@@ -166,7 +166,8 @@ profile - a server, a container, or CI.
 | SVG markers, including parametrised fill and stroke | Yes - drawn by QGIS itself |
 | Stacked symbol layers on a **point** | Yes - drawn by QGIS itself |
 | Stacked symbol layers on a line or polygon | Top layer only - the one you see - and reported |
-| Rule-based, embedded-symbol renderers | Not yet, reported by name |
+| Rule-based | Yes - one legend class per rule, with QGIS deciding which rule draws each feature; see [Rule-based styling](#rule-based-styling) |
+| Embedded-symbol renderers | Not yet, reported by name |
 | Sizes in pixels, points, millimetres or inches | Yes - converted to screen pixels, so an 8 px marker stays 8 px |
 | Sizes in map units or metres on the ground | Yes - marker size, line and outline width, and rasterised marker icons keep their distance on the ground and zoom with the map as in QGIS. Map units of a geographic CRS (degrees) are approximated - fixed at the size they have where the layer fills the opening view, and reported; so is a marker picture that also has a size in screen units, or classes that mix units |
 | Symbol opacity | Yes - multiplied with the colour's own transparency, and with the layer opacity once |
@@ -206,6 +207,35 @@ Worth knowing:
   why.
 - **If you host the map behind a strict Content Security Policy**, it needs to
   allow `data:` images — see [Hosting](hosting.md).
+
+### Rule-based styling
+
+A rule-based layer is exported as one class per rule that draws a symbol. When
+you export, QGIS itself works out which rule draws each feature - nested rules
+within their parent's filter, ELSE rules, rules with no filter, switched-off
+rules drawing nothing - and the answer is written into the exported data as a
+property called `rule` (`rule_2` and so on if the layer already has a field of
+that name). Each class is drawn with its rule's symbol the way a categorized
+class is, and the legend lists the rules by their labels, or by their filter
+for a rule with no label. Popups and labels are not affected, and the `rule`
+property never shows in a popup. Features no rule draws are left out, as in
+QGIS.
+
+Worth knowing, and each said in the Fidelity tab when it applies:
+
+- **A feature two rules draw shows one symbol.** QGIS draws a feature once for
+  every rule that matches it, one symbol over another; the web map draws it
+  once, with the symbol of the last of those rules - the one on top in QGIS.
+  The Fidelity tab says how many features this affects.
+- **Scale ranges on rules are not kept.** A rule limited to a scale range draws
+  at every zoom.
+- **Filters that read the map view are worked out once.** A filter using
+  `@map_scale`, `@map_extent`, an atlas variable or another value that follows
+  what QGIS's map shows is evaluated at export with no map view, where the
+  value is empty.
+- **Nested rules are listed one after another** in the legend, without the
+  rules that group them, and **symbol levels** are not kept: features are drawn
+  in the order of the data.
 
 ## Height
 

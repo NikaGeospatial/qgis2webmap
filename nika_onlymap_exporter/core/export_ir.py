@@ -492,6 +492,10 @@ class RendererSpec:
     # reader needs them to drop what QGIS leaves undrawn - NULLs, values in a gap,
     # values in a switched-off range - because a threshold scale colours them all.
     value_ranges: tuple[ValueRange, ...] = ()
+    # Whether `field_name` is not a field of the layer but a property the reader
+    # writes into each feature: the rule of a rule-based renderer that draws it,
+    # by that rule's legend label (see `renderer_translator.RuleMatcher`).
+    field_generated: bool = False
 
     @property
     def representative_symbol(self) -> SymbolSpec | None:
@@ -528,6 +532,7 @@ class RendererSpec:
             "hiddenValues": list(self.hidden_values),
             "unmatchedHidden": self.unmatched_hidden,
             "valueRanges": [r.snapshot() for r in self.value_ranges],
+            "fieldGenerated": self.field_generated,
         }
 
 

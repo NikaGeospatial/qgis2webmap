@@ -272,6 +272,8 @@ def _renderer(layer: ExportLayer) -> str:
     renderer = layer.renderer
     if renderer.kind is RendererKind.SINGLE:
         return "Single symbol"
+    if renderer.kind is RendererKind.CATEGORIZED and renderer.field_generated:
+        return "Rule-based, " + _plural(len(renderer.categories), "rule", "rules")
     if renderer.kind is RendererKind.CATEGORIZED:
         text = f"Categorized on '{renderer.field_name}', " + _plural(
             len(renderer.categories), "class", "classes"

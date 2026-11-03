@@ -30,15 +30,21 @@ from typing import TYPE_CHECKING, Any
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsExpression,
+    QgsExpressionContext,
+    QgsExpressionContextUtils,
     QgsExpressionNodeBinaryOperator,
     QgsExpressionNodeColumnRef,
     QgsExpressionNodeInOperator,
     QgsExpressionNodeLiteral,
+    QgsFeatureRequest,
     QgsGraduatedSymbolRenderer,
+    QgsReadWriteContext,
+    QgsRenderContext,
     QgsRuleBasedRenderer,
     QgsSingleSymbolRenderer,
     QgsSymbol,
 )
+from qgis.PyQt.QtXml import QDomDocument
 
 from .export_ir import (
     MM_TO_PIXELS,
@@ -757,13 +763,16 @@ def translate_renderer(
         )
         if translated is not None:
             return translated
+        return _translate_rule_tree(
+            layer, renderer, report, subject, layer_id, scale, ground
+        )
 
     kind_name = type(renderer).__name__
     report.unsupported(
         subject,
         f"This renderer ({kind_name}) is not translated yet. Supported renderers "
-        "are single symbol, categorized and graduated, and rule-based rules that "
-        "each pick one value of one field. The layer will use a default style.",
+        "are single symbol, categorized, graduated and rule-based. The layer "
+        "will use a default style.",
         layer_id,
     )
     return RendererSpec(kind=RendererKind.UNSUPPORTED, unsupported_reason=kind_name)
@@ -1264,6 +1273,8 @@ def rule_classes(
     field: str | None = None
     seen: set[str] = set()
     classes: list[_RuleClass] = []
+    if renderer.rootRule().symbol() is not None:
+        return None
     for rule in renderer.rootRule().children():
         if rule.children() or rule.symbol() is None:
             return None
@@ -1356,6 +1367,273 @@ def _translate_rule_based(
         categories=tuple(categories),
         unmatched_hidden=not any(category.is_default for category in categories),
     )
+
+
+def drawn_rules(renderer: QgsRuleBasedRenderer) -> list[Any]:
+    """Every rule of `renderer` that draws a symbol, in the order QGIS draws a
+    feature's symbols: a rule before its children, siblings in their order.
+
+    A switched-off rule draws nothing, and nor does anything under it; a rule
+    with no symbol only narrows its children. The rules are the renderer's own,
+    alive as long as it is.
+    """
+    rules: list[Any] = []
+
+    def walk(rule: Any) -> None:
+        if not rule.active():
+            return
+        if rule.symbol() is not None:
+            rules.append(rule)
+        for child in rule.children():
+            walk(child)
+
+    walk(renderer.rootRule())
+    return rules
+
+
+def rule_values(rules: list[Any]) -> list[str]:
+    """The category value standing for each of `rules`: its label, or its
+    filter when it has none, made unique - the legend lists the classes by
+    these, and two rules QGIS lists alike must still be told apart."""
+    values: list[str] = []
+    for number, rule in enumerate(rules, start=1):
+        base = rule.label() or rule.filterExpression() or f"Rule {number}"
+        value, copy = base, 1
+        while value in values:
+            copy += 1
+            value = f"{base} ({copy})"
+        values.append(value)
+    return values
+
+
+#: The property a rule-based layer's generated class is written to, numbered
+#: when the layer has a field of that name.
+RULE_FIELD = "rule"
+
+# Variables a filter reads that are about the QGIS view drawing the layer -
+# its scale, extent, time, the atlas page - rather than about the feature.
+_VIEW_VARIABLES = frozenset({"zoom_level", "vector_tile_zoom", "canvas_cursor_point"})
+_VIEW_VARIABLE_PREFIXES = ("map_", "atlas_", "layout_", "frame_", "animation_")
+
+
+def _view_variables(expression: str) -> list[str]:
+    """The view variables `expression` reads, `@`-prefixed and sorted."""
+    names = QgsExpression(expression).referencedVariables()
+    return sorted(
+        f"@{name}"
+        for name in names
+        if name in _VIEW_VARIABLES or name.startswith(_VIEW_VARIABLE_PREFIXES)
+    )
+
+
+def _rule_field(taken: Collection[str]) -> str:
+    """`RULE_FIELD`, or the first of `rule_2`, `rule_3`, ... no field takes."""
+    name, number = RULE_FIELD, 1
+    while name in taken:
+        number += 1
+        name = f"{RULE_FIELD}_{number}"
+    return name
+
+
+def _translate_rule_tree(
+    layer: QgsVectorLayer,
+    renderer: QgsRuleBasedRenderer,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+    scale: MapUnitScale | None,
+    ground: GroundUnits | None,
+) -> RendererSpec:
+    """Any other rule-based renderer, as a categorized one on a property the
+    reader generates: which rule draws each feature, by that rule's label.
+
+    QGIS itself matches the rules when the features are read (`RuleMatcher`),
+    so nesting, ELSE and switched-off rules mean exactly what they mean in
+    QGIS. What a single class per feature cannot say is reported here, and the
+    features that more than one rule draws are counted when they are read.
+    """
+    rules = drawn_rules(renderer)
+    if not rules:
+        report.unsupported(
+            subject,
+            "No rule draws a symbol: every rule is switched off or has none, so "
+            "QGIS draws nothing for this layer. The layer will use a default "
+            "style.",
+            layer_id,
+        )
+        return RendererSpec(
+            kind=RendererKind.UNSUPPORTED, unsupported_reason="no rule draws"
+        )
+
+    categories = []
+    for index, (rule, value) in enumerate(zip(rules, rule_values(rules))):
+        symbol = translate_symbol(
+            rule.symbol(),
+            report,
+            f"{subject}, rule {index + 1}",
+            layer_id,
+            scale=scale,
+            ground=ground,
+        )
+        categories.append(CategorySpec(value=value, label=value, symbol=symbol))
+
+    # A limit on a rule applies to everything under it too, so it is said once,
+    # of the rule that sets it.
+    root_key = renderer.rootRule().ruleKey()
+    for rule in renderer.rootRule().descendants():
+        if not _shows(rule):
+            continue
+        name = rule.label() or rule.filterExpression()
+        if rule.dependsOnScale():
+            report.approximated(
+                subject,
+                f"The rule '{name}' only draws within a scale range in QGIS; "
+                "the web map draws it at every zoom.",
+                layer_id,
+            )
+        variables = [] if rule.isElse() else _view_variables(rule.filterExpression())
+        if variables:
+            report.approximated(
+                subject,
+                f"The rule '{name}' reads {', '.join(variables)}, which follows "
+                "what the QGIS map shows and cannot follow the web map as you "
+                "zoom and pan. It was worked out once at export, with no map "
+                "view, where that has no value.",
+                layer_id,
+            )
+    if any(
+        rule.parent() is not None and rule.parent().ruleKey() != root_key
+        for rule in rules
+    ):
+        report.approximated(
+            subject,
+            "Nested rules are listed one after another in the legend, without "
+            "the rules that group them.",
+            layer_id,
+        )
+    if renderer.usingSymbolLevels():
+        report.approximated(
+            subject,
+            "Symbol levels are not kept: features are drawn in the order of "
+            "the data, each with the symbol of its rule.",
+            layer_id,
+        )
+
+    categories = [
+        replace(category, symbol=symbol)
+        for category, symbol in zip(
+            categories,
+            harmonise_ground_sizes(
+                [c.symbol for c in categories], report, subject, layer_id
+            ),
+        )
+    ]
+    report.preserved(
+        subject,
+        f"Rule-based with {len(categories)} "
+        f"rule{' that draws' if len(categories) == 1 else 's that draw'}, each a "
+        "class named after the rule. QGIS works out which rule draws each "
+        "feature when the map is exported; features no rule picks are not "
+        "drawn, as in QGIS.",
+        layer_id,
+    )
+    return RendererSpec(
+        kind=RendererKind.CATEGORIZED,
+        field_name=_rule_field(layer.fields().names()),
+        categories=tuple(categories),
+        unmatched_hidden=True,
+        field_generated=True,
+    )
+
+
+def _shows(rule: Any) -> bool:
+    """Whether anything `rule` says shows on the map: it and every rule above
+    it are switched on, and it or a rule under it draws a symbol."""
+    above = rule.parent()
+    while above is not None:
+        if not above.active():
+            return False
+        above = above.parent()
+    return _draws(rule)
+
+
+def _draws(rule: Any) -> bool:
+    """Whether `rule` is switched on and it or a rule under it draws."""
+    return bool(rule.active()) and (
+        rule.symbol() is not None or any(_draws(child) for child in rule.children())
+    )
+
+
+class RuleMatcher:
+    """Which rule draws each feature of a rule-based layer, worked out by QGIS.
+
+    Made on the GUI thread from the live layer and used on a worker, the way
+    QGIS's own drawing splits it: a clone of the renderer, copies of the
+    layer's fields and expression context, and plain values - nothing that
+    refers back to the layer. QGIS answers which rules draw a feature
+    (`legendKeysForFeature`, which applies ELSE rules and switched-off rules as
+    drawing does); the class is the last of them `drawn_rules` lists, because
+    QGIS draws a feature's symbols in that order and the last one is on top.
+    """
+
+    def __init__(self, layer: QgsVectorLayer, field_name: str) -> None:
+        self.field_name = field_name
+        self.renderer: QgsRuleBasedRenderer = layer.renderer().clone()
+        rules = drawn_rules(self.renderer)
+        # Rule key -> (place in the drawing order, category value).
+        self.classes = {
+            rule.ruleKey(): (index, value)
+            for index, (rule, value) in enumerate(zip(rules, rule_values(rules)))
+        }
+        self.fields = layer.fields()
+        self.context = QgsExpressionContext(
+            QgsExpressionContextUtils.globalProjectLayerScopes(layer)
+        )
+        used = set(self.renderer.usedAttributes(self._render_context()))
+        # QGIS's marker for "every field" - a filter reading `attributes()`.
+        self.used_attributes: frozenset[str] | None = (
+            None if QgsFeatureRequest.ALL_ATTRIBUTES in used else frozenset(used)
+        )
+        self.renderer_xml = _renderer_xml(self.renderer)
+
+    def _render_context(self) -> QgsRenderContext:
+        context = QgsRenderContext()
+        context.setExpressionContext(QgsExpressionContext(self.context))
+        # Scale 0 is inside every scale range. The web map draws a rule at every
+        # zoom (reported), and QGIS's ELSE rules are not affected by it either:
+        # a rule outside its range still counts as matched, as it does here.
+        context.setRendererScale(0.0)
+        return context
+
+    def values(self, features: Collection[Any]) -> tuple[list[str | None], int]:
+        """Each feature's category value, `None` for one no rule draws, and how
+        many features more than one rule draws. **Safe off the GUI thread**:
+        each call works on its own clone of the renderer."""
+        renderer = self.renderer.clone()
+        context = self._render_context()
+        renderer.startRender(context, self.fields)
+        values: list[str | None] = []
+        stacked = 0
+        try:
+            for feature in features:
+                context.expressionContext().setFeature(feature)
+                drawn = [
+                    self.classes[key]
+                    for key in renderer.legendKeysForFeature(feature, context)
+                    if key in self.classes
+                ]
+                stacked += len(drawn) > 1
+                values.append(max(drawn)[1] if drawn else None)
+        finally:
+            renderer.stopRender(context)
+        return values, stacked
+
+
+def _renderer_xml(renderer: QgsFeatureRenderer) -> str:
+    """The renderer as QGIS saves it: what a cache key holds of a `RuleMatcher`."""
+    document = QDomDocument("renderer")
+    document.appendChild(renderer.save(document, QgsReadWriteContext()))
+    return str(document.toString())
 
 
 def _translate_graduated(
@@ -1505,8 +1783,9 @@ def class_symbols(renderer: QgsFeatureRenderer | None) -> list[QgsSymbol]:
         ]
 
     if isinstance(renderer, QgsRuleBasedRenderer):
-        read = rule_classes(renderer)
-        return [klass.rule.symbol().clone() for klass in read[1]] if read else []
+        # The classes of either rule-based path: where every rule picks values
+        # of one field, its rules are exactly the drawn ones, in this order.
+        return [rule.symbol().clone() for rule in drawn_rules(renderer)]
 
     if isinstance(renderer, QgsGraduatedSymbolRenderer):
         return [

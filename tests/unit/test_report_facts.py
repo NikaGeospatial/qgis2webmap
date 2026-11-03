@@ -133,6 +133,21 @@ class TestVectorLayer:
             layer_facts(layer)
         )
 
+    def test_a_rule_based_layer_counts_its_rules(self) -> None:
+        """Its classes are on a property the export generates, not a field."""
+        layer = sites(
+            renderer=RendererSpec(
+                kind=RendererKind.CATEGORIZED,
+                field_name="rule",
+                categories=tuple(
+                    CategorySpec(value=v, label=v, symbol=SymbolSpec())
+                    for v in ("Major", "Minor")
+                ),
+                field_generated=True,
+            )
+        )
+        assert "Rule-based, 2 rules" in values(layer_facts(layer))
+
     def test_display_settings_are_listed_when_set(self) -> None:
         extra = {"visible_zoom_range": (12.5, 18.2)} if HAS_ZOOM_RANGE else {}
         layer = sites(

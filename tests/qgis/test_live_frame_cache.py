@@ -541,6 +541,44 @@ class TestEditsThatTouchTheData:
         _same_as_fresh(world, again)
 
 
+def _rule_based(world: World) -> None:
+    """Draw the sites by rules on "pop", a rule-based layer's generated class."""
+    from qgis.core import QgsMarkerSymbol, QgsRuleBasedRenderer
+
+    root = QgsRuleBasedRenderer.Rule(None)
+    for label, expression, colour in (
+        ("Small", '"pop" < 25', "#ff0000"),
+        ("Large", "ELSE", "#0000ff"),
+    ):
+        symbol = QgsMarkerSymbol.createSimple({"color": colour})
+        root.appendChild(QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression, label))
+    world.sites.setRenderer(QgsRuleBasedRenderer(root))
+
+
+class TestARuleBasedLayer:
+    """Its rules are matched as the features are read, from a clone of the
+    renderer the read carries: the key holds that renderer, so the read is
+    reused while it is unchanged and read again when a rule changes."""
+
+    def test_a_note_edit_reuses_the_read(self, world, cache) -> None:
+        _rule_based(world)
+        first = _build(world, cache)
+        world.note.setText("Another note")
+        again = _build(world, cache)
+        assert cache.read_count == 1
+        assert again[0] != first[0]
+        _same_as_fresh(world, again)
+
+    def test_a_changed_rule_reads_again(self, world, cache) -> None:
+        _rule_based(world)
+        first = _build(world, cache)
+        world.sites.renderer().rootRule().children()[0].setFilterExpression('"pop" < 5')
+        again = _build(world, cache)
+        assert cache.read_count == 2
+        assert again[2] != first[2]
+        _same_as_fresh(world, again)
+
+
 class TestWhatIsNeverReused:
     def test_a_layer_reading_the_clock_is_read_every_time(self, world, cache) -> None:
         from qgis.core import QgsField

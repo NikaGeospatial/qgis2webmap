@@ -85,6 +85,7 @@ BUILDERS = (
     ("ground_size", "GROUND_SIZE_FIXTURES_DIR", "expected.json"),
     ("legend_fit", "LEGEND_FIT_FIXTURES_DIR", "qgis.json"),
     ("label", "LABEL_FIXTURES_DIR", "expected.json"),
+    ("rule_based", "RULE_BASED_FIXTURES_DIR", "expected.json"),
 )
 
 #: Status words used in the summary. Only PASSED counts as a pass.

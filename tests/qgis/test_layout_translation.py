@@ -377,6 +377,27 @@ class TestLiveLegendChecks:
         # Polygon classes are squares in QGIS too.
         assert "square" not in row.detail
 
+    def test_a_rule_based_layer_says_it_too(self, project) -> None:
+        """It is exported as categories, so the browser changes its legend
+        the same way."""
+        from qgis.core import QgsRuleBasedRenderer
+
+        layout, map_item, parcels, _roads = _layout(project)
+        root = QgsRuleBasedRenderer.Rule(None)
+        root.appendChild(
+            QgsRuleBasedRenderer.Rule(
+                QgsFillSymbol.createSimple({"color": "red"}), 0, 0, "ELSE", "All"
+            )
+        )
+        parcels.setRenderer(QgsRuleBasedRenderer(root))
+        _legend(layout, map_item)
+        report = FidelityReportBuilder()
+        read_layout(layout, report)
+        (row,) = self._legend_rows(report)
+        assert row.status is FidelityStatus.APPROXIMATED
+        assert "'other' row" in row.detail
+        assert "classified field" in row.detail
+
 
 class TestStaticLegendShapes:
     def test_literal_rows_use_the_runtimes_shape_words(self, project) -> None:
