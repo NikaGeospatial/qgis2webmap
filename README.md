@@ -35,7 +35,8 @@ else.** That report can include the runtime version, feature and widget usage
 counts, and the hostname of the page the map is running from — never the
 map's data or who opened it. Aside from that one report, an exported file
 works with no internet connection, on a machine that has never had QGIS
-installed. Publishing to NIKA hosting and AI-assisted enhancement are separate,
+installed - unless you add a basemap or live XYZ, WMS or WMTS layers, which
+draw only while the reader is online. Publishing to NIKA hosting and AI-assisted enhancement are separate,
 explicit actions you start yourself — nothing is uploaded automatically.
 
 See the [privacy page](https://qgis2webmap.nikaplanet.com/privacy.html)

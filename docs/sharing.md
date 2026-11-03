@@ -20,7 +20,9 @@ One file. Everything is inside it: the map, its styling and all of its data.
 
 Send it, copy it to a USB stick, put it on a shared drive. The recipient
 double-clicks it. They need a web browser and nothing else - no QGIS, no account,
-no internet connection.
+no internet connection. The exception is a basemap or a live layer (XYZ, WMS or
+WMTS): those draw only while the recipient is online, and the rest of the map
+works without a connection.
 
 **It is the largest of the three, and that is inherent to the format.** Every
 feature is written into the HTML itself, because there is no sibling folder for

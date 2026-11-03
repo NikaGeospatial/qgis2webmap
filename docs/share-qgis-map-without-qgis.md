@@ -56,7 +56,8 @@ What they get:
 - 3D terrain and extrusion, if you enabled them
 
 What they need: a browser. Not QGIS, not an account, not a login, and — apart
-from a basemap if you chose one — not an internet connection.
+from a basemap or live XYZ, WMS and WMTS layers, if your map has them — not an
+internet connection.
 
 What they do not get: your project file, your data files, or anything you
 excluded on the Layers tab. Fields you hid in QGIS stay hidden in the export.
