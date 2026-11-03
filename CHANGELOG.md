@@ -27,6 +27,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   fill (such as `{s}`) is now refused with a reason instead of exported to
   request the token literally.
 
+### Fixed
+- OGC API Features and SensorThings layers are described as web services in
+  the export, like WFS layers: their features are downloaded once and
+  embedded. They were described as read from a database.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added

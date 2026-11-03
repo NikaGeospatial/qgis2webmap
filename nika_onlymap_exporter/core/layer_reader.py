@@ -94,7 +94,11 @@ _GEOMETRY_BY_WKB = {
 # Provider keys that mean "the data lives in a file next to the project".
 _FILE_PROVIDERS = frozenset({"ogr", "gdal", "delimitedtext", "gpx", "spatialite"})
 _DATABASE_PROVIDERS = frozenset({"postgres", "mssql", "oracle", "db2", "hana"})
-_SERVICE_PROVIDERS = frozenset({"wfs", "arcgisfeatureserver", "ows", "wms"})
+# OGC API Features (`OAPIF`) and SensorThings are web feature services too,
+# with their own provider keys since QGIS 3.14 and 3.36.
+_SERVICE_PROVIDERS = frozenset(
+    {"wfs", "oapif", "sensorthings", "arcgisfeatureserver", "ows", "wms"}
+)
 
 
 def geometry_kind(layer: QgsVectorLayer) -> GeometryKind:
