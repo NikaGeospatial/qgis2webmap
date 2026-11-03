@@ -40,6 +40,7 @@ import base64
 from collections.abc import Sequence
 from html import escape
 
+from ..core.manifest_builder import RASTER_LAYER_CLASS
 from .raster_cog import WEB_MERCATOR_EPSG
 from .web_mercator_projjson import WEB_MERCATOR_PROJJSON
 
@@ -134,13 +135,27 @@ _STAND_IN = """      <script>
       </script>"""
 
 
-def build_raster_embed(embedded: Sequence[tuple[str, bytes]]) -> str:
-    """The page markup that carries `embedded` rasters; empty when there are none.
+def has_cog_layer(markup: str) -> bool:
+    """Whether `markup` (a manifest, or a sheet of frames) has a `COGLayer`.
+
+    Attribute values are escaped, so no layer name can spell the attribute.
+    """
+    return f'type="{RASTER_LAYER_CLASS}"' in markup
+
+
+def build_raster_embed(
+    embedded: Sequence[tuple[str, bytes]], *, cog_layer: bool = False
+) -> str:
+    """The page markup that carries `embedded` rasters; empty when there are none
+    and the page has no `COGLayer` (`cog_layer`).
 
     `embedded` is `(src, bytes)` pairs: the name each `COGLayer` asks for and
-    the converted file it should get.
+    the converted file it should get. A page whose rasters are all read over
+    the web carries none, and still needs the stand-in: without its `data:`
+    workers it draws nothing from disk, and without its EPSG:3857 answer
+    nothing offline.
     """
-    if not embedded:
+    if not embedded and not cog_layer:
         return ""
     blocks = [
         f'      <script type="{RASTER_SCRIPT_TYPE}" data-src="{escape(name)}">'

@@ -79,7 +79,7 @@ from ..core.cartograph_ir import (
     TextSpec,
 )
 from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, gzip_base64
-from ..packaging.raster_embed import build_raster_embed
+from ..packaging.raster_embed import build_raster_embed, has_cog_layer
 
 #: Shown instead of a live cartograph when the browser runs no JavaScript:
 #: its live maps and the inlined runtime need it. (A static-only cartograph
@@ -183,8 +183,11 @@ def write_cartograph_html(
             f'<noscript><p style="font:16px sans-serif;margin:2em">'
             f"{html.escape(NOSCRIPT_MESSAGE)}</p></noscript>\n"
         )
-        if embedded_rasters:
-            body += build_raster_embed(embedded_rasters) + "\n"
+        raster_embed = build_raster_embed(
+            embedded_rasters, cog_layer=has_cog_layer(sheet)
+        )
+        if raster_embed:
+            body += raster_embed + "\n"
     else:
         # No live frame, no loader to wait for: the sheet is in the page from
         # the start, so it reads with JavaScript off too - the runtime's
