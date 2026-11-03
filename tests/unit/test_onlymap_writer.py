@@ -305,11 +305,13 @@ class TestCreditComponent:
 
         # The attribution is the thing that moves, lifted clear of the chip.
         # Two reservations: the chip is one line, or two once it carries a data
-        # credit, and it grows upward from its anchor.
+        # credit, and it grows upward from its anchor. Both are fallbacks for
+        # the height measured in the page, which a wrapped credit exceeds.
         assert '[data-om-widget-slot="bottom-end"]' in markup
-        assert "calc(12px + 36px + 8px)" in markup
+        assert "12px + max(var(--om-credit-height, 36px), 36px) + 8px" in markup
         assert "body:has(.om-credit-data)" in markup
-        assert "calc(12px + 54px + 8px)" in markup
+        assert "12px + max(var(--om-credit-height, 54px), 54px) + 8px" in markup
+        assert 'setProperty("--om-credit-measured"' in markup
 
     def test_the_widget_stack_is_not_hand_offset(self) -> None:
         """The bottom-left corner is the runtime's flex slot to lay out.

@@ -145,11 +145,16 @@ RELOAD_SCRIPT = f"""
 #
 # That corner is already occupied twice over: the chip itself at `bottom: 12px`,
 # and the runtime's `bottom-end` widget slot (provider attribution), which the
-# template already lifts above the chip with hard-coded 36px/54px offsets. So
-# this has to join that stack rather than ignore it - the offsets below continue
-# the same arithmetic, and the slot is pushed up again by exactly this chip's
-# height while it exists. `:has()` does that, which also means dismissing the
+# template already lifts above the chip by the chip's measured height,
+# `--om-credit-height` (36px/54px when it has not been measured). So this has to
+# join that stack rather than ignore it - the offsets below continue the same
+# arithmetic, and the slot is pushed up again by exactly this chip's height while
+# it exists. `:has()` does that, which also means dismissing the
 # chip drops the attribution back on its own with no script involved.
+#
+# The offsets never go below the fixed 36px/54px they used to be, which leave a
+# gap over a chip the badge has shortened; only a chip taller than that moves
+# them.
 _HOST_CTA_TEMPLATE = """
     <style>
       /* Deliberately unlike the map's own chrome. This is plugin UI shown while
@@ -159,9 +164,9 @@ _HOST_CTA_TEMPLATE = """
         position: fixed;
         right: 12px;
         /* 12px inset + the credit chip's height + the runtime's own widget gap.
-           Same arithmetic as the template's attribution offsets, and the same
-           caveat: measured at 12px/1.5, approximate on purpose. */
-        bottom: calc(12px + 36px + 8px);
+           Same arithmetic as the template's attribution offsets, with the same
+           measured height and the same 12px/1.5 fallbacks. */
+        bottom: calc(12px + max(var(--om-credit-height, 36px), 36px) + 8px);
         /* Above the caption's 10000 and the runtime widgets' 9999: an
            affordance you cannot reach to dismiss is worse than no affordance. */
         z-index: 2147483000;
@@ -219,9 +224,9 @@ _HOST_CTA_TEMPLATE = """
         color: #18181b;
       }
       /* A data credit gives the chip a second line, which the template already
-         accounts for at 54px. Follow it up. */
+         accounts for at 54px when unmeasured. Follow it up. */
       body:has(.om-credit-data) .om-preview-cta {
-        bottom: calc(12px + 54px + 8px);
+        bottom: calc(12px + max(var(--om-credit-height, 54px), 54px) + 8px);
       }
       /* Now get out of the attribution's way. The template lifts the
          `bottom-end` slot to clear the chip; while this chip exists it has to
@@ -229,11 +234,15 @@ _HOST_CTA_TEMPLATE = """
          `:has()` rather than set from the dismiss handler so removing the chip
          puts the attribution back by itself. */
       body:has(.om-preview-cta) [data-om-widget-slot="bottom-end"] {
-        bottom: calc(12px + 36px + 8px + 34px + 8px) !important;
+        bottom: calc(
+          12px + max(var(--om-credit-height, 36px), 36px) + 8px + 34px + 8px
+        ) !important;
       }
       body:has(.om-preview-cta):has(.om-credit-data)
         [data-om-widget-slot="bottom-end"] {
-        bottom: calc(12px + 54px + 8px + 34px + 8px) !important;
+        bottom: calc(
+          12px + max(var(--om-credit-height, 54px), 54px) + 8px + 34px + 8px
+        ) !important;
       }
       /* A caption pinned to this corner would land on top of the stack. Push
          above it rather than fight for the space - the caption is the author's
