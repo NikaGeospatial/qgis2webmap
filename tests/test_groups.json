@@ -146,6 +146,7 @@
         "tests/qgis/test_symbol_rasterizer.py",
         "tests/qgis/test_raster_smoothing.py",
         "tests/qgis/test_attribute_representation.py",
+        "tests/qgis/test_popup_media.py",
         "tests/qgis/test_layer_reader.py",
         "tests/qgis/test_map_service_layers.py",
         "tests/qgis/test_remote_raster.py",
