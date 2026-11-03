@@ -181,6 +181,7 @@ _LIVE_FRAME_SETTINGS = ExportSettings(
     show_layer_switcher=False,
     show_zoom_controls=False,
     show_scale_bar=False,
+    show_measure=False,
     show_title=False,
     show_abstract=False,
 )

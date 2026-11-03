@@ -385,10 +385,15 @@ one, so if your source requires attribution, set it in QGIS before exporting.
 
 ## The map itself
 
-Legend, layer switcher, zoom controls and a scale bar are **on by default**. The
-layer switcher is left out of maps that have only one layer to switch, since it
-would hold a single ticked box; labels count as an entry of their own, so a
-labelled layer is enough to bring it back.
+Legend, layer switcher, zoom controls, a scale bar and a measure tool are **on
+by default**. The layer switcher is left out of maps that have only one layer
+to switch, since it would hold a single ticked box; labels count as an entry of
+their own, so a labelled layer is enough to bring it back.
+
+The measure tool measures distances and areas on the ground, in metric,
+imperial or nautical units, whatever CRS the project uses. It works in a map
+opened from a file, served from a website and in the Preview. It is not drawn
+in a cartograph's interactive frames, which are maps on a printed page.
 
 On the **Appearance** tab you can also:
 
@@ -396,8 +401,8 @@ On the **Appearance** tab you can also:
   of your choosing. The description is the abstract from
   *Project Properties → Metadata*; nothing appears if the project has none.
   Corners are shared with the map controls — the layer switcher is top left,
-  the legend top right, the zoom and scale bottom left, and the OnlyMap credit
-  bottom right.
+  the legend top right, the zoom, scale and measure tool bottom left, and the
+  OnlyMap credit bottom right.
 - **Set the colour of the controls**, background and text separately. Left
   alone, they use OnlyMap's own colours.
 - **Open popups on hover** instead of on click. Hover replaces click rather

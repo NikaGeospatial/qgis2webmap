@@ -1133,6 +1133,7 @@ class ExportSettings:
     show_layer_switcher: bool = True
     show_zoom_controls: bool = True
     show_scale_bar: bool = True
+    show_measure: bool = True
     quantize_precision: int | None = None
     simplify_tolerance: float | None = None
     popup_on_hover: bool = False
@@ -1194,6 +1195,7 @@ class ExportSettings:
             "showLayerSwitcher": self.show_layer_switcher,
             "showZoomControls": self.show_zoom_controls,
             "showScaleBar": self.show_scale_bar,
+            "showMeasure": self.show_measure,
             "quantizePrecision": self.quantize_precision,
             "simplifyTolerance": self.simplify_tolerance,
             "popupOnHover": self.popup_on_hover,

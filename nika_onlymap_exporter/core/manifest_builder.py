@@ -1747,6 +1747,7 @@ WIDGET_POSITIONS = {
     "layer-switcher": "top-left",
     "zoom-controls": "bottom-left",
     "scale-bar": "bottom-left",
+    "measure": "bottom-left",
 }
 
 
@@ -2024,6 +2025,11 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
         widgets.append(
             f'{indent}<om-widget type="layer-switcher" '
             f'position="{WIDGET_POSITIONS["layer-switcher"]}"></om-widget>'
+        )
+    if settings.show_measure:
+        widgets.append(
+            f'{indent}<om-widget type="measure" '
+            f'position="{WIDGET_POSITIONS["measure"]}"></om-widget>'
         )
     if settings.show_zoom_controls:
         widgets.append(

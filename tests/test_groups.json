@@ -198,6 +198,7 @@
       ],
       "browser": [
         "tests/browser/test_exported_map.py",
+        "tests/browser/test_measure_tool.py",
         "tests/browser/test_cartograph_acceptance.py",
         "tests/browser/test_cartograph_static.py",
         "tests/browser/test_cartograph_text.py"
@@ -299,7 +300,8 @@
         "tests/qgis/test_plugin_cartograph_entry.py"
       ],
       "browser": [
-        "tests/browser/test_exported_map.py"
+        "tests/browser/test_exported_map.py",
+        "tests/browser/test_measure_tool.py"
       ]
     },
     "i18n": {

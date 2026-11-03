@@ -78,6 +78,39 @@ class TestAlgorithmShape:
         )
 
 
+class TestMeasureToolParameter:
+    def test_it_is_offered_and_on_by_default(self, algorithm) -> None:
+        """On by default like the dialog's switch, so a batch run and a dialog
+        export of the same project produce the same map."""
+        definition = algorithm.parameterDefinition("MEASURE")
+        assert definition is not None
+        assert definition.description() == "Measure tool"
+        assert definition.defaultValue() is True
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_it_decides_whether_the_map_has_one(
+        self, project, make_memory_layer, tmp_path, value
+    ) -> None:
+        if discover_runtime_dir() is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        project.addMapLayer(
+            make_memory_layer("pts", features=[("Ashford", [0.87, 51.15])])
+        )
+        context = qgis_core.QgsProcessingContext()
+        context.setProject(project)
+        algorithm = ExportProjectAlgorithm()
+        algorithm.initAlgorithm()
+
+        results = algorithm.processAlgorithm(
+            {"OUTPUT": str(tmp_path / "map.html"), "MODE": 0, "MEASURE": value},
+            context,
+            qgis_core.QgsProcessingFeedback(),
+        )
+
+        html = Path(results["OUTPUT"]).read_text(encoding="utf-8")
+        assert ('<om-widget type="measure"' in html) is value
+
+
 class TestAlgorithmRuns:
     def test_it_exports_through_the_same_writer(
         self, project, make_memory_layer, tmp_path

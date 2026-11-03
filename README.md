@@ -125,8 +125,8 @@ Deeper articles live at [NIKA Documentation](https://docs.nikaplanet.com).
 Vector points, lines and polygons from GeoPackage, Shapefile, GeoJSON and CSV
 sources, with single-symbol, categorized and graduated styling; layer order,
 groups, visibility, field aliases and hidden fields; labels, popups, and data
-attribution. Every map ships a legend, layer switcher, zoom controls and a
-scale bar.
+attribution. Every map ships a legend, layer switcher, zoom controls, a scale
+bar and a measure tool.
 
 Anything that will not survive the trip is listed in the **Fidelity** tab
 *before* you export, classified as preserved, approximated, raster-fallback,

@@ -81,6 +81,25 @@ class TestSettingsPersistence:
         assert restored.layers["abc"].include is False
         assert restored.layers["abc"].label is True
 
+    def test_the_measure_tool_choice_round_trips(self, project) -> None:
+        save_state(project, DialogState(show_measure=False))
+        assert load_state(project).show_measure is False
+        save_state(project, DialogState(show_measure=True))
+        assert load_state(project).show_measure is True
+
+    def test_a_project_saved_before_the_measure_tool_gets_it(self, project) -> None:
+        """No `measure` key at all: the new default, as for the caption."""
+        import json
+
+        save_state(project, DialogState(show_legend=False))
+        widgets = json.loads(project.readEntry("qgis2webmap", "widgets", "")[0])
+        del widgets["measure"]
+        project.writeEntry("qgis2webmap", "widgets", json.dumps(widgets))
+
+        state = load_state(project)
+        assert state.show_measure is True
+        assert state.show_legend is False
+
     def test_empty_project_yields_sensible_defaults(self, project) -> None:
         state = load_state(project)
         assert state.map_name == ""
@@ -305,6 +324,10 @@ class TestDialogState:
         assert settings.show_legend is False
         assert settings.show_scale_bar is False
         assert settings.show_zoom_controls is True
+        assert settings.show_measure is True
+        assert DialogState(show_measure=False).to_export_settings().show_measure is (
+            False
+        )
 
 
 class TestLayerWatcher:
@@ -387,6 +410,34 @@ class TestPreview:
 
         _result, outcome = build_artifact(export, tmp_path / "map.html")
         assert "om-view-changed" not in outcome.path.read_text()
+
+
+class TestMeasureToolSwitch:
+    """The Appearance tab's Measure tool switch, beside the other map controls."""
+
+    def test_it_is_on_and_unticking_it_leaves_the_tool_off(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            check = dialog.widget_checks["measure"]
+            assert check.text() == "Measure tool"
+            assert check.isChecked()
+            check.setChecked(False)
+            assert dialog.state.show_measure is False
+            assert dialog.state.to_export_settings().show_measure is False
+        finally:
+            dialog.close()
+
+    def test_it_opens_as_the_project_saved_it(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        save_state(project, DialogState(show_measure=False))
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            assert not dialog.widget_checks["measure"].isChecked()
+        finally:
+            dialog.close()
 
 
 class TestShortWindows:

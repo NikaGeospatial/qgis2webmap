@@ -23,6 +23,7 @@ from typing import Any
 from ..core.export_ir import (
     Color,
     ExportProject,
+    ExportSettings,
     FidelityItem,
     OutputMode,
     OverlayCorner,
@@ -494,7 +495,7 @@ def _widget_color_block(project: ExportProject) -> str:
     if declarations:
         blocks.append("\n".join(["      :root {", *declarations, "      }"]))
 
-    scale_block = _chrome_scale_block(settings.chrome_scale)
+    scale_block = _chrome_scale_block(settings.chrome_scale, settings)
     if scale_block:
         blocks.append(scale_block)
 
@@ -509,10 +510,11 @@ _WIDGET_ORIGINS = {
     "layer-switcher": "top left",
     "zoom-controls": "bottom left",
     "scale-bar": "bottom left",
+    "measure": "bottom left",
 }
 
 
-def _chrome_scale_block(scale: float) -> str:
+def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
     """Scale the map chrome with a transform, not a font size.
 
     **The runtime exposes no size property.** Its theming surface is six custom
@@ -564,6 +566,23 @@ def _chrome_scale_block(scale: float) -> str:
         ]
     )
 
+    # The measure tool sits above those two in the same corner, and nothing
+    # moves it out of their way: a transform leaves the layout as it was, so
+    # the zoom controls, lifted and grown by the rules above, reached up into
+    # its readout - measured at scale 2. It is lifted by their lift plus their
+    # growth, so the gap between them scales like the others. The zoom
+    # controls are two `--om-widget-size` buttons (30px unless the page raises
+    # it for touch), and 8px is the runtime's gap between stacked widgets.
+    lift = _measure_lift(scale, settings)
+    if lift:
+        rules.extend(
+            [
+                '      om-widget[type="measure"] {',
+                f"        bottom: {lift} !important;",
+                "      }",
+            ]
+        )
+
     # The caption is our own element, so it scales by type rather than by
     # transform - sharper text, and it reflows instead of overflowing.
     rules.extend(
@@ -577,6 +596,25 @@ def _chrome_scale_block(scale: float) -> str:
         ]
     )
     return "\n".join(rules)
+
+
+def _measure_lift(scale: float, settings: ExportSettings) -> str:
+    """How far a scaled measure tool rises to clear what is stacked under it.
+
+    Empty when it is not on the map, or when nothing is under it to grow into.
+    """
+    if not settings.show_measure:
+        return ""
+    growth = round(scale - 1.0, 3)
+    if settings.show_zoom_controls:
+        return (
+            f"calc({round(58.0 * scale, 1)}px + {growth} * "
+            "(var(--om-widget-size, 30px) * 2 + 8px))"
+        )
+    if settings.show_scale_bar:
+        # The scale bar measured 27px tall, its padding included.
+        return f"{round(30.0 * scale + growth * (27.0 + 8.0), 1)}px"
+    return ""
 
 
 def _attribution_block(project: ExportProject) -> str:

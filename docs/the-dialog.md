@@ -245,8 +245,16 @@ exported map should be useful without configuring anything.
 
 ### Map controls
 
-Four switches — **Legend**, **Layer switcher**, **Zoom controls**, **Scale bar**.
-Untick one to leave that control off the exported map.
+Five switches — **Legend**, **Layer switcher**, **Zoom controls**, **Scale bar**,
+**Measure tool**. Untick one to leave that control off the exported map.
+
+The **measure tool** lets whoever opens the map measure on it. They pick
+**Measure distance** or **Measure area**, click points on the map, and read the
+total in metric, imperial or nautical units; **Enter** finishes the line or
+shape, **Clear** removes it, and clicking the same button again ends measuring.
+While it is measuring, a click places a point rather than opening a popup.
+Distances and areas are measured on the ground, whatever CRS the project uses.
+It sits above the zoom controls in the bottom-left corner.
 
 The layer switcher is the one exception to that. It only appears when the map
 has more than one thing to switch between, so a map with a single unlabelled
@@ -264,18 +272,18 @@ worse than a missing one.
 - **Project description** draws the abstract from
   **Project Properties → Metadata**. Nothing appears if the project has none.
 - **Position** places the caption. All four corners already hold controls —
-  switcher top left, legend top right, zoom and scale bottom left, credit bottom
-  right — so the two centre positions are the only genuinely clear space, and
-  they are listed first.
+  switcher top left, legend top right, zoom, scale and measure tool bottom
+  left, credit bottom right — so the two centre positions are the only
+  genuinely clear space, and they are listed first.
 
 ### Control colours
 
 **Background** and **Text and icons** apply to the legend, layer switcher, zoom
-controls and scale bar. Both start unset, meaning *use the map's own styling*;
+controls, scale bar and measure tool. Both start unset, meaning *use the map's own styling*;
 leave them that way and a default export is unchanged.
 
-**Size** scales the legend, layer switcher, zoom controls, scale bar and title
-together — Small through to *Largest, for presentations and big screens*. The
+**Size** scales the legend, layer switcher, zoom controls, scale bar, measure
+tool and title together — Small through to *Largest, for presentations and big screens*. The
 credit stays fixed, so attribution cannot be shrunk out of legibility.
 
 ### Behaviour
