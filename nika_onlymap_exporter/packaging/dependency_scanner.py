@@ -283,6 +283,38 @@ def report_remote_dependency(
         )
 
 
+def report_service_legend(layer: ExportLayer, report: FidelityReportBuilder) -> None:
+    """The Fidelity row for the legend pictures a WMS or WMTS layer's service
+    draws, which the web map's legend loads live, as QGIS's does."""
+    from urllib.parse import urlsplit
+
+    tiles = layer.tiles
+    if tiles is None or not tiles.legend:
+        return
+    images = tiles.legend
+    hosts = " and ".join(dict.fromkeys(urlsplit(image.url).netloc for image in images))
+    several = len(images) > 1
+    detail = (
+        f"The legend shows the {'pictures' if several else 'picture'} {hosts} "
+        "draws for this layer, as QGIS's legend does. The map loads "
+        f"{'them' if several else 'it'} from the service each time it is "
+        "opened, so it needs an internet connection; without one, the legend "
+        "lists the layer by its name alone."
+    )
+    if several:
+        detail += (
+            " QGIS's legend shows the first sublayer's picture only; the map's "
+            f"shows one for each of the {len(images)} sublayers, under its name."
+        )
+    if tiles.contextual_legend:
+        detail += (
+            " QGIS's legend for this layer shows only what is in view (its "
+            "contextual WMS legend); the map's is the layer's whole legend, "
+            "which does not change as the map moves."
+        )
+    report.approximated(f"Legend of '{layer.name}'", detail, layer.layer_id)
+
+
 def scan(
     project: ExportProject,
     report: FidelityReportBuilder,
@@ -316,6 +348,12 @@ def scan(
                 reason = dependency.note or f"'{dependency.identifier}' is missing."
                 blocking.append(reason)
                 report.blocked(f"Data source of '{layer.name}'", reason, layer.layer_id)
+
+        # A map service's legend pictures are fetched from it on every open,
+        # like its tiles - but only when there is a legend to show them in.
+        if project.settings.show_legend and layer.tiles is not None:
+            remote.extend(image.url for image in layer.tiles.legend)
+            report_service_legend(layer, report)
 
     # The basemap and terrain are not layers, so no layer dependency names them,
     # yet the map fetches their tiles every time it is opened. The Fidelity

@@ -44,6 +44,7 @@ from .export_ir import (
     Extent,
     GeometryKind,
     LabelingSpec,
+    LegendImage,
     NoDataRule,
     PopupSpec,
     RasterSpec,
@@ -1296,6 +1297,16 @@ def _is_key_parameter(name: str) -> bool:
     return name.lower().replace("-", "").replace("_", "") in _KEY_PARAMETERS
 
 
+def _carries_key(url: str) -> bool:
+    """Whether `url` carries an access key: a key parameter, or
+    `user:password@host`, which is a credential just as `?key=` is."""
+    from urllib.parse import parse_qsl, urlsplit
+
+    parts = urlsplit(url)
+    pairs = parse_qsl(parts.query, keep_blank_values=True)
+    return "@" in parts.netloc or any(_is_key_parameter(key) for key, _ in pairs)
+
+
 def _live_dependency(
     url: str, name: str, what: str = "tile address"
 ) -> tuple[str, AssetDependency]:
@@ -1310,7 +1321,7 @@ def _live_dependency(
     keyless = [(key, value) for key, value in pairs if not _is_key_parameter(key)]
     # `user:password@host` is a credential just as `?key=` is.
     host = parts.netloc.rpartition("@")[2]
-    keyed = len(keyless) != len(pairs) or host != parts.netloc
+    keyed = _carries_key(url)
     if keyed:
         # Never kept, not even in the model: the export is blocked below, but a
         # snapshot or a report must not be able to carry the key either.
@@ -1458,6 +1469,36 @@ def _cached_capabilities(url: str) -> bytes | None:
         device.close()
 
 
+def _service_legend(
+    name: str,
+    found: list[tuple[str, str]],
+    report: FidelityReportBuilder,
+    layer_id: str,
+) -> tuple[LegendImage, ...]:
+    """The legend pictures of a WMS or WMTS layer, from `(title, address)`
+    pairs; a title is kept only when there are several pictures to tell
+    apart. An address carrying an access key is left out, with a row: the
+    browser would load it, key and all, from the page anyone can read.
+    """
+    from urllib.parse import urlsplit
+
+    images: list[LegendImage] = []
+    for title, address in found:
+        if _carries_key(address):
+            host = urlsplit(address).netloc.rpartition("@")[2]
+            report.unsupported(
+                f"Legend of '{name}'",
+                f"The address of this layer's legend picture on {host} carries "
+                "an access key, which the legend would write into the map for "
+                "anyone who receives it to copy. The picture is left out of the "
+                "legend, which lists the layer by its name.",
+                layer_id,
+            )
+            continue
+        images.append(LegendImage(address, title if len(found) > 1 else ""))
+    return tuple(images)
+
+
 def _map_service_layer(
     layer: QgsRasterLayer,
     tiles: TileSpec,
@@ -1505,6 +1546,9 @@ def read_map_service(
     A WMS-T layer that follows QGIS's time is a snapshot: the template asks
     for the `TIME` QGIS sends now, worked out from `map_time` as QGIS works
     it out (`_wms_snapshot_time`), and is refused when that cannot be told.
+
+    The legend pictures QGIS's legend shows for the layer travel the same
+    way, as addresses the browser loads (`TileSpec.legend`).
     """
     from urllib.parse import urlsplit
 
@@ -1569,7 +1613,22 @@ def read_map_service(
             return None
         template, dependency = _live_dependency(found.template, name)
         host = urlsplit(template).netloc
-        tiles = TileSpec(template, found.min_zoom, found.max_zoom, found.tile_size)
+        legend_url = map_services.wmts_legend_url(
+            capabilities,
+            layer=(map_services.values(pairs, "layers") or [""])[0],
+            style=(map_services.values(pairs, "styles") or [""])[0],
+            image_format=image_format,
+            source=layer.source(),
+        )
+        tiles = TileSpec(
+            template,
+            found.min_zoom,
+            found.max_zoom,
+            found.tile_size,
+            legend=_service_legend(
+                name, [("", legend_url)] if legend_url else [], report, layer_id
+            ),
+        )
         report.approximated(
             subject,
             f"Exported as a live WMTS layer: the web map loads its tiles from "
@@ -1631,7 +1690,30 @@ def read_map_service(
     )
     template, dependency = _live_dependency(template, name)
     host = urlsplit(template).netloc
-    tiles = TileSpec(template, 0, 19, map_services.WMS_TILE_SIZE)
+    # The legend pictures QGIS's legend shows, from the same capabilities;
+    # none without them, since nothing else says where the service draws one.
+    legend = (
+        map_services.wms_legend_urls(
+            parsed,
+            layers,
+            map_services.values(pairs, "styles"),
+            image_format,
+            url=url if "IgnoreGetMapUrl" in (key for key, _ in pairs) else None,
+        )
+        if parsed is not None
+        else []
+    )
+    # QGIS's "Use contextual WMS legend", read as QGIS reads it: a whole
+    # number, on when it is not 0. Its legend then shows only what is in view.
+    contextual = map_services.value(pairs, "contextualWMSLegend").strip()
+    tiles = TileSpec(
+        template,
+        0,
+        19,
+        map_services.WMS_TILE_SIZE,
+        legend=_service_legend(name, legend, report, layer_id),
+        contextual_legend=contextual.lstrip("+-").isdigit() and int(contextual) != 0,
+    )
     projection = (
         ""
         if map_services.web_mercator_code(source_crs)

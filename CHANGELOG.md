@@ -62,6 +62,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the text is saved, not the fields the expression reads. Variables QGIS sets
   only while drawing (`@map_scale`, atlas variables) have no value at export,
   and the Fidelity tab says so. These layers used to export with no labels.
+- **WMS and WMTS legends** ([qgis2web#1015](https://github.com/qgis2web/qgis2web/issues/1015)):
+  a WMS or WMTS layer's legend entry shows the picture the service draws for
+  it, as QGIS's legend does - the style's LegendURL, or for a WMS a
+  GetLegendGraphic request built from what QGIS stored when it loaded the
+  layer, one for each sublayer of a layer made of several. The browser loads
+  it from the service when the map opens, so it needs an internet
+  connection; offline the legend lists the layer by name. An address that
+  carries an access key is left out. A cartograph's legend still lists the
+  layer by name; the Checks tab says so.
 
 ### Fixed
 - Labels on multi-part features land where QGIS draws them

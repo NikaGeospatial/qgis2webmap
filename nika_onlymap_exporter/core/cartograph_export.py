@@ -1132,6 +1132,40 @@ def _report_raster_swatches(
         )
 
 
+def _report_service_legends(
+    spec: CartographSpec,
+    frame_id: str,
+    layers: Sequence[ExportLayer],
+    report: FidelityReportBuilder,
+) -> None:
+    """Say, for each WMS or WMTS layer a derived legend lists, that QGIS's
+    legend shows the picture the service draws for it, and the browser's
+    lists it by name: a row of the runtime's legend is a swatch and a label,
+    with no place for a picture."""
+    legends = [
+        item
+        for item in spec.items
+        if isinstance(item, LegendSpec) and item.derived and item.for_ == frame_id
+    ]
+    for layer in layers:
+        if layer.tiles is None or not layer.tiles.legend or not layer.visible:
+            continue
+        if all(
+            any(
+                row.layer == layer.layer_id and row.match is None and row.hide
+                for row in legend.rows
+            )
+            for legend in legends
+        ):
+            continue
+        report.approximated(
+            f"Legend '{layer.name}'",
+            "QGIS's legend shows the picture the service draws for this layer; "
+            "the browser's legend cannot show a picture, so it lists the layer "
+            "by its name.",
+        )
+
+
 def fit_legends_to_layout(
     layout: QgsPrintLayout,
     project: QgsProject,
@@ -1568,6 +1602,7 @@ def finish_cartograph_full(
         # final symbology is known.
         spec = fit_frame_legends(spec, source.frame_id, rendered.layers)
         _report_raster_swatches(spec, source.frame_id, rendered.layers, report)
+        _report_service_legends(spec, source.frame_id, rendered.layers, report)
         spec = fit_frame_legend_boxes(spec, source.frame_id, rendered.layers, report)
         live_markup[source.frame_id] = _map_element(writer, rendered, verdict, held)
     _warn_when_inline_data_is_heavy(projects, report, measured)

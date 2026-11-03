@@ -32,6 +32,7 @@ from nika_onlymap_exporter.core.export_ir import (
     ExportSettings,
     Extent,
     GeometryKind,
+    LegendImage,
     RendererKind,
     RendererSpec,
     SourceKind,
@@ -40,7 +41,9 @@ from nika_onlymap_exporter.core.export_ir import (
 )
 from nika_onlymap_exporter.core.map_services import (
     WMS_TILE_SIZE,
+    parse_wms_capabilities,
     wms_get_map_template,
+    wms_legend_urls,
 )
 from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
 
@@ -395,3 +398,190 @@ class TestWmtsTiles:
         assert measured["crimson"] > 0
         assert measured["found"] == pytest.approx(measured["expected"], abs=1.5)
         assert any(r["params"].get("REQUEST") == "GetTile" for r in services.requests)
+
+
+def _legend_layer(services, service="cors/wms", layers=("target",), styles=None):
+    """A WMS layer with the legend pictures the reader finds for it, from
+    the fake service's own capabilities."""
+    from urllib.request import urlopen
+
+    url = services.url(service)
+    with urlopen(url + "?SERVICE=WMS&REQUEST=GetCapabilities") as response:
+        parsed = parse_wms_capabilities(response.read())  # the local fake service
+    assert parsed is not None
+    found = wms_legend_urls(
+        parsed, list(layers), list(styles or [""] * len(layers)), "image/png"
+    )
+    layer = _wms_layer(url, layers=layers)
+    assert layer.tiles is not None
+    legend = tuple(LegendImage(address, title) for title, address in found)
+    return replace(layer, tiles=replace(layer.tiles, legend=legend))
+
+
+def _with_legend(layer: ExportLayer, *urls: str) -> ExportLayer:
+    assert layer.tiles is not None
+    legend = tuple(LegendImage(url) for url in urls)
+    return replace(layer, tiles=replace(layer.tiles, legend=legend))
+
+
+LEGEND_STATE = """
+async () => {
+  const widget = [...document.querySelectorAll('om-widget')].find(
+    (w) => w.shadowRoot && w.shadowRoot.querySelector('.omni-panel'));
+  const root = widget.shadowRoot;
+  const images = [...root.querySelectorAll('.omni-legend-graphic img')];
+  // Each picture loads or fails by itself; wait for both, bounded.
+  await Promise.all(images.map((img) => img.complete ? null : new Promise((done) => {
+    img.addEventListener('load', done);
+    img.addEventListener('error', done);
+    setTimeout(done, 15000);
+  })));
+  const box = (el) => {
+    const r = el.getBoundingClientRect();
+    return { width: r.width, height: r.height, top: r.top, bottom: r.bottom };
+  };
+  return {
+    rows: [...root.querySelectorAll('.omni-row')].map((row) => ({
+      text: row.textContent, ...box(row),
+    })),
+    fields: [...root.querySelectorAll('.omni-legend-field')].map((f) => f.textContent),
+    images: images.map((img) => ({
+      natural: [img.naturalWidth, img.naturalHeight],
+      shown: box(img),
+      graphic: {
+        clientHeight: img.parentElement.clientHeight,
+        scrollHeight: img.parentElement.scrollHeight,
+      },
+    })),
+    panel: box(root.querySelector('.omni-panel')),
+    viewport: [innerWidth, innerHeight],
+  };
+}
+"""
+
+
+def _legend(page, url: str) -> dict:
+    page.set_viewport_size({"width": 900, "height": 700})
+    page.goto(url)
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('om-widget')].some("
+        "(w) => w.shadowRoot && w.shadowRoot.querySelector('.omni-panel'))",
+        timeout=30_000,
+    )
+    return page.evaluate(LEGEND_STATE)
+
+
+def _legend_requests(services, before: int) -> list[dict]:
+    return [
+        request
+        for request in services.requests[before:]
+        if request["params"].get("REQUEST") == "GetLegendGraphic"
+        or request["path"].endswith("/legends/outlined.png")
+    ]
+
+
+class TestWmsLegend:
+    """The service's legend picture, in the exported page's legend."""
+
+    @pytest.mark.parametrize("service", ["cors/wms", "nocors/wms", "cors/wms111"])
+    def test_the_picture_loads_from_a_file(
+        self, page, runtime, services, tmp_path, service
+    ) -> None:
+        """Opened from a file, as an exported map usually is. A picture needs
+        no CORS, so a service that sends none still shows its legend."""
+        from fake_map_services import LEGEND_SIZES
+
+        before = len(services.requests)
+        entry = _export(runtime, tmp_path, _legend_layer(services, service))
+        state = _legend(page, entry.as_uri())
+
+        (image,) = state["images"]
+        assert image["natural"] == list(LEGEND_SIZES["target"])
+        assert image["shown"]["width"] == LEGEND_SIZES["target"][0]
+        (asked,) = _legend_requests(services, before)
+        assert asked["params"]["LAYER"] == "target"
+        assert [row["text"] for row in state["rows"]] == ["Fake WMS", "Stations"]
+        # The picture sits under its layer's row, inside the panel.
+        assert image["shown"]["top"] >= state["rows"][0]["bottom"]
+        assert image["shown"]["bottom"] <= state["panel"]["bottom"]
+
+    def test_the_picture_loads_when_the_map_is_served(
+        self, page, runtime, services, tmp_path
+    ) -> None:
+        """Served over http, from the Preview's own server."""
+        from fake_map_services import OUTLINED_LEGEND_SIZE
+
+        from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+        layer = _legend_layer(services, styles=("outlined",))
+        entry = _export(runtime, tmp_path, layer)
+        server = PreviewServer(entry.parent)
+        server.start()
+        try:
+            state = _legend(page, f"http://127.0.0.1:{server.port}/{entry.name}")
+        finally:
+            server.stop()
+        (image,) = state["images"]
+        assert image["natural"] == list(OUTLINED_LEGEND_SIZE)
+
+    def test_each_sublayer_has_its_picture_under_its_name(
+        self, page, runtime, services, tmp_path
+    ) -> None:
+        from fake_map_services import LEGEND_SIZES
+
+        layer = _legend_layer(services, layers=("target", "boundary"))
+        state = _legend(page, _export(runtime, tmp_path, layer).as_uri())
+        assert state["fields"] == ["Target area", "Boundary"]
+        assert [image["natural"] for image in state["images"]] == [
+            list(LEGEND_SIZES["target"]),
+            list(LEGEND_SIZES["boundary"]),
+        ]
+
+    def test_a_tall_picture_keeps_its_size_and_scrolls(
+        self, page, runtime, services, tmp_path
+    ) -> None:
+        """`boundary`'s legend is 600 px tall: shown at its own size, so its
+        text stays legible, in a box that scrolls rather than a panel that
+        runs off the screen."""
+        from fake_map_services import LEGEND_SIZES
+
+        layer = _legend_layer(services, layers=("boundary",))
+        state = _legend(page, _export(runtime, tmp_path, layer).as_uri())
+        (image,) = state["images"]
+        assert image["natural"] == list(LEGEND_SIZES["boundary"])
+        assert image["shown"]["width"] == LEGEND_SIZES["boundary"][0]
+        assert image["graphic"]["clientHeight"] <= 240
+        assert image["graphic"]["scrollHeight"] >= LEGEND_SIZES["boundary"][1]
+        assert state["panel"]["bottom"] <= state["viewport"][1]
+
+    def test_a_picture_that_fails_leaves_the_legend_readable(
+        self, page, runtime, services, tmp_path
+    ) -> None:
+        """A service that answers with an error, and one that cannot be
+        reached (offline): no picture, no broken-image box, and the rows
+        exactly where a legend without pictures puts them."""
+        plain = _wms_layer(services.url("cors/wms"))
+        reference = _legend(page, _export(runtime, tmp_path / "plain", plain).as_uri())
+
+        failing = _with_legend(
+            plain,
+            _legend_layer(services)
+            .tiles.legend[0]
+            .url.replace(  # type: ignore[union-attr]
+                "LAYER=target", "LAYER=missing"
+            ),
+            "http://127.0.0.1:9/legend.png",
+        )
+        state = _legend(page, _export(runtime, tmp_path / "failing", failing).as_uri())
+
+        assert [image["natural"] for image in state["images"]] == [[0, 0], [0, 0]]
+        for image in state["images"]:
+            # No height is no broken-image box: nothing shows.
+            assert image["shown"]["height"] == 0
+            assert image["graphic"]["clientHeight"] == 0
+        assert [row["text"] for row in state["rows"]] == ["Fake WMS", "Stations"]
+        for row, expected in zip(state["rows"], reference["rows"]):
+            assert row["height"] == pytest.approx(expected["height"], abs=0.5)
+        assert state["panel"]["height"] == pytest.approx(
+            reference["panel"]["height"], abs=8
+        )

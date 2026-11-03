@@ -297,6 +297,19 @@ stay empty in a map opened from a file and in **Preview in browser**, which
 serves the map from your own computer over `http://`, but draw once the map is
 published over `https://`, such as on NIKA hosting or GitHub Pages.
 
+### A WMS or WMTS layer's legend shows no picture
+
+The legend lists the layer by name, without the picture QGIS's legend shows.
+The reader's browser loads that picture from the service when the map opens,
+so it is missing offline, while the service is down, when the service answers
+the request with an error, and on a site whose Content Security Policy does
+not allow images from the service ([hosting](hosting.md#if-your-site-sets-a-content-security-policy)).
+It needs no CORS, so it can show while the layer's tiles stay empty. A
+service that gives QGIS neither a LegendURL for the layer's style nor a
+GetLegendGraphic request has no picture in QGIS either, and none is exported;
+nor is a picture whose address carries an access key (the Checks tab says
+so). The legend in a cartograph lists the layer by name in any case.
+
 ### A raster read over the web (a COG) is empty in the map
 
 The rest of the map draws, but the raster stays blank. The map reads the parts

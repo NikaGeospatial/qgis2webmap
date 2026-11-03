@@ -2482,6 +2482,65 @@ class TestTileLayer:
         markup = build_manifest(make_project(layers=(self.tile_layer(),)))
         assert "validate" not in markup
 
+    LEGEND = (
+        "https://example.org/wms?SERVICE=WMS&VERSION=1.3.0&SLD_VERSION=1.1.0"
+        "&REQUEST=GetLegendGraphic&FORMAT=image/png&LAYER=a&STYLE=&TRANSPARENT=true"
+    )
+
+    def legend_layer(self, *images):
+        from nika_onlymap_exporter.core.export_ir import LegendImage
+
+        layer = self.wms_layer()
+        assert layer.tiles is not None
+        pictures = tuple(LegendImage(url, label) for url, label in images)
+        return replace(layer, tiles=replace(layer.tiles, legend=pictures))
+
+    def test_a_service_legend_picture_sits_under_its_layers_row(self) -> None:
+        """A plain `<img>` with empty alt text, so one that cannot load takes
+        no room and leaves the row as it is."""
+        import html
+
+        legend = build_legend_widget(
+            make_project(layers=(self.legend_layer((self.LEGEND, "")),))
+        )
+        row = legend.index("<span>OpenStreetMap</span>")
+        (image,) = re.findall(r'<img src="([^"]*)" alt="">', legend)
+        assert html.unescape(image) == self.LEGEND
+        assert legend.index('class="omni-legend-graphic"') > row
+        assert 'class="omni-legend-field"' not in legend
+        assert "<script" not in legend
+
+    def test_several_sublayers_each_have_their_name(self) -> None:
+        legend = build_legend_widget(
+            make_project(
+                layers=(
+                    self.legend_layer(
+                        (self.LEGEND, "Roads & rails"),
+                        (self.LEGEND.replace("LAYER=a", "LAYER=b"), "Rivers"),
+                    ),
+                )
+            )
+        )
+        fields = re.findall(r'<div class="omni-legend-field">([^<]*)</div>', legend)
+        assert fields == ["Roads &amp; rails", "Rivers"]
+        assert legend.count("<img ") == 2
+        assert legend.index("Rivers") < legend.rindex("LAYER=b")
+
+    def test_a_tall_or_wide_picture_is_bounded(self) -> None:
+        legend = build_legend_widget(
+            make_project(layers=(self.legend_layer((self.LEGEND, "")),))
+        )
+        rules = re.search(r"\.omni-legend-graphic \{([^}]*)\}", legend)
+        assert rules is not None
+        assert "max-height" in rules.group(1) and "overflow: auto" in rules.group(1)
+        assert re.search(r"\.omni-legend-graphic img \{[^}]*max-width: 100%", legend)
+
+    def test_a_layer_without_one_is_unchanged(self) -> None:
+        legend = build_legend_widget(make_project(layers=(self.wms_layer(),)))
+        assert "<img" not in legend
+        assert 'class="omni-legend-sub"' not in legend
+        assert "legend" not in json.dumps(self.wms_layer().snapshot()["tiles"])
+
 
 class TestDeclutter:
     """Clusters and held-back labels, as `core.declutter` decided them."""
