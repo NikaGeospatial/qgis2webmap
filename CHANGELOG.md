@@ -50,6 +50,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - OGC API Features and SensorThings layers are described as web services in
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
+- A raster whose file is already a Cloud-Optimized GeoTIFF compressed with
+  LZW, ZSTD or LERC no longer exports as an empty layer: the web map cannot
+  decode those compressions, so the file is now converted (to DEFLATE, as
+  every other raster is) instead of being copied as it stands.
 
 ## [0.3.0] - 2026-10-30
 

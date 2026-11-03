@@ -132,6 +132,26 @@ def test_uncompressed_cog_is_flagged_as_an_opportunity():
     assert any("uncompressed" in warning for warning in verdict.warnings)
 
 
+@pytest.mark.parametrize(
+    "compression", ["LZW", "ZSTD", "LERC", "LERC_DEFLATE", "LERC_ZSTD"]
+)
+def test_a_cog_the_runtime_cannot_decode_is_not_web_ready(compression):
+    # OnlyMap 0.13.3 draws these blank, so a COG carrying one must be
+    # re-encoded rather than shipped as it stands.
+    verdict = rc.verdict_from_probe(probe(compression=compression))
+    assert verdict.is_cog
+    assert not verdict.is_web_decodable
+    assert not verdict.is_web_ready
+    assert "re-encoded" in verdict.describe()
+
+
+@pytest.mark.parametrize("compression", ["DEFLATE", "JPEG", "YCbCr JPEG", "WEBP"])
+def test_a_cog_the_runtime_can_decode_stays_web_ready(compression):
+    # GDAL names a three-band JPEG "YCbCr JPEG"; it is still JPEG to a decoder.
+    verdict = rc.verdict_from_probe(probe(compression=compression))
+    assert verdict.is_web_ready
+
+
 def test_verdict_snapshot_is_json_ready():
     snapshot = rc.verdict_from_probe(probe()).snapshot()
     assert snapshot["isCog"] is True
@@ -315,6 +335,49 @@ def test_skip_if_ready_false_forces_a_copy(tmp_path, plain_geotiff):
 
     assert not result.skipped
     assert second.exists()
+
+
+def _web_mercator_cog(path, compression: str):
+    """A 3-band EPSG:3857 COG written with `compression` -- already web-placed."""
+    from osgeo import osr
+
+    source = gdal.GetDriverByName("MEM").Create("", 64, 64, 3, gdal.GDT_Byte)
+    source.SetGeoTransform([1_280_174.0, 400.0, 0.0, 6_841_175.0, 0.0, -400.0])
+    reference = osr.SpatialReference()
+    reference.ImportFromEPSG(rc.WEB_MERCATOR_EPSG)
+    source.SetProjection(reference.ExportToWkt())
+    for band, value in ((1, 60), (2, 120), (3, 180)):
+        source.GetRasterBand(band).Fill(value)
+    gdal.GetDriverByName("COG").CreateCopy(
+        str(path), source, options=[f"COMPRESS={compression}"]
+    )
+    return path
+
+
+@needs_gdal
+@pytest.mark.parametrize("compression", ["LZW", "ZSTD"])
+def test_a_cog_the_runtime_cannot_decode_is_re_encoded(tmp_path, compression):
+    source = _web_mercator_cog(tmp_path / "source.tif", compression)
+    assert rc.is_cog(source).is_cog
+    destination = tmp_path / "out.tif"
+
+    result = rc.to_cog(source, destination)
+
+    assert not result.skipped
+    assert result.destination == str(destination)
+    assert not result.reprojected
+    assert result.compression == rc.DEFAULT_COMPRESSION
+    assert rc.is_cog(destination).is_web_ready
+
+
+@needs_gdal
+def test_a_jpeg_cog_is_still_used_unchanged(tmp_path):
+    # Guards the "YCbCr JPEG" spelling: read literally, it is not in the
+    # web-safe set and every JPEG COG would be needlessly rewritten.
+    source = _web_mercator_cog(tmp_path / "source.tif", "JPEG")
+    result = rc.to_cog(source, tmp_path / "out.tif")
+    assert result.skipped
+    assert result.destination == str(source)
 
 
 @needs_gdal

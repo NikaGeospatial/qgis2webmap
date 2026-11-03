@@ -75,9 +75,12 @@ DEFAULT_OVERVIEW_RESAMPLING = "AVERAGE"
 # Compressions a COG may carry that every mainstream client can decode. A file
 # using something outside this set is not necessarily broken, but we will not
 # call it web-ready without saying so.
-WEB_SAFE_COMPRESSIONS = frozenset(
-    {"DEFLATE", "LZW", "ZSTD", "JPEG", "WEBP", "LERC", "LERC_DEFLATE", "LERC_ZSTD"}
-)
+# LZW, ZSTD and LERC (with LERC_DEFLATE and LERC_ZSTD) are left out although
+# GDAL writes them: the OnlyMap runtime loads their decoders as separate script
+# files that the plugin's standalone page cannot resolve, so a layer stored in
+# one of them draws blank (seen with OnlyMap 0.13.3). A COG carrying one is
+# re-encoded to `DEFAULT_COMPRESSION` instead of being used as it is.
+WEB_SAFE_COMPRESSIONS = frozenset({"DEFLATE", "JPEG", "WEBP"})
 
 # Lossy codecs. Listed so `to_cog` can say out loud that it is about to throw
 # pixel values away, instead of the user discovering it in their elevation
@@ -210,14 +213,26 @@ class CogVerdict:
         return self.epsg != WEB_MERCATOR_EPSG
 
     @property
+    def is_web_decodable(self) -> bool:
+        """True when a web map can decode the tiles' compression."""
+        return _is_web_decodable(self.probe.compression if self.probe else None)
+
+    @property
     def is_web_ready(self) -> bool:
         """A COG *and* already in Web Mercator, so it can be hosted as-is."""
-        return self.is_cog and not self.needs_reprojection
+        return self.is_cog and not self.needs_reprojection and self.is_web_decodable
 
     def describe(self) -> str:
         """One line a human can act on."""
         if self.is_web_ready:
             return f"{Path(self.path).name} is already a web-ready COG."
+        if self.is_cog and not self.is_web_decodable:
+            return (
+                f"{Path(self.path).name} is a COG but its "
+                f"{_compression_label(self.probe.compression if self.probe else None)} "
+                "compression is not one every web client can decode; it will be "
+                "re-encoded."
+            )
         if self.is_cog:
             return (
                 f"{Path(self.path).name} is a COG but is in "
@@ -371,10 +386,10 @@ def _disqualifying_reasons(probe: RasterProbe) -> tuple[str, ...]:
             "every pixel at full resolution"
         )
 
-    compression = (probe.compression or "NONE").upper()
-    if compression != "NONE" and compression not in WEB_SAFE_COMPRESSIONS:
+    if not _is_web_decodable(probe.compression):
         reasons.append(
-            f"its {compression} compression is not one every web client can decode"
+            f"its {_compression_label(probe.compression)} compression is not one "
+            "every web client can decode"
         )
 
     if not reasons:
@@ -384,6 +399,20 @@ def _disqualifying_reasons(probe: RasterProbe) -> tuple[str, ...]:
         )
 
     return tuple(reasons)
+
+
+def _compression_label(compression: str | None) -> str:
+    """GDAL's compression name, upper-cased, `NONE` when it reports none."""
+    return (compression or "NONE").upper()
+
+
+def _is_web_decodable(compression: str | None) -> bool:
+    """Whether tiles stored with `compression` can be decoded by a web map.
+
+    GDAL reports a three-band JPEG as "YCbCr JPEG": still JPEG to a decoder.
+    """
+    name = _compression_label(compression).removeprefix("YCBCR ")
+    return name == "NONE" or name in WEB_SAFE_COMPRESSIONS
 
 
 def _probe_warnings(probe: RasterProbe) -> tuple[str, ...]:
@@ -692,7 +721,12 @@ def to_cog(
         )
 
     already_correct_crs = target_epsg is None or probe.epsg == target_epsg
-    if skip_if_ready and verdict.is_cog and already_correct_crs:
+    if (
+        skip_if_ready
+        and verdict.is_cog
+        and already_correct_crs
+        and verdict.is_web_decodable
+    ):
         return CogResult(
             source=source_text,
             destination=source_text,

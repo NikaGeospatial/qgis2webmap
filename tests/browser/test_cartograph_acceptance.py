@@ -308,6 +308,21 @@ class TestLiveFrameInWgs84:
         assert all(check["errors"] == [] for check in checks)
 
 
+def _assert_red_square_on_white(page, want: dict) -> None:
+    """The `_write_raster_live` square: red in the middle, white at the edge."""
+
+    def colour(lonlat: list[float]) -> list[int]:
+        return _colour_at(page, want["main_frame"], lonlat)
+
+    deadline = time.monotonic() + 30
+    red = colour(want["red"])
+    while red[:3] != [255, 0, 0] and time.monotonic() < deadline:
+        page.wait_for_timeout(500)
+        red = colour(want["red"])
+    assert red[:3] == pytest.approx([255, 0, 0], abs=8)
+    assert colour(want["white"])[:3] == pytest.approx([255, 255, 255], abs=8)
+
+
 class TestRasterInALiveFrame:
     """A raster in a live frame draws from the page itself: its source file
     is gone, and the page has no server to fetch from."""
@@ -316,17 +331,18 @@ class TestRasterInALiveFrame:
         _needs_webgl(page)
         want = expected["raster_live"]
         _open(page, fixtures / "raster-live.html")
+        _assert_red_square_on_white(page, want)
 
-        def colour(lonlat: list[float]) -> list[int]:
-            return _colour_at(page, want["main_frame"], lonlat)
-
-        deadline = time.monotonic() + 30
-        red = colour(want["red"])
-        while red[:3] != [255, 0, 0] and time.monotonic() < deadline:
-            page.wait_for_timeout(500)
-            red = colour(want["red"])
-        assert red[:3] == pytest.approx([255, 0, 0], abs=8)
-        assert colour(want["white"])[:3] == pytest.approx([255, 255, 255], abs=8)
+    @pytest.mark.parametrize("compression", ["lzw", "zstd"])
+    def test_a_cog_source_the_runtime_cannot_decode_still_draws(
+        self, page, fixtures: Path, expected, compression: str
+    ) -> None:
+        """OnlyMap 0.13.3 draws an LZW or ZSTD COG blank, so a source already
+        in one must be re-encoded on export rather than embedded as it is."""
+        _needs_webgl(page)
+        want = expected[f"raster_{compression}_live"]
+        _open(page, fixtures / f"raster-{compression}-live.html")
+        _assert_red_square_on_white(page, want)
 
     def test_the_first_automatic_print_has_it_with_no_network(
         self, page, fixtures: Path, expected
