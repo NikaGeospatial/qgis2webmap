@@ -679,10 +679,11 @@ def to_cog(
     for and will not think to clean up.
 
     `skip_if_ready` short-circuits when the source is already a COG in the
-    target CRS, in a compression the web map decodes. Nothing is copied in that case and `CogResult.destination`
-    points at the *source*; copying a 2 GB file to prove we looked at it is
-    pure cost. Pass False when the caller needs its own copy regardless -- for
-    instance to keep an artifact self-contained.
+    target CRS, in a compression the web map decodes. Nothing is copied in
+    that case and `CogResult.destination` points at the *source*; copying a
+    2 GB file to prove we looked at it is pure cost. Pass False when the
+    caller needs its own copy regardless -- for instance to keep an artifact
+    self-contained.
 
     Progress is reported as (units_done, 100). GDAL's callback fires often on a
     large raster, so a UI should expect to be called many times; `should_cancel`
