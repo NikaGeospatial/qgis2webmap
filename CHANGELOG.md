@@ -4,7 +4,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1] - Unreleased
+## [0.3.1] - 2026-11-03
 
 ### Added
 - **WMS layers export as live layers** ([#2](https://github.com/NikaGeospatial/qgis2webmap/issues/2)).
