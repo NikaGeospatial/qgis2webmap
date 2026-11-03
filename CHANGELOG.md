@@ -11,7 +11,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   class per rule that draws a symbol, and the legend lists the rules by their
   label. QGIS itself works out which rule draws each feature when you export
   - nested rules, ELSE rules and switched-off rules behave as in QGIS - and
-  the answer travels in the data as a `rule` property that popups do not
+  the answer travels in the data as a `Style` property that popups do not
   show. Reported in the Fidelity tab where the web map differs: a feature two
   rules draw shows only the symbol on top, scale ranges on rules are not
   kept, filters that read the map view (such as `@map_scale`) are worked out

@@ -604,7 +604,7 @@ class TestRuleTree:
     def test_each_feature_carries_the_rule_that_draws_it(self, project) -> None:
         exported = read_layer(_tree_layer(NESTED), FidelityReportBuilder())
 
-        assert exported.renderer.field_name == "rule"
+        assert exported.renderer.field_name == "Style"
         assert _classes(exported) == {
             0: "Small x",
             1: "Small x",  # Above 1 too, under it
@@ -667,13 +667,13 @@ class TestRuleTree:
 
     def test_the_class_property_does_not_take_a_fields_name(self, project) -> None:
         exported = read_layer(
-            _tree_layer(OVERLAPPING, extra_field="rule"), FidelityReportBuilder()
+            _tree_layer(OVERLAPPING, extra_field="Style"), FidelityReportBuilder()
         )
 
-        assert exported.renderer.field_name == "rule_2"
+        assert exported.renderer.field_name == "Style_2"
         properties = [f["properties"] for f in exported.geojson["features"]]
-        assert {p["rule"] for p in properties} == {"real"}
-        assert {p["rule_2"] for p in properties} == {"Above 1", "Above 5"}
+        assert {p["Style"] for p in properties} == {"real"}
+        assert {p["Style_2"] for p in properties} == {"Above 1", "Above 5"}
 
     def test_the_popup_does_not_show_the_class(self, project) -> None:
         exported = read_layer(_tree_layer(NESTED), FidelityReportBuilder())
@@ -703,8 +703,8 @@ class TestRuleTree:
         bare = read_layer(layer, FidelityReportBuilder(), with_popup=False)
 
         properties = [f["properties"] for f in bare.geojson["features"]]
-        assert all(set(p) == {"rule"} for p in properties)
-        assert [p["rule"] for p in properties] == [
+        assert all(set(p) == {"Style"} for p in properties)
+        assert [p["Style"] for p in properties] == [
             value for value in expected.values() if value is not None
         ]
 

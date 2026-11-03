@@ -216,10 +216,10 @@ A rule-based layer is exported as one class per rule that draws a symbol. When
 you export, QGIS itself works out which rule draws each feature - nested rules
 within their parent's filter, ELSE rules, rules with no filter, switched-off
 rules drawing nothing - and the answer is written into the exported data as a
-property called `rule` (`rule_2` and so on if the layer already has a field of
+property called `Style` (`Style_2` and so on if the layer already has a field of
 that name). Each class is drawn with its rule's symbol the way a categorized
 class is, and the legend lists the rules by their labels, or by their filter
-for a rule with no label. Popups and labels are not affected, and the `rule`
+for a rule with no label. Popups and labels are not affected, and the `Style`
 property never shows in a popup. Features no rule draws are left out, as in
 QGIS.
 

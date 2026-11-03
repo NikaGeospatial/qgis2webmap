@@ -1407,8 +1407,9 @@ def rule_values(rules: list[Any]) -> list[str]:
 
 
 #: The property a rule-based layer's generated class is written to, numbered
-#: when the layer has a field of that name.
-RULE_FIELD = "rule"
+#: when the layer has a field of that name. The runtime's legend prints it
+#: above the rules, so it is a word a map reader understands.
+RULE_FIELD = "Style"
 
 # Variables a filter reads that are about the QGIS view drawing the layer -
 # its scale, extent, time, the atlas page - rather than about the feature.
@@ -1427,7 +1428,7 @@ def _view_variables(expression: str) -> list[str]:
 
 
 def _rule_field(taken: Collection[str]) -> str:
-    """`RULE_FIELD`, or the first of `rule_2`, `rule_3`, ... no field takes."""
+    """`RULE_FIELD`, or the first of `Style_2`, `Style_3`, ... no field takes."""
     name, number = RULE_FIELD, 1
     while name in taken:
         number += 1
