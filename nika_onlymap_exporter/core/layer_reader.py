@@ -57,6 +57,7 @@ from .export_ir import (
 )
 from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import (
+    collect_character_set,
     format_label_number,
     label_expression_context,
     translate_labeling,
@@ -2397,11 +2398,16 @@ def _file_size(path: str) -> int | None:
 NAME_HALO = Color(255, 255, 255, 0.9)
 
 
-def point_names(labeling: LabelingSpec, field_name: str) -> LabelingSpec:
+def point_names(
+    labeling: LabelingSpec, field_name: str, character_set: str | None
+) -> LabelingSpec:
     """`labeling` showing `field_name`, always, with a halo.
 
     Built on the layer's own labelling when it has one, so its font and size
-    carry over; a halo is added only where QGIS set none.
+    carry over; a halo is added only where QGIS set none. `character_set` is
+    the names field's own (`collect_character_set`): the labelling's is its
+    label field's, and the atlas it builds *replaces* the runtime's, so a name
+    with a glyph only the names field uses would draw blank.
     """
     return dataclasses.replace(
         labeling,
@@ -2409,6 +2415,7 @@ def point_names(labeling: LabelingSpec, field_name: str) -> LabelingSpec:
         field_name=field_name,
         expression=None,
         number_format=None,
+        character_set=character_set,
         halo_color=labeling.halo_color or NAME_HALO,
         halo_width=labeling.halo_width or 1.0,
     )
@@ -2646,7 +2653,15 @@ def prepare_layer(
         and kind is GeometryKind.POINT
         and layer.fields().indexOf(name_field) >= 0
     ):
-        labeling = point_names(labeling, name_field)
+        labeling = point_names(
+            labeling,
+            name_field,
+            collect_character_set(layer, name_field, labeling.capitalization)
+            if scans is None
+            else scans.character_set(
+                layer, name_field, labeling.capitalization, collect_character_set
+            ),
+        )
         report.preserved(
             f"Names on '{name}'",
             f"Each point's '{name_field}' shows beside it with a halo, without "

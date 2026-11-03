@@ -17,6 +17,9 @@ browser job (no QGIS) points `LABEL_FIXTURES_DIR` at the download. It writes:
 - `expected.json`: its `entry`, and per point its position and the text QGIS's
   own labelling engine draws there on a render of the same layer (`None` where
   it draws none).
+- `accented-names/`: a map of points labelled "Zürich" whose Names (the Layers
+  tab's Points row) show another field, "ØÅÆ", every glyph of which the label
+  field lacks; `expected.json`'s `names` gives its `entry` and the points.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -47,6 +50,7 @@ def main(out_dir: Path) -> int:
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         expected = _write_map(out_dir)
+        expected["names"] = _write_names_map(out_dir)
         (out_dir / "expected.json").write_text(json.dumps(expected, indent=2))
     finally:
         app.exitQgis()
@@ -149,6 +153,81 @@ def _write_map(out_dir: Path) -> dict:
             for lon, lat, _n in POINTS
         ],
         "fidelity": [item.detail for item in report.items],
+    }
+
+
+# Names a degree apart, far from each other at the zoom the map opens on.
+NAME_POINTS = [(0.0, 0.5), (2.0, 1.5), (0.0, 2.5)]
+
+
+def _write_names_map(out_dir: Path) -> dict:
+    from qgis.core import (
+        Qgis,
+        QgsFeature,
+        QgsGeometry,
+        QgsMarkerSymbol,
+        QgsPalLayerSettings,
+        QgsProject,
+        QgsSingleSymbolRenderer,
+        QgsVectorLayer,
+        QgsVectorLayerSimpleLabeling,
+    )
+    from qgis.PyQt.QtGui import QColor
+
+    from nika_onlymap_exporter.core.export_ir import ExportSettings
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+    from nika_onlymap_exporter.core.project_reader import read_project
+    from nika_onlymap_exporter.core.settings import LayerSettings
+    from nika_onlymap_exporter.packaging.runtime_manager import (
+        LocalRuntime,
+        discover_runtime_dir,
+    )
+    from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
+
+    project = QgsProject.instance()
+    project.clear()
+    layer = QgsVectorLayer(
+        "Point?crs=EPSG:4326&field=name:string&field=other:string", "Towns", "memory"
+    )
+    features = []
+    for lon, lat in NAME_POINTS:
+        feature = QgsFeature(layer.fields())
+        feature.setGeometry(QgsGeometry.fromWkt(f"Point({lon} {lat})"))
+        feature.setAttributes(["Zürich", "ØÅÆ"])
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.updateExtents()
+    layer.setRenderer(
+        QgsSingleSymbolRenderer(
+            QgsMarkerSymbol.createSimple(
+                {"name": "circle", "size": "2", "color": "0,0,0"}
+            )
+        )
+    )
+    settings = QgsPalLayerSettings()
+    settings.fieldName = "name"
+    text_format = settings.format()
+    text_format.setColor(QColor(255, 0, 0))
+    text_format.setSize(20)
+    text_format.setSizeUnit(Qgis.RenderUnit.Pixels)
+    settings.setFormat(text_format)
+    layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
+    layer.setLabelsEnabled(True)
+    project.addMapLayer(layer)
+
+    exported = read_project(
+        project,
+        FidelityReportBuilder(),
+        settings=ExportSettings(show_title=False, show_legend=False),
+        layer_settings={layer.id(): LayerSettings(name_field="other")},
+    )
+    runtime = LocalRuntime(discover_runtime_dir())
+    result = OnlyMapWriter(runtime_provider=runtime).write(
+        exported, out_dir / "accented-names"
+    )
+    return {
+        "entry": str(Path(result.entry_path).relative_to(out_dir)),
+        "points": [[lon, lat] for lon, lat in NAME_POINTS],
     }
 
 

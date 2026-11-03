@@ -1205,6 +1205,24 @@ class TestRepeatedLineLabelsDraw:
         assert counts[:2] + counts[3:] == [0, 0, 0, 0], counts
 
 
+class TestAccentedNamesDraw:
+    """A point layer's Names show a field other than its label field. The page
+    declares the font atlas it needs, which replaces the runtime's, so a name
+    whose glyphs only the names field uses drew blank when the atlas was the
+    label field's. The names here are nothing but such glyphs."""
+
+    def test_every_name_draws_its_glyphs(self, page, expression_label_map) -> None:
+        fixtures, expected = expression_label_map
+        names = expected["names"]
+        page.set_viewport_size({"width": 1000, "height": 800})
+        open_map(page, fixtures / names["entry"])
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        wait_until_drawn(page)
+        counts = page.evaluate(COUNT_RED_PIXELS_NEAR, [names["points"], 60, 40])
+        assert all(count > 20 for count in counts), counts
+
+
 class TestDashedLinesReallyDash:
     """`dash` reaching the markup is not the same as deck.gl honouring it.
 

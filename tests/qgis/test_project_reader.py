@@ -794,6 +794,45 @@ class TestDeclutter:
         subjects = {i.subject for i in report.items}
         assert "Names on 'towns'" in subjects
 
+    def test_names_from_another_field_carry_their_own_glyphs(self, project) -> None:
+        """The labels read "Zürich" and the names "Ørsted Ålborg": the font
+        atlas the page declares replaces the runtime's, so the names field's
+        Ø and Å must be in it, not only the label field's ü."""
+        from nika_onlymap_exporter.core.manifest_builder import build_label_element
+        from nika_onlymap_exporter.core.settings import LayerSettings
+
+        layer = qgis_core.QgsVectorLayer(
+            "Point?crs=EPSG:4326&field=name:string&field=other:string",
+            "towns",
+            "memory",
+        )
+        features = []
+        for index in range(3):
+            feature = qgis_core.QgsFeature(layer.fields())
+            feature.setGeometry(
+                qgis_core.QgsGeometry.fromPointXY(qgis_core.QgsPointXY(index, 0.0))
+            )
+            feature.setAttributes(["Zürich", "Ørsted Ålborg"])
+            features.append(feature)
+        layer.dataProvider().addFeatures(features)
+        layer.updateExtents()
+        settings = qgis_core.QgsPalLayerSettings()
+        settings.fieldName = "name"
+        layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+        layer.setLabelsEnabled(True)
+        project.addMapLayer(layer)
+
+        read = read_project(
+            project,
+            FidelityReportBuilder(),
+            layer_settings={layer.id(): LayerSettings(name_field="other")},
+        ).layers[0]
+
+        assert read.labeling.field_name == "other"
+        declared = build_label_element(read).split('character-set="')[1].split('"')[0]
+        assert {"Ø", "Å", "r", "s"} <= set(declared)
+        assert set("Ørsted Ålborg") <= set(read.labeling.character_set or "")
+
     def test_names_ignore_a_field_the_layer_does_not_have(
         self, project, make_memory_layer
     ) -> None:

@@ -94,6 +94,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - A line's label sits at half its length along it, as QGIS places it. It was
   on the line's middle vertex, which on a line of two vertices is one of its
   ends.
+- A point layer's **Names** showing a different field from its labels draws
+  every accented or other non-ASCII letter of the names. Letters only the
+  names field used drew blank.
 - Labels on multi-part features land where QGIS draws them
   ([qgis2web#1095](https://github.com/qgis2web/qgis2web/issues/1095)): every
   point of a multipoint is labelled, not only the first; a multi-part line is

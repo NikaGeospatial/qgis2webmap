@@ -362,7 +362,8 @@ point instead.
 **Names beside every point.** On a point layer's **Points** row, **Names**
 picks a field whose value shows beside each point with a halo, without clicking
 for a popup. It replaces the layer's QGIS labels, and like them the names
-appear from the zoom where most have room.
+appear from the zoom where most have room. Accented and other non-ASCII
+letters are collected from the names field itself.
 
 **Labels from an expression** are worked out for each feature when the map is
 exported, the way QGIS works them out, and the text is saved with the map: it
