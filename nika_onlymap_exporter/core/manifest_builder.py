@@ -1850,12 +1850,32 @@ LEGEND_STYLES = """:host { font-family: system-ui, sans-serif; font-size: 12px; 
 .omni-legend-graphic img { display: block; max-width: 100%; background: #fff; }"""
 
 
-def _legend_style_element(indent: str) -> list[str]:
+def _legend_style_element(indent: str, settings: ExportSettings) -> list[str]:
     return [
         f"{indent}  <style>",
         *(f"{indent}    {line}" if line else "" for line in LEGEND_STYLES.splitlines()),
+        *(f"{indent}    {line}" for line in _legend_graphic_size(settings)),
         f"{indent}  </style>",
     ]
+
+
+def _legend_graphic_size(settings: ExportSettings) -> list[str]:
+    """A service's legend pictures sized by a legend whose size is set.
+
+    Their own 240px caps keep an Auto legend from growing to a wide picture;
+    a legend given a size has one, so a picture takes the panel's width and
+    the panel, not the picture, scrolls. A narrower legend already scales a
+    picture down (`.omni-legend-graphic img`). Nothing for Auto, so its
+    legend is as it was.
+    """
+    caps = []
+    if settings.legend_width is not None:
+        caps.append("max-width: none;")
+    if settings.legend_height is not None:
+        caps.append("max-height: none;")
+    if not caps:
+        return []
+    return [f".omni-legend-graphic {{ {' '.join(caps)} }}"]
 
 
 def needs_image_legend(project: ExportProject) -> bool:
@@ -2011,7 +2031,7 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     """
     title = "" if project.settings.show_title else project.title
     lines = [f'{indent}<om-widget position="{WIDGET_POSITIONS["legend"]}">']
-    lines.extend(_legend_style_element(indent))
+    lines.extend(_legend_style_element(indent, project.settings))
     lines.append(f'{indent}  <div class="omni-panel">')
     lines.append(f"{indent}    <h4>{escape_attr(title or 'Legend')}</h4>")
 

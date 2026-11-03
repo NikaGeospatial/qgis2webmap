@@ -554,6 +554,28 @@ class TestWmsLegend:
         assert image["graphic"]["scrollHeight"] >= LEGEND_SIZES["boundary"][1]
         assert state["panel"]["bottom"] <= state["viewport"][1]
 
+    def test_a_sized_legend_sizes_its_pictures(
+        self, page, runtime, services, tmp_path
+    ) -> None:
+        """Given a height, the legend scrolls as a whole: the tall picture is
+        no longer cut to its own 240px box, and the legend stays on the map."""
+        from fake_map_services import LEGEND_SIZES
+
+        layer = _legend_layer(services, layers=("boundary",))
+        settings = ExportSettings(basemap="none", legend_width=200, legend_height=500)
+        state = _legend(page, _export(runtime, tmp_path, layer, settings).as_uri())
+        (image,) = state["images"]
+        assert image["graphic"]["clientHeight"] == LEGEND_SIZES["boundary"][1]
+        host = page.evaluate(
+            """() => {
+                const host = [...document.querySelectorAll('om-widget')].find(
+                    (w) => w.shadowRoot && w.shadowRoot.querySelector('.omni-panel'));
+                const box = host.getBoundingClientRect();
+                return [box.width, box.height, host.scrollHeight > host.clientHeight];
+            }"""
+        )
+        assert host == [200, 500, True]
+
     def test_a_picture_that_fails_leaves_the_legend_readable(
         self, page, runtime, services, tmp_path
     ) -> None:

@@ -256,6 +256,18 @@ While it is measuring, a click places a point rather than opening a popup.
 Distances and areas are measured on the ground, whatever CRS the project uses.
 It sits above the zoom controls in the bottom-left corner.
 
+Beside **Legend** and **Layer switcher**, while each is ticked, two boxes set
+that panel's width and height in pixels — width 140 to 600, height 100 to
+1000; a number outside that is brought into it. Left on **Auto**, the panel is
+as it has always been: as wide as its contents and as tall as them, up to half
+the map, scrolling inside past that. A height the contents do not fill leaves
+the panel that tall, and longer contents scroll inside it. Whatever is set,
+the panel stays on the map: on a smaller window it is at most the map's width
+and height, so the page never scrolls. A WMS or WMTS layer's legend picture
+takes the width of a legend whose width is set, and scrolls with a legend
+whose height is set. The zoom controls, scale bar and measure tool have fixed
+sizes; **Size** under [Control colours](#control-colours) scales them all.
+
 The layer switcher is the one exception to that. It only appears when the map
 has more than one thing to switch between, so a map with a single unlabelled
 layer does not get one however this is set — there would be nothing in it but a

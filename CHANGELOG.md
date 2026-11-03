@@ -24,6 +24,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
   the zoom controls, bottom left, and is not drawn in a cartograph's
   interactive frames.
+- **A width and a height for the legend and the layer switcher**, beside
+  their switches on the Appearance tab: 140 to 600 pixels wide and 100 to
+  1000 tall, and never bigger than the map, so the page does not scroll; on a
+  narrow screen the width yields. Auto, the default, keeps them exactly as
+  they were. A WMS or WMTS legend picture follows the legend's size.
 - **Exporting without the dialog**, a new guide: batch exports from the
   Processing toolbox, the QGIS Python console and `qgis_process`, and the
   one-time runtime setup they need first.

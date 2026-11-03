@@ -496,6 +496,10 @@ On the **Appearance** tab you can also:
   Corners are shared with the map controls — the layer switcher is top left,
   the legend top right, the zoom, scale and measure tool bottom left, and the
   OnlyMap credit bottom right.
+- **Set the size of the legend and the layer switcher**, a width and a height
+  in pixels for each. Left on Auto, a panel is as wide as its contents and at
+  most half the map tall; set, it is that size, but never bigger than the map,
+  so the page does not scroll.
 - **Set the colour of the controls**, background and text separately. Left
   alone, they use OnlyMap's own colours.
 - **Open popups on hover** instead of on click. Hover replaces click rather

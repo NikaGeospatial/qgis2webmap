@@ -440,6 +440,123 @@ class TestMeasureToolSwitch:
             dialog.close()
 
 
+class TestPanelSizes:
+    """Width and height boxes beside the Legend and Layer switcher switches."""
+
+    def test_sizes_round_trip_and_auto_is_none(self, project) -> None:
+        save_state(
+            project,
+            DialogState(legend_width=320, legend_height=480, layer_switcher_height=200),
+        )
+        state = load_state(project)
+        assert (state.legend_width, state.legend_height) == (320, 480)
+        assert (state.layer_switcher_width, state.layer_switcher_height) == (
+            None,
+            200,
+        )
+        settings = state.to_export_settings()
+        assert (settings.legend_width, settings.layer_switcher_height) == (320, 200)
+
+    def test_a_project_saved_before_sizes_is_auto(self, project) -> None:
+        import json
+
+        save_state(project, DialogState(legend_width=320))
+        widgets = json.loads(project.readEntry("qgis2webmap", "widgets", "")[0])
+        for key in (
+            "legendWidth",
+            "legendHeight",
+            "layerSwitcherWidth",
+            "layerSwitcherHeight",
+        ):
+            del widgets[key]
+        project.writeEntry("qgis2webmap", "widgets", json.dumps(widgets))
+        state = load_state(project)
+        assert state.legend_width is None
+        assert state.layer_switcher_height is None
+
+    def test_a_hand_edited_size_is_clamped_or_auto(self, project) -> None:
+        import json
+
+        save_state(project, DialogState())
+        widgets = json.loads(project.readEntry("qgis2webmap", "widgets", "")[0])
+        widgets.update(
+            legendWidth=5000,
+            legendHeight=3,
+            layerSwitcherWidth="wide",
+            layerSwitcherHeight=True,
+        )
+        project.writeEntry("qgis2webmap", "widgets", json.dumps(widgets))
+        state = load_state(project)
+        assert (state.legend_width, state.legend_height) == (600, 100)
+        assert state.layer_switcher_width is None
+        assert state.layer_switcher_height is None
+
+    def test_the_boxes_show_only_while_the_control_is_on(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            assert set(dialog.widget_sizes) == {"legend", "layerSwitcher"}
+            width, height = dialog.widget_sizes["legend"]
+            # Hidden by the switch, not by the Appearance tab being unseen.
+            assert not width.isHidden() and not height.isHidden()
+            assert width.text() == height.text() == "Auto"
+            dialog.widget_checks["legend"].setChecked(False)
+            assert width.isHidden() and height.isHidden()
+            dialog.widget_checks["legend"].setChecked(True)
+            assert not width.isHidden()
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize(
+        ("typed", "expected"),
+        [("320", 320), ("50", 140), ("9000", 600), ("", None)],
+    )
+    def test_what_is_typed_is_clamped_into_the_range(
+        self, qgis_app, project, make_memory_layer, typed, expected
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            width, _height = dialog.widget_sizes["layerSwitcher"]
+            width.set_pixels(300)
+            width.lineEdit().setText(typed)
+            width.interpretText()
+            assert dialog.state.layer_switcher_width == expected
+            assert dialog.state.to_export_settings().layer_switcher_width == expected
+        finally:
+            dialog.close()
+
+    def test_the_height_has_its_own_range(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            _width, height = dialog.widget_sizes["legend"]
+            for typed, expected in (("5", 100), ("1200", 1000), ("750", 750)):
+                height.lineEdit().setText(typed)
+                height.interpretText()
+                assert dialog.state.legend_height == expected
+            # The step below the smallest size is Auto.
+            height.set_pixels(100)
+            height.stepDown()
+            assert height.text() == "Auto"
+            assert dialog.state.legend_height is None
+        finally:
+            dialog.close()
+
+    def test_it_opens_with_the_sizes_the_project_saved(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        save_state(project, DialogState(legend_width=250, layer_switcher_height=400))
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            assert dialog.widget_sizes["legend"][0].pixels() == 250
+            assert dialog.widget_sizes["legend"][1].pixels() is None
+            assert dialog.widget_sizes["layerSwitcher"][1].pixels() == 400
+        finally:
+            dialog.close()
+
+
 class TestShortWindows:
     """A short window scrolls a tab of stacked cards; it never crushes them."""
 

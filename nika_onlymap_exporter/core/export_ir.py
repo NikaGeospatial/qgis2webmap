@@ -1265,6 +1265,12 @@ class ExportSettings:
     # and scale bar - not the credit component, which stays fixed so attribution
     # cannot be shrunk out of legibility.
     chrome_scale: float = 1.0
+    # The legend's and layer switcher's size in CSS pixels, before
+    # `chrome_scale`; None is Auto, the runtime's own sizing.
+    legend_width: int | None = None
+    legend_height: int | None = None
+    layer_switcher_width: int | None = None
+    layer_switcher_height: int | None = None
     widget_background: Color | None = None
     widget_foreground: Color | None = None
     # None leaves the runtime's own highlight alone. qgis2web has no equivalent:
@@ -1311,6 +1317,11 @@ class ExportSettings:
             "basemap": self.basemap,
             "terrain": self.terrain,
             "chromeScale": self.chrome_scale,
+            "legendSize": [self.legend_width, self.legend_height],
+            "layerSwitcherSize": [
+                self.layer_switcher_width,
+                self.layer_switcher_height,
+            ],
             "widgetBackground": (
                 self.widget_background.snapshot() if self.widget_background else None
             ),

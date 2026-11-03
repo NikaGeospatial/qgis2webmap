@@ -496,3 +496,63 @@ class TestChromeScale:
         block = _widget_color_block(project)
         assert "--om-widget-bg" in block
         assert "transform: scale(1.5)" in block
+
+
+class TestPanelSizes:
+    """The legend's and layer switcher's width and height, from Appearance."""
+
+    @staticmethod
+    def _block(**settings) -> str:
+        from nika_onlymap_exporter.writers.onlymap_writer import _widget_color_block
+
+        return _widget_color_block(make_project(**settings))
+
+    def test_auto_emits_nothing(self) -> None:
+        """Auto is the runtime's own sizing, byte for byte."""
+        assert self._block() == ""
+        assert "omni-legend-graphic { max" not in build_manifest(make_project())
+
+    def test_a_set_size_is_the_panels_size(self) -> None:
+        block = self._block(legend_width=320, legend_height=480)
+        rule = block.split('om-widget[type="legend"],')[1].split("}")[0]
+        assert "width: 320px;" in rule
+        assert "height: 480px;" in rule
+        # The static legend a picture swatch needs is matched too.
+        assert 'om-widget[position="top-right"]:not([type]) {' in block
+
+    def test_the_map_caps_it_whatever_was_typed(self) -> None:
+        """The corner's half-the-map cap becomes the whole map less its insets,
+        and the panel yields to it, so the page never scrolls."""
+        block = self._block(layer_switcher_width=600, layer_switcher_height=1000)
+        slot = block.split('[data-om-widget-slot="top-start"] {')[1].split("}")[0]
+        assert "max-height: calc(100% - 24px);" in slot
+        assert "max-width: calc(100% - 24px);" in slot
+        panel = block.split('om-widget[type="layer-switcher"] {')[1].split("}")[0]
+        assert "max-width: 100%;" in panel
+
+    def test_the_cap_allows_for_the_controls_scale(self) -> None:
+        """The scale's transform grows the panel after layout."""
+        block = self._block(legend_height=900, chrome_scale=2.0)
+        assert "max-height: calc((100% - 24px) / 2.0);" in block
+
+    def test_only_the_dimension_set_changes(self) -> None:
+        block = self._block(legend_width=300)
+        assert "height" not in block
+        assert "top-start" not in block
+
+    def test_a_panel_left_off_the_map_gets_no_rule(self) -> None:
+        assert self._block(show_legend=False, legend_width=300) == ""
+
+    def test_a_service_legend_picture_follows_a_sized_legend(self) -> None:
+        from nika_onlymap_exporter.core.manifest_builder import _legend_style_element
+
+        style = "\n".join(_legend_style_element("", ExportSettings(legend_width=400)))
+        assert ".omni-legend-graphic { max-width: none; }" in style
+        style = "\n".join(
+            _legend_style_element(
+                "", ExportSettings(legend_width=400, legend_height=600)
+            )
+        )
+        assert ".omni-legend-graphic { max-width: none; max-height: none; }" in style
+        auto = "\n".join(_legend_style_element("", ExportSettings()))
+        assert "max-width: none" not in auto

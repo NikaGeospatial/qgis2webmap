@@ -62,6 +62,7 @@ from qgis.PyQt.QtGui import (
     QPalette,
     QResizeEvent,
     QShowEvent,
+    QWheelEvent,
 )
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -84,6 +85,7 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QSpinBox,
     QStackedWidget,
     QStyle,
     QStyledItemDelegate,
@@ -140,7 +142,11 @@ from ..core.save_folders import (
     web_maps_folder,
 )
 from ..core.settings import (
+    MAX_PANEL_HEIGHT,
+    MAX_PANEL_WIDTH,
     MAX_PRECISION,
+    MIN_PANEL_HEIGHT,
+    MIN_PANEL_WIDTH,
     MIN_PRECISION,
     PRECISION_FULL,
     DialogOutput,
@@ -220,6 +226,13 @@ _OSM_FILE_NOTE_FOR_CATALOGUE = N_(
     "Choose Liberty - the same OpenStreetMap data - or another basemap, or "
     "export as a Folder for a website."
 )
+
+# The Map controls whose panel size can be set: the `DialogState` attributes
+# of each one's width and height.
+_PANEL_SIZE_ATTRIBUTES = {
+    "legend": ("legend_width", "legend_height"),
+    "layerSwitcher": ("layer_switcher_width", "layer_switcher_height"),
+}
 
 # The Share rows that act on the map file, so need one to have been chosen.
 SHARE_ACTIONS_ON_THE_FILE = frozenset({"copy_path", "reveal"})
@@ -618,6 +631,44 @@ def _search_key(text: str) -> str:
     """Case- and accent-insensitive form of `text` for the layer search."""
     decomposed = unicodedata.normalize("NFKD", text.casefold())
     return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+class _PanelSizeBox(QSpinBox):
+    """A legend or layer switcher dimension in pixels, or Auto when empty.
+
+    Auto is the value one below the range, shown as its special text, so the
+    down arrow from the smallest size reaches it and clearing the box picks
+    it. A typed number outside the range is clamped into it rather than
+    thrown away - 50 is the smallest size, not Auto. The wheel is ignored,
+    like the cartograph's spin boxes: it scrolls the tab behind.
+    """
+
+    def __init__(self, low: int, high: int, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._low = low
+        self.setRange(low - 1, high)
+        self.setSpecialValueText(tr("Auto"))
+        self.setSuffix(" px")
+        self.setKeyboardTracking(False)
+        self.setCorrectionMode(QSpinBox.CorrectionMode.CorrectToNearestValue)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def pixels(self) -> int | None:
+        value = self.value()
+        return None if value < self._low else value
+
+    def set_pixels(self, value: int | None) -> None:
+        self.setValue(self.minimum() if value is None else value)
+
+    def fixup(self, text: str | None) -> str:
+        digits = "".join(ch for ch in (text or "") if ch.isdigit())
+        if not digits:
+            return self.specialValueText()
+        return str(max(self._low, min(self.maximum(), int(digits))))
+
+    def wheelEvent(self, event: QWheelEvent | None) -> None:  # noqa: N802
+        if event is not None:
+            event.ignore()
 
 
 class _SearchBox(QLineEdit):
@@ -2390,6 +2441,9 @@ class MainDialog(QDialog):
         chrome = QGroupBox(tr("Map controls"), page)
         chrome_layout = QVBoxLayout(chrome)
         self.widget_checks: dict[str, QCheckBox] = {}
+        # Width and height boxes beside the two panels whose size is theirs to
+        # set; zoom controls, scale bar and measure tool have fixed sizes.
+        self.widget_sizes: dict[str, tuple[_PanelSizeBox, _PanelSizeBox]] = {}
         for key, label, current in (
             ("legend", tr("Legend"), self.state.show_legend),
             ("layerSwitcher", tr("Layer switcher"), self.state.show_layer_switcher),
@@ -2400,8 +2454,11 @@ class MainDialog(QDialog):
             check = QCheckBox(label, page)
             check.setChecked(current)
             check.toggled.connect(lambda v, k=key: self._on_widget_toggled(k, v))
-            chrome_layout.addWidget(check)
             self.widget_checks[key] = check
+            if key in _PANEL_SIZE_ATTRIBUTES:
+                chrome_layout.addLayout(self._panel_size_row(key, check, page))
+            else:
+                chrome_layout.addWidget(check)
         layout.addWidget(chrome)
 
         layout.addWidget(self._build_caption_group(page))
@@ -2567,6 +2624,52 @@ class MainDialog(QDialog):
         highlight_row.addStretch(1)
         layout.addLayout(highlight_row)
         return box
+
+    def _panel_size_row(self, key: str, check: QCheckBox, page: QWidget) -> QHBoxLayout:
+        """`check` with the panel's width and height beside it, shown while
+        the panel is on the map."""
+        width_attribute, height_attribute = _PANEL_SIZE_ATTRIBUTES[key]
+        width = _PanelSizeBox(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH, page)
+        height = _PanelSizeBox(MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT, page)
+        width.set_pixels(getattr(self.state, width_attribute))
+        height.set_pixels(getattr(self.state, height_attribute))
+        width.setToolTip(
+            tr(
+                "Width in pixels, {low} to {high}. Auto is as wide as its "
+                "contents. On a narrower map it is as wide as the map."
+            ).format(low=MIN_PANEL_WIDTH, high=MAX_PANEL_WIDTH)
+        )
+        height.setToolTip(
+            tr(
+                "Height in pixels, {low} to {high}; what does not fit scrolls "
+                "inside it. Auto grows with its contents up to half the map. On "
+                "a shorter map it is as tall as the map."
+            ).format(low=MIN_PANEL_HEIGHT, high=MAX_PANEL_HEIGHT)
+        )
+        width.setAccessibleName(tr("{control} width").format(control=check.text()))
+        height.setAccessibleName(tr("{control} height").format(control=check.text()))
+        # Connected only once the values are in place, so restoring them never
+        # registers as the user changing one.
+        width.valueChanged.connect(
+            lambda _v, box=width, name=width_attribute: setattr(
+                self.state, name, box.pixels()
+            )
+        )
+        height.valueChanged.connect(
+            lambda _v, box=height, name=height_attribute: setattr(
+                self.state, name, box.pixels()
+            )
+        )
+        times = QLabel("\N{MULTIPLICATION SIGN}", page)
+        row = QHBoxLayout()
+        row.addWidget(check)
+        row.addStretch(1)
+        for widget in (width, times, height):
+            row.addWidget(widget)
+            widget.setVisible(check.isChecked())
+            check.toggled.connect(widget.setVisible)
+        self.widget_sizes[key] = (width, height)
+        return row
 
     def _on_widget_toggled(self, key: str, value: bool) -> None:
         attribute = {

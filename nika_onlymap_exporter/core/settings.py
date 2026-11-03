@@ -346,6 +346,33 @@ def _read_scale(raw: Any) -> float:
     return round(value, 2)
 
 
+# The Appearance tab's legend and layer switcher sizes, in CSS pixels. Below
+# 140 wide the runtime's own panels stop shrinking (their `min-width`), and
+# below 100 tall a panel shows its heading and little else; past 600 wide or
+# 1000 tall a panel is most of a laptop's map. However big, the exported page
+# caps the panel at the map (`writers/onlymap_writer._panel_size_block`).
+MIN_PANEL_WIDTH = 140
+MAX_PANEL_WIDTH = 600
+MIN_PANEL_HEIGHT = 100
+MAX_PANEL_HEIGHT = 1000
+
+
+def _read_panel_size(raw: Any, low: int, high: int) -> int | None:
+    """A persisted panel width or height, or None for Auto.
+
+    Out of range is clamped into it, as the spin box clamps what is typed;
+    anything unreadable is Auto, which is how the panel looked before sizes
+    could be set.
+    """
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return max(low, min(high, value))
+
+
 def _read_precision(raw: Any) -> int | None:
     """A persisted coordinate precision, or None for "maintain"."""
     if raw is None or isinstance(raw, bool):
@@ -440,6 +467,10 @@ CHROME_FIELDS = (
     "show_abstract",
     "title_corner",
     "chrome_scale",
+    "legend_width",
+    "legend_height",
+    "layer_switcher_width",
+    "layer_switcher_height",
     "widget_background",
     "widget_foreground",
 )
@@ -492,6 +523,12 @@ class DialogState:
     terrain: str = "none"
     # A multiplier on the size of the map's chrome. 1.0 is the runtime default.
     chrome_scale: float = 1.0
+    # The legend's and layer switcher's size in pixels; None is Auto - as wide
+    # as their contents, as tall as them up to half the map.
+    legend_width: int | None = None
+    legend_height: int | None = None
+    layer_switcher_width: int | None = None
+    layer_switcher_height: int | None = None
     widget_background: str = ""
     widget_foreground: str = ""
     highlight_color: str = ""
@@ -626,6 +663,10 @@ class DialogState:
             basemap=self.basemap,
             terrain=self.terrain,
             chrome_scale=self.chrome_scale,
+            legend_width=self.legend_width,
+            legend_height=self.legend_height,
+            layer_switcher_width=self.layer_switcher_width,
+            layer_switcher_height=self.layer_switcher_height,
             widget_background=parse_hex_color(self.widget_background),
             widget_foreground=parse_hex_color(self.widget_foreground),
             highlight_color=parse_hex_color(self.highlight_color),
@@ -685,6 +726,19 @@ def load_state(project: QgsProject) -> DialogState:
             state.basemap = str(widgets.get("basemap", "none") or "none")
             state.terrain = str(widgets.get("terrain", "none") or "none")
             state.chrome_scale = _read_scale(widgets.get("chromeScale"))
+            # Absent from a project saved before sizes could be set: Auto.
+            state.legend_width = _read_panel_size(
+                widgets.get("legendWidth"), MIN_PANEL_WIDTH, MAX_PANEL_WIDTH
+            )
+            state.legend_height = _read_panel_size(
+                widgets.get("legendHeight"), MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT
+            )
+            state.layer_switcher_width = _read_panel_size(
+                widgets.get("layerSwitcherWidth"), MIN_PANEL_WIDTH, MAX_PANEL_WIDTH
+            )
+            state.layer_switcher_height = _read_panel_size(
+                widgets.get("layerSwitcherHeight"), MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT
+            )
             state.widget_background = str(widgets.get("widgetBackground", "") or "")
             state.widget_foreground = str(widgets.get("widgetForeground", "") or "")
             state.highlight_color = str(widgets.get("highlightColor", "") or "")
@@ -815,6 +869,10 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "basemap": state.basemap,
                 "terrain": state.terrain,
                 "chromeScale": state.chrome_scale,
+                "legendWidth": state.legend_width,
+                "legendHeight": state.legend_height,
+                "layerSwitcherWidth": state.layer_switcher_width,
+                "layerSwitcherHeight": state.layer_switcher_height,
                 "widgetBackground": state.widget_background,
                 "widgetForeground": state.widget_foreground,
                 "highlightColor": state.highlight_color,

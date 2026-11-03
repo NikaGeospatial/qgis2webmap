@@ -203,6 +203,7 @@
       "browser": [
         "tests/browser/test_exported_map.py",
         "tests/browser/test_measure_tool.py",
+        "tests/browser/test_panel_sizes.py",
         "tests/browser/test_cartograph_acceptance.py",
         "tests/browser/test_cartograph_static.py",
         "tests/browser/test_cartograph_text.py"
@@ -305,7 +306,8 @@
       ],
       "browser": [
         "tests/browser/test_exported_map.py",
-        "tests/browser/test_measure_tool.py"
+        "tests/browser/test_measure_tool.py",
+        "tests/browser/test_panel_sizes.py"
       ]
     },
     "i18n": {
