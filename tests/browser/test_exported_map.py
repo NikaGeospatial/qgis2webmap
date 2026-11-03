@@ -1294,6 +1294,85 @@ def _rects_overlap(a: dict, b: dict) -> bool:
     )
 
 
+class TestTallControls:
+    """A legend or layer list longer than the map scrolls inside its panel.
+
+    A 30-layer legend ran past the bottom of the map and the whole page gained
+    a scrollbar. Each top corner now holds at most half the map's height."""
+
+    PANELS = ('om-widget[type="legend"]', 'om-widget[type="layer-switcher"]')
+
+    def _open(self, page, crowded_controls_map):
+        page.set_viewport_size({"width": 1280, "height": 700})
+        open_map(page, crowded_controls_map)
+        for selector in self.PANELS:
+            page.wait_for_function(
+                """(selector) => document.querySelector(selector)
+                     ?.shadowRoot?.querySelector('.omni-panel')""",
+                arg=selector,
+                timeout=30_000,
+            )
+        return page
+
+    def test_the_page_never_scrolls(self, page, crowded_controls_map) -> None:
+        self._open(page, crowded_controls_map)
+        sizes = page.evaluate(
+            """() => [document.documentElement.scrollHeight, innerHeight,
+                      document.documentElement.scrollWidth, innerWidth]"""
+        )
+        assert sizes[0] <= sizes[1] and sizes[2] <= sizes[3], sizes
+
+    def test_each_panel_takes_at_most_half_the_map(
+        self, page, crowded_controls_map
+    ) -> None:
+        self._open(page, crowded_controls_map)
+        map_box = page.locator("om-map").bounding_box()
+        assert map_box is not None
+        for selector in self.PANELS:
+            box = page.locator(selector).bounding_box()
+            assert box is not None
+            assert box["height"] <= map_box["height"] / 2 + 1, selector
+            # Cut short, not emptied: what does not fit is there to scroll to.
+            overflow = page.locator(selector).evaluate(
+                "el => el.scrollHeight - el.clientHeight"
+            )
+            assert overflow > 100, (selector, overflow)
+
+    def test_the_wheel_scrolls_the_legend_not_the_map(
+        self, page, crowded_controls_map
+    ) -> None:
+        self._open(page, crowded_controls_map)
+        legend = page.locator('om-widget[type="legend"]')
+        box = legend.bounding_box()
+        assert box is not None
+        before = page.evaluate(
+            "() => JSON.stringify(document.querySelector('om-map').getCamera())"
+        )
+        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        for _ in range(8):
+            page.mouse.wheel(0, 200)
+            next_frames(page)
+        page.wait_for_function(
+            """() => document.querySelector('om-widget[type="legend"]')
+                 .scrollTop > 0""",
+            timeout=5_000,
+        )
+        # The last layer's row can be scrolled into the panel's view.
+        last = legend.evaluate(
+            """el => {
+                const rows = [...el.shadowRoot.querySelectorAll('.omni-row')];
+                const row = rows[rows.length - 1].getBoundingClientRect();
+                const panel = el.getBoundingClientRect();
+                return row.bottom <= panel.bottom + 1 && row.top >= panel.top;
+            }"""
+        )
+        assert last
+        after = page.evaluate(
+            "() => JSON.stringify(document.querySelector('om-map').getCamera())"
+        )
+        assert after == before
+
+
 class TestTitleAndPhoneControls:
     """A long centred title at 320px used to sit on the folded controls button,
     and a real click on it was intercepted by the title."""

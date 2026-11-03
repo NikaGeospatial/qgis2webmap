@@ -46,7 +46,8 @@ changelog=0.3.1
     to 0.13.3, its licence is shown only once, and it is kept compressed on
     disk. Faster exports. Fixes: a Cloud-Optimized GeoTIFF compressed with
     LZW, ZSTD or LERC exported as an empty layer; on relief maps the
-    attribution sat under a wrapped imagery credit.
+    attribution sat under a wrapped imagery credit; a long legend or layer
+    list made the page scroll, and now scrolls inside its panel.
     0.3.0
     Cartograph (Beta): a "Make: Web map | Cartograph" switch turns a QGIS
     print layout - or the current map view - into one printable HTML page.

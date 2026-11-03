@@ -37,6 +37,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   same.
 
 ### Fixed
+- A legend or layer list longer than half the map no longer runs past its
+  bottom edge and makes the whole page scroll: it stops at half the map's
+  height and scrolls inside its own panel.
 - On a relief map the imagery credit wraps to a second line, and the
   attribution above it sat underneath it. The attribution, and the preview's
   Host prompt, now keep clear of the credit at its measured height.
