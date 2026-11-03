@@ -46,6 +46,7 @@ from .export_ir import (
     LabelingSpec,
     LegendImage,
     NoDataRule,
+    NumberFormat,
     PopupSpec,
     RasterSpec,
     RendererKind,
@@ -55,7 +56,11 @@ from .export_ir import (
     TileSpec,
 )
 from .fidelity_report import FidelityReportBuilder
-from .labeling_translator import label_expression_context, translate_labeling
+from .labeling_translator import (
+    format_label_number,
+    label_expression_context,
+    translate_labeling,
+)
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
 from .renderer_translator import (
@@ -303,6 +308,8 @@ class LabelExpression:
     # The fields the expression reads, which the read must fetch; `None` when
     # it may read any of them (`attribute(@feature, ...)`).
     columns: frozenset[str] | None
+    # QGIS's "Formatted numbers", applied to each text that reads as a number.
+    number_format: NumberFormat | None = None
 
     def texts(
         self,
@@ -332,6 +339,8 @@ class LabelExpression:
                 failed += 1
                 first_error = first_error or expression.evalErrorString()
                 value = None
+            if value and self.number_format is not None:
+                value = format_label_number(value, self.number_format)
             texts.append({self.property_name: value or None})
         if failed:
             report.approximated(
@@ -362,6 +371,7 @@ def label_expression(
             if QgsFeatureRequest.ALL_ATTRIBUTES in columns
             else frozenset(str(name) for name in columns)
         ),
+        number_format=labeling.number_format,
     )
 
 
@@ -2398,6 +2408,7 @@ def point_names(labeling: LabelingSpec, field_name: str) -> LabelingSpec:
         enabled=True,
         field_name=field_name,
         expression=None,
+        number_format=None,
         halo_color=labeling.halo_color or NAME_HALO,
         halo_width=labeling.halo_width or 1.0,
     )

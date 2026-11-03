@@ -648,6 +648,19 @@ class LineLabelRepeat:
 
 
 @dataclass(frozen=True)
+class NumberFormat:
+    """QGIS's "Formatted numbers": a label that reads as a number is drawn
+    with `decimals` places, and a plus sign on a positive one with
+    `plus_sign`, in QGIS's own number format for its language."""
+
+    decimals: int = 3
+    plus_sign: bool = False
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"decimals": self.decimals, "plusSign": self.plus_sign}
+
+
+@dataclass(frozen=True)
 class LabelingSpec:
     """Layer labelling, when enabled.
 
@@ -702,6 +715,10 @@ class LabelingSpec:
     # Where labels repeat along a line layer's lines; `None` labels each line
     # (or part) once, at half its length.
     repeat: LineLabelRepeat | None = None
+    # QGIS's "Formatted numbers", applied as the label text is worked out at
+    # export (`layer_reader.LabelExpression`), which a formatted layer's
+    # labels always are.
+    number_format: NumberFormat | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -730,6 +747,9 @@ class LabelingSpec:
             "perPart": self.per_part,
             "measurePlane": self.measure_plane,
             "repeat": self.repeat.snapshot() if self.repeat else None,
+            "numberFormat": (
+                self.number_format.snapshot() if self.number_format else None
+            ),
         }
 
 

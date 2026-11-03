@@ -335,6 +335,13 @@ so a layer's labels show from the zoom where no repeat overlaps the next. At
 most 50 labels sit on one line and 5,000 on one layer; past either the repeats
 spread further apart, and the Fidelity tab says so.
 
+**Formatted numbers** apply as in QGIS: a label that reads as a number
+(including one from an expression) gets the decimal places and plus sign set,
+rounded and written in QGIS's number format for its language, with its
+decimal and thousands separators. The text is worked out at export, in the
+language QGIS runs in then. Data-defined number formatting is not carried; the
+layer's own setting is used, and the Fidelity tab says so.
+
 Collision handling, callouts and curved placement are not: the web map draws
 every label, so where a layer's labels would pile up they wait for a closer
 zoom - the one at which most of them have room - and the Fidelity tab names it.

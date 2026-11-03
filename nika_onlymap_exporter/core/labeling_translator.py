@@ -35,12 +35,14 @@ from qgis.core import (
     QgsRuleBasedLabeling,
     QgsUnitTypes,
 )
+from qgis.PyQt.QtCore import QLocale
 
 from .export_ir import (
     MM_TO_PIXELS,
     Color,
     LabelingSpec,
     LineLabelRepeat,
+    NumberFormat,
 )
 from .fidelity_report import FidelityReportBuilder
 from .label_points import apply_capitalization, to_plane
@@ -332,6 +334,14 @@ def translate_labeling(
     if not field_name:
         return LabelingSpec(enabled=False)
 
+    number_format = _number_format(settings, report, subject, layer_id)
+    if number_format is not None and expression is None:
+        # QGIS formats the text a label reads as a number in its own locale,
+        # which the web map cannot, so the field is worked out per feature at
+        # export as an expression would be, into a property of its own.
+        expression = QgsExpression.quotedColumnRef(field_name)
+        field_name = expression_label_property(layer)
+
     text_format = settings.format()
     font = text_format.font()
     buffer_settings = text_format.buffer()
@@ -442,6 +452,7 @@ def translate_labeling(
         per_part=bool(getattr(settings, "labelPerPart", False)),
         measure_plane=plane,
         repeat=repeat,
+        number_format=number_format,
     )
 
 
@@ -554,6 +565,52 @@ def _data_defined(settings: Any, *names: str) -> bool:
         )
     except (AttributeError, TypeError):  # pragma: no cover
         return False
+
+
+def _number_format(
+    settings: Any, report: FidelityReportBuilder, subject: str, layer_id: str
+) -> NumberFormat | None:
+    """QGIS's "Formatted numbers", when it is on."""
+    if not getattr(settings, "formatNumbers", False):
+        return None
+    number_format = NumberFormat(
+        decimals=max(0, int(getattr(settings, "decimals", 3))),
+        plus_sign=bool(getattr(settings, "plusSign", False)),
+    )
+    sign = ", with a plus sign on positive numbers," if number_format.plus_sign else ""
+    report.preserved(
+        subject,
+        f"Labels that read as numbers are formatted as QGIS draws them, to "
+        f"{number_format.decimals} decimal place(s){sign} in QGIS's number "
+        "format for its language, when the map is exported.",
+        layer_id,
+    )
+    if _data_defined(settings, "NumFormat", "NumDecimals", "NumPlusSign"):
+        report.approximated(
+            subject,
+            "The labels' number formatting is set by a data-defined override, "
+            "which is not carried, so the layer's own Formatted numbers "
+            "setting is used.",
+            layer_id,
+        )
+    return number_format
+
+
+def format_label_number(text: str, number_format: NumberFormat) -> str:
+    """`text` as QGIS's "Formatted numbers" draws it.
+
+    QGIS reads the label text as a number the way Qt's C locale does - so
+    "1e3" and " 3.5 " are numbers and "1,5" is not, whatever the language -
+    and writes it back with `QLocale().toString(value, 'f', decimals)`: in its
+    own language's separators, rounded half away from zero, which Python's
+    own formatting does not do. A plus sign goes on a number above zero only.
+    Measured against QGIS 4.2's drawn labels in en_US, de_DE and fr_FR.
+    """
+    value, ok = QLocale.c().toDouble(text)
+    if not ok:
+        return text
+    formatted = QLocale().toString(value, "f", number_format.decimals)
+    return f"+{formatted}" if number_format.plus_sign and value > 0 else formatted
 
 
 # `QgsStringUtils::Capitalization`, by value rather than by name: the enum is

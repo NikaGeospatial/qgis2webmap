@@ -84,6 +84,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   from the zoom where no repeat overlaps the next. At most 50 labels sit on
   one line and 5,000 on one layer; past either the repeats spread out, and the
   Fidelity tab says so.
+- **Formatted numbers** in a layer's label settings apply to labels from a
+  field or an expression: a label that reads as a number has the decimal
+  places and plus sign QGIS draws, in QGIS's number format for its language
+  (for example `+1.234,50` in German, with a narrow no-break space between
+  thousands in French). The text is worked out at export.
 
 ### Fixed
 - A line's label sits at half its length along it, as QGIS places it. It was
