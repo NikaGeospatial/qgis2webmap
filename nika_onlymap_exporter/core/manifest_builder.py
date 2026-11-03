@@ -1567,6 +1567,26 @@ POPUP_STYLES = """.om-popup {
    empty instead, which is the behaviour these modes replaced. */
 .om-popup-row:not(.om-popup-always):has(.om-popup-value:empty) {
   display: none;
+}
+/* The runtime makes an overlay with nothing it knows to be interactive
+   transparent to the pointer, so the map under it keeps its hover picks. A link
+   takes the pointer back for itself alone. */
+.om-popup-value a {
+  pointer-events: auto;
+  color: #1d4ed8;
+  overflow-wrap: anywhere;
+}
+/* A picture fits the popup's width, its proportions kept. */
+.om-popup-row:has(.om-popup-picture) .om-popup-value {
+  min-width: 0;
+}
+.om-popup-picture {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 15rem;
+  border-radius: 4px;
 }"""
 
 
@@ -1603,12 +1623,16 @@ def _popup_row(field: PopupFieldSpec, indent: str) -> str:
         if field.mode is PopupFieldMode.NO_LABEL
         else f'<span class="om-popup-label">{escape_attr(field.display_name)}</span>'
     )
+    # Escaped: a field the map draws with keeps its original name (see
+    # `rename_untemplatable_fields`), and that name is the user's text. A
+    # markup field's property holds what `popup_media` built and escaped, so
+    # it is inserted as it is - the runtime's triple braces.
+    token = escape_attr(field.name)
+    value = f"{{{{{{{token}}}}}}}" if field.markup else f"{{{{{token}}}}}"
     return (
         f'{indent}    <div class="{" ".join(classes)}">'
         f"{label}"
-        # Escaped: a field the map draws with keeps its original name (see
-        # `rename_untemplatable_fields`), and that name is the user's text.
-        f'<span class="om-popup-value">{{{{{escape_attr(field.name)}}}}}</span></div>'
+        f'<span class="om-popup-value">{value}</span></div>'
     )
 
 

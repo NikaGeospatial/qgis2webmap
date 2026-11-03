@@ -388,6 +388,44 @@ choosing anything else overrides that.
 **Set every field to** below the layer list applies one setting to every field
 of every layer at once, replacing the individual choices.
 
+### Links and pictures
+
+A value that is a web address (`http://` or `https://`) or an email address
+(`mailto:`) shows as a link that opens in a new tab. Nothing else becomes a
+link: a `javascript:`, `data:` or `file:` value stays text. No attribute value
+can add anything to the page - whatever a value holds, it is shown as text, a
+link or a picture.
+
+Pictures follow the field's widget in QGIS (Layer Properties > Attributes
+Form). A field whose widget is **Attachment**, with its **Integrated document
+viewer** set to **Image**, shows its pictures in the popup, fitted to the
+popup's width:
+
+- **A picture on this computer is carried with the map** - inside the file
+  for Standalone HTML, beside `index.html` for Folder and Share ZIP - so it
+  shows without an internet connection. A relative path is found where QGIS
+  finds it: beside the project file, or under the widget's default path. A
+  picture over 1280 pixels across is scaled down to that, and one over 1 MB
+  is saved again as JPEG (PNG when transparent); your files are not changed.
+  One picture can be up to 1 MB after that, and one map carries up to 20 MB
+  of pictures.
+- **A picture that is a web address is not carried.** It loads each time
+  the popup opens, so it shows only with an internet connection.
+
+A picture that cannot be carried - not found, not a picture, or over a
+limit - shows its path instead, and the Fidelity tab lists what was carried,
+made smaller or left out. An Attachment field that shows its path as a link
+without the full path shows the link by its file name, as QGIS does. A path in
+a field without the Attachment widget stays text.
+
+Only the pictures of features the map carries, in fields its popups show, are
+read or carried: a field set to *Do not show this field*, or a layer with
+popups off, carries none.
+
+**Links, and pictures that are web addresses, need an internet connection when
+the map is viewed.** Everything the map carries, its pictures included, works
+offline.
+
 ### Settings for one layer only
 
 Expanding a layer also reveals a **This layer only** row, where three map-wide

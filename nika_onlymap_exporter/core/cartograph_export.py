@@ -100,6 +100,7 @@ from ..packaging.dependency_scanner import (
     data_bytes_by_layer,
     report_remote_dependency,
 )
+from ..packaging.popup_pictures import embed_popup_pictures
 from ..packaging.raster_staging import stage_rasters
 from ..packaging.runtime_manager import RuntimeBundle
 from ..translation import tr
@@ -1531,6 +1532,9 @@ def finish_cartograph_full(
         export_project, frame_rasters = _embed_rasters(export_project, report)
         for name, data in frame_rasters:
             embedded_rasters.setdefault(name, data)
+        # A frame lives in the cartograph's own page, so its popup pictures
+        # travel inside it, as a single-file web map's do.
+        export_project = embed_popup_pictures(export_project)
         requirement = prepared.atlas_requirement
         if requirement is not None and requirement.frame_id == source.frame_id:
             export_project = _with_atlas_order(export_project, requirement)

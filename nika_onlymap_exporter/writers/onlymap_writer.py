@@ -43,6 +43,7 @@ from ..packaging.asset_embedder import (
     should_compress_data,
 )
 from ..packaging.dependency_scanner import ScanResult, scan
+from ..packaging.popup_pictures import place_popup_pictures
 from ..packaging.raster_cog import CancelCheck, ProgressCallback
 from ..packaging.raster_embed import build_raster_embed, has_cog_layer
 from ..packaging.raster_staging import RasterStagingResult, stage_rasters
@@ -356,6 +357,12 @@ class OnlyMapWriter:
         project = staging.project
         written.extend(
             ArtifactFile(path, path.stat().st_size) for path in staging.files
+        )
+        # Popup pictures beside the page or inside it, as the tier carries
+        # everything else; the reader already chose them and said so.
+        project, picture_files = place_popup_pictures(project, destination, mode)
+        written.extend(
+            ArtifactFile(path, path.stat().st_size) for path in picture_files
         )
 
         runtime_file = None
