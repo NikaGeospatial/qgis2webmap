@@ -52,12 +52,13 @@ What they get:
 
 - your layers, in the order and styling you set in QGIS
 - pan, zoom, and layer switching
-- popups with the attributes you chose to expose
+- popups with the attributes you chose to expose, links and pictures included
 - 3D terrain and extrusion, if you enabled them
 
 What they need: a browser. Not QGIS, not an account, not a login, and — apart
-from a basemap or live XYZ, WMS and WMTS layers, if your map has them — not an
-internet connection.
+from a basemap or live XYZ, WMS and WMTS layers, and following a link or seeing
+a web picture in a popup, if your map has them — not an internet connection.
+Pictures carried with the map show offline.
 
 What they do not get: your project file, your data files, or anything you
 excluded on the Layers tab. Fields you hid in QGIS stay hidden in the export.

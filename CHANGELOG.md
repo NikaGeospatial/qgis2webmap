@@ -7,6 +7,19 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Links and pictures in popups.** A value that is a web or email address
+  (`http`, `https` or `mailto`) shows as a link that opens in a new tab;
+  other schemes stay text. A field whose QGIS widget is **Attachment** with
+  its document viewer set to **Image** shows its pictures, fitted to the
+  popup: a picture on this computer is carried with the map (inside a
+  Standalone HTML file, beside `index.html` in Folder and Share ZIP), scaled
+  down to 1280 pixels across when larger, up to 1 MB each and 20 MB per map;
+  a picture that is a web address loads live. Links and web pictures need an
+  internet connection when the map is viewed; carried pictures work offline.
+  The Fidelity tab says what was carried, made smaller or left out, and no
+  attribute value can add markup to the page. qgis2web users report broken
+  attribute links ([qgis2web#1126](https://github.com/qgis2web/qgis2web/issues/1126))
+  and overflowing popup pictures ([qgis2web#1196](https://github.com/qgis2web/qgis2web/issues/1196)).
 - **Cloud Optimized GeoTIFFs QGIS reads over the web** (`/vsicurl/https://...`
   or an `https://` address) export as live layers: the map reads the parts it
   draws straight from the address, and nothing is carried or downloaded. For

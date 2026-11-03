@@ -73,6 +73,16 @@ additional identifier travels with it, and the file is no larger. But the
 so the dialog warns in red when it is not, and the Fidelity tab names the
 provider.
 
+## Popup pictures that are web addresses
+
+A picture a popup shows from a web address (an Attachment field set to show
+an Image, holding an `https://` address - see
+[Popups](supported-features.md#links-and-pictures)) is not carried in the
+file. The reader's browser fetches it from that address when the popup opens,
+so its server sees the request. No page address is sent with it. Pictures
+stored on your computer are carried inside the map and fetch nothing, and a
+link in a popup fetches nothing until someone follows it.
+
 ## Cartographs
 
 A [cartograph](qgis-print-layout-to-html.md) follows the same policy, and
