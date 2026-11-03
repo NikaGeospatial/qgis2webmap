@@ -847,6 +847,21 @@ class RasterSpec:
 
 
 @dataclass(frozen=True)
+class LegendImage:
+    """A legend picture a map service draws, loaded by the viewer's browser.
+
+    `url` is free of any access key, like a tile template. `label` names the
+    sublayer it is for when the layer has several, and is `""` otherwise.
+    """
+
+    url: str
+    label: str = ""
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"url": self.url, "label": self.label}
+
+
+@dataclass(frozen=True)
 class TileSpec:
     """A live XYZ tile service, drawn from the same server on the web map.
 
@@ -865,6 +880,12 @@ class TileSpec:
     # or the size a WMS template asks for (`{width}`/`{height}`). `None`
     # leaves the runtime's default.
     tile_size: int | None = None
+    # The legend pictures the service draws for a WMS or WMTS layer, as
+    # QGIS's legend shows them; empty for XYZ tiles, which have none.
+    legend: tuple[LegendImage, ...] = ()
+    # Whether QGIS's legend for the layer shows only what is in view (a WMS
+    # "contextual legend"), which a picture loaded once cannot follow.
+    contextual_legend: bool = False
 
     def snapshot(self) -> dict[str, Any]:
         snapshot: dict[str, Any] = {
@@ -874,6 +895,10 @@ class TileSpec:
         }
         if self.tile_size is not None:
             snapshot["tileSize"] = self.tile_size
+        if self.legend:
+            snapshot["legend"] = [image.snapshot() for image in self.legend]
+        if self.contextual_legend:
+            snapshot["contextualLegend"] = True
         return snapshot
 
 

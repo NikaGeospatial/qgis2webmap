@@ -48,11 +48,16 @@ def _wms(
     extra="",
     name="WMS",
     image_format="image/png",
+    styles=None,
 ):
     source = (
         f"crs={crs}&dpiMode=7&format={quote(image_format, safe='')}"
         + "".join(f"&layers={quote(layer)}" for layer in layers)
-        + "&styles" * len(layers)
+        + (
+            "".join(f"&styles={quote(style)}" for style in styles)
+            if styles is not None
+            else "&styles" * len(layers)
+        )
         + extra
         + f"&url={quote(url, safe='')}"
     )
@@ -231,6 +236,231 @@ class TestCredentials:
         assert "access key" in (dependency.note or "")
         rendered = repr(exported.snapshot()) + repr(dependency) + repr(report.items)
         assert "SENTINEL" not in rendered
+
+
+def _qgis_legend_request(layer):
+    """The legend address QGIS itself asks for `layer`'s legend, and the
+    picture it got: the ground truth. Taken from QGIS's network log, since
+    QGIS may answer from its cache without reaching the service."""
+    asked: list[str] = []
+
+    def log(parameters) -> None:
+        asked.append(parameters.request().url().toString())
+
+    from qgis.PyQt.QtCore import QEventLoop, QTimer
+    from qgis.PyQt.QtGui import QImage
+
+    got: list[QImage] = []
+    loop = QEventLoop()
+    # The overload that hands over the parameters; the older one, of three
+    # arguments, is the default and would call `log` wrongly.
+    created = qgis_core.QgsNetworkAccessManager.instance().requestAboutToBeCreated[
+        qgis_core.QgsNetworkRequestParameters
+    ]
+    created.connect(log)
+    # What QGIS's legend node does: the provider's fetcher, with no map view.
+    fetcher = layer.dataProvider().getLegendGraphicFetcher(None)
+    try:
+        fetcher.finish.connect(lambda image: (got.append(image), loop.quit()))
+        fetcher.error.connect(lambda _message: loop.quit())
+        QTimer.singleShot(15_000, loop.quit)
+        fetcher.start()
+        if not got:
+            loop.exec()
+    finally:
+        created.disconnect(log)
+    (url,) = asked
+    return url, got[0] if got else QImage()
+
+
+def _same_request(url: str):
+    """`url` as path and parameters, decoded, in order."""
+    parts = urlsplit(url)
+    return parts.netloc, parts.path, parse_qsl(parts.query, keep_blank_values=True)
+
+
+class TestLegend:
+    """The legend picture the map shows is the one QGIS's legend shows."""
+
+    @pytest.mark.parametrize(
+        ("service", "styles"),
+        [
+            ("cors/wms", None),
+            ("cors/wms", ("outlined",)),
+            ("cors/wms", ("default",)),
+            ("cors/wms111", None),
+            ("cors/wms111", ("outlined",)),
+        ],
+    )
+    def test_it_is_the_address_qgis_asks(
+        self, qgis_app, services, service, styles
+    ) -> None:
+        from fake_map_services import LEGEND_SIZES, OUTLINED_LEGEND_SIZE
+
+        layer = _wms(services.url(service), crs="EPSG:3857", styles=styles)
+        assert layer.isValid()
+        exported, _ = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        (image,) = exported.tiles.legend
+        assert image.label == ""
+
+        qgis_url, picture = _qgis_legend_request(layer)
+        assert _same_request(image.url) == _same_request(qgis_url)
+        outlined = styles == ("outlined",)
+        expected = OUTLINED_LEGEND_SIZE if outlined else LEGEND_SIZES["target"]
+        assert (picture.width(), picture.height()) == expected
+        assert ("/legends/outlined.png" in image.url) is outlined
+
+    def test_reading_the_legend_never_contacts_the_service(
+        self, qgis_app, services
+    ) -> None:
+        layer = _wms(services.url("cors/wms"), crs="EPSG:3857")
+        before = len(services.requests)
+        exported, _ = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.legend
+        assert len(services.requests) == before
+
+    def test_each_sublayer_has_its_own_picture(self, qgis_app, services) -> None:
+        """QGIS's legend shows the first sublayer's picture; the map's shows
+        the first one exactly so, and the next one's beside it."""
+        layer = _wms(
+            services.url("cors/wms"),
+            layers=("target", "boundary"),
+            styles=("outlined", ""),
+            crs="EPSG:3857",
+        )
+        exported, _ = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        first, second = exported.tiles.legend
+        qgis_url, _ = _qgis_legend_request(layer)
+        assert _same_request(first.url) == _same_request(qgis_url)
+        # In the source string's order, which QGIS's own sublayer list
+        # follows; each under the title the capabilities give it.
+        names = {"target": "Target area", "boundary": "Boundary"}
+        for image in (first, second):
+            named = dict(parse_qsl(urlsplit(image.url).query))["LAYER"]
+            assert image.label == names.pop(named)
+        assert names == {}
+
+    def test_a_wmts_styles_legend_url(self, qgis_app, services) -> None:
+        layer = _wmts(services.url("cors/wmts"))
+        assert layer.isValid()
+        exported, _ = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        (image,) = exported.tiles.legend
+        assert image.url.startswith(services.url("cors/legends/outlined.png"))
+        qgis_url, picture = _qgis_legend_request(layer)
+        assert _same_request(image.url) == _same_request(qgis_url)
+        assert not picture.isNull()
+
+    def test_a_key_never_reaches_the_legend(self, qgis_app, services) -> None:
+        """A layer asked at its own keyed address (`IgnoreGetMapUrl`): its
+        legend would be asked there too, so the picture is left out."""
+        layer = _wms(
+            services.url("cors/wms") + "?token=SENTINEL-pw",
+            crs="EPSG:3857",
+            extra="&IgnoreGetMapUrl=1",
+        )
+        exported, report = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.legend == ()
+        assert "access key" in " ".join(
+            item.detail
+            for item in report.items
+            if item.subject == "Legend of 'WMS'"
+            and item.status is FidelityStatus.UNSUPPORTED
+        )
+        assert "SENTINEL" not in repr(exported.snapshot()) + repr(report.items)
+
+    def test_a_contextual_legend_is_known(self, qgis_app, services) -> None:
+        on = _wms(
+            services.url("cors/wms"), crs="EPSG:3857", extra="&contextualWMSLegend=1"
+        )
+        off = _wms(
+            services.url("cors/wms"), crs="EPSG:3857", extra="&contextualWMSLegend=0"
+        )
+        for layer, contextual in ((on, True), (off, False)):
+            exported, _ = _read(layer)
+            assert exported is not None
+            assert exported.tiles is not None
+            assert exported.tiles.contextual_legend is contextual
+
+    def test_without_capabilities_there_is_no_legend(self, qgis_app) -> None:
+        """Nothing says where the service draws its legend, so no guess."""
+        exported, report = _read(_wms(OFFLINE, crs="EPSG:3857"))
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.legend == ()
+        assert not [i for i in report.items if i.subject.startswith("Legend")]
+
+
+class TestCartographLegend:
+    """A cartograph's legend is the runtime's `<om-legend>`, whose rows are a
+    swatch and a label: the WMS layer keeps its row, and the report says the
+    service's picture is not in it."""
+
+    def _report(self, project, services, legend_hides_it=False):
+        from atlas_fixtures import add_map, build_parcels
+        from qgis.core import (
+            QgsCoordinateReferenceSystem,
+            QgsLayoutItemLegend,
+            QgsLayoutSize,
+            QgsPrintLayout,
+            QgsUnitTypes,
+        )
+
+        from nika_onlymap_exporter.core.cartograph_export import (
+            export_layout_to_cartograph,
+        )
+        from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
+
+        project.setCrs(QgsCoordinateReferenceSystem("EPSG:3857"))
+        parcels = build_parcels()
+        wms = _wms(services.url("cors/wms"), crs="EPSG:3857")
+        project.addMapLayers([parcels, wms])
+        layout = QgsPrintLayout(project)
+        layout.initializeDefaults()
+        map_item = add_map(layout, [parcels, wms])
+        legend = QgsLayoutItemLegend(layout)
+        layout.addLayoutItem(legend)
+        legend.setLinkedMap(map_item)
+        legend.attemptResize(QgsLayoutSize(80, 60, QgsUnitTypes.LayoutMillimeters))
+        if legend_hides_it:
+            legend.setSyncMode(qgis_core.Qgis.LegendSyncMode.Manual)
+            legend.model().rootGroup().removeLayer(wms)
+        runtime = RuntimeBundle(
+            javascript=b"// core js placeholder",
+            css=b"/* core css placeholder */",
+            version="0.12.0",
+            sha256="0" * 64,
+            cartograph_javascript=b"// cartograph js placeholder",
+            cartograph_css=b"/* cartograph css placeholder */",
+        )
+        report = FidelityReportBuilder()
+        export_layout_to_cartograph(layout, project, runtime, report)
+        return report
+
+    def test_the_legend_says_the_picture_is_not_shown(self, project, services) -> None:
+        report = self._report(project, services)
+        rows = [
+            item.detail
+            for item in report.items
+            if item.subject == "Legend 'WMS'"
+            and item.status is FidelityStatus.APPROXIMATED
+        ]
+        assert rows and "cannot show a picture" in rows[0]
+        # The web map's row is for the web map's legend, which this is not.
+        assert not [i for i in report.items if i.subject == "Legend of 'WMS'"]
+
+    def test_a_legend_without_the_layer_says_nothing(self, project, services) -> None:
+        report = self._report(project, services, legend_hides_it=True)
+        assert not [i for i in report.items if i.subject == "Legend 'WMS'"]
 
 
 YEAR_EXTENT = (

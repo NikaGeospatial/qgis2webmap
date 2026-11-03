@@ -28,6 +28,7 @@ from nika_onlymap_exporter.core.export_ir import (
     ExportLayer,
     ExportProject,
     Extent,
+    FidelityStatus,
     GeometryKind,
     OutputMode,
     RendererKind,
@@ -289,6 +290,63 @@ class TestDependencyScanner:
         assert result.remote_dependencies == hosts
         assert result.is_offline is (hosts == ())
         assert result.snapshot()["remoteDependencies"] == list(hosts)
+
+    @staticmethod
+    def _service_layer(*images, contextual=False) -> ExportLayer:
+        from nika_onlymap_exporter.core.export_ir import LegendImage, TileSpec
+
+        return make_layer(
+            name="Roads",
+            geometry_kind=GeometryKind.RASTER,
+            source_kind=SourceKind.SERVICE,
+            geojson=None,
+            tiles=TileSpec(
+                "https://maps.example/wms?REQUEST=GetMap&BBOX={bbox-epsg-3857}",
+                legend=tuple(LegendImage(url, label) for url, label in images),
+                contextual_legend=contextual,
+            ),
+        )
+
+    def _legend_rows(self, project) -> tuple[list[str], tuple[str, ...]]:
+        report = FidelityReportBuilder()
+        result = scan(project, report)
+        rows = [
+            item.detail
+            for item in report.items
+            if item.subject == "Legend of 'Roads'"
+            and item.status is FidelityStatus.APPROXIMATED
+        ]
+        return rows, result.remote_dependencies
+
+    def test_a_service_legend_is_live_and_needs_the_internet(self) -> None:
+        url = "https://legends.example/wms?REQUEST=GetLegendGraphic&LAYER=a"
+        rows, remote = self._legend_rows(make_project([self._service_layer((url, ""))]))
+        (row,) = rows
+        assert "legends.example" in row and "internet connection" in row
+        assert "sublayer" not in row and "contextual" not in row
+        assert url in remote
+
+    def test_several_pictures_and_a_contextual_legend_are_said(self) -> None:
+        layer = self._service_layer(
+            ("https://h/wms?LAYER=a", "A"),
+            ("https://h/wms?LAYER=b", "B"),
+            contextual=True,
+        )
+        (row,) = self._legend_rows(make_project([layer]))[0]
+        assert "pictures" in row and "each of the 2 sublayers" in row
+        assert "contextual WMS legend" in row
+
+    def test_without_a_legend_on_the_map_nothing_is_said(self) -> None:
+        from nika_onlymap_exporter.core.export_ir import ExportSettings
+
+        url = "https://legends.example/wms?LAYER=a"
+        project = make_project(
+            [self._service_layer((url, ""))],
+            settings=ExportSettings(show_legend=False),
+        )
+        rows, remote = self._legend_rows(project)
+        assert rows == []
+        assert url not in remote
 
     def test_blocking_dependency_stops_the_export(self) -> None:
         layer = make_layer(

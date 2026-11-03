@@ -1815,7 +1815,13 @@ LEGEND_STYLES = """:host { font-family: system-ui, sans-serif; font-size: 12px; 
   border-radius: 0;
   object-fit: contain;
   background: none;
-}"""
+}
+/* A map service's own legend picture (`_legend_image_markup`). A wide one is
+   scaled to the panel; a tall one keeps its size, so its text stays legible,
+   and scrolls. White behind it, as in QGIS: it is drawn for a white page. One
+   that does not load takes no room, since its alt text is empty. */
+.omni-legend-graphic { max-width: 240px; max-height: min(240px, 40vh); overflow: auto; }
+.omni-legend-graphic img { display: block; max-width: 100%; background: #fff; }"""
 
 
 def _legend_style_element(indent: str) -> list[str]:
@@ -1936,6 +1942,33 @@ def _legend_entries(layer: ExportLayer, indent: str) -> list[str]:
     return lines
 
 
+def _legend_image_markup(layer: ExportLayer, indent: str) -> list[str]:
+    """The legend pictures a WMS or WMTS layer's service draws, under its row.
+
+    Plain `<img>`s the browser loads from the service when the page opens,
+    as QGIS's legend loads them: no script, and no CORS needed for a picture
+    that is only shown. Each sublayer's picture is under its name when there
+    are several. A picture that cannot load - offline, a service that is
+    down - leaves the layer's row as it would be without one.
+    """
+    images = layer.tiles.legend if layer.tiles is not None else ()
+    if not images:
+        return []
+    lines = [f'{indent}    <div class="omni-legend-sub">']
+    for image in images:
+        if image.label:
+            lines.append(
+                f'{indent}      <div class="omni-legend-field">'
+                f"{escape_attr(image.label)}</div>"
+            )
+        lines.append(
+            f'{indent}      <div class="omni-legend-graphic">'
+            f'<img src="{escape_attr(image.url)}" alt=""></div>'
+        )
+    lines.append(f"{indent}    </div>")
+    return lines
+
+
 def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     """A static legend whose swatches are the map's own markers.
 
@@ -1964,6 +1997,7 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
             f"<span>{escape_attr(layer.name)}</span></div>"
         )
         lines.extend(_legend_entries(layer, indent))
+        lines.extend(_legend_image_markup(layer, indent))
 
     lines.append(f"{indent}  </div>")
     lines.append(f"{indent}</om-widget>")
