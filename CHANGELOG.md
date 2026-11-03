@@ -14,6 +14,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
   the zoom controls, bottom left, and is not drawn in a cartograph's
   interactive frames.
+- **Exporting without the dialog**, a new guide: batch exports from the
+  Processing toolbox, the QGIS Python console and `qgis_process`, and the
+  one-time runtime setup they need first.
 - **Cloud Optimized GeoTIFFs QGIS reads over the web** (`/vsicurl/https://...`
   or an `https://` address) export as live layers: the map reads the parts it
   draws straight from the address, and nothing is carried or downloaded. For

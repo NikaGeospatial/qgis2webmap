@@ -114,10 +114,11 @@ no field for one. Supply it either way round instead:
 
 - set the `ONLYMAP_LICENSE_KEY` environment variable, which is also the only
   route that works on a machine with no QGIS profile - a server, a container, CI;
-- or pass the **OnlyMap licence key** parameter to the *Export project to
-  OnlyMap* Processing algorithm.
+- or pass the **OnlyMap licence key** parameter to the *Export to OnlyMap web
+  map* Processing algorithm.
 
-Both are picked up by the dialog too, so a key set once applies to every export.
+The environment variable is picked up by the dialog too, so a key set there once
+applies to every export. The parameter applies to the run it is passed to.
 
 The key is stored on your computer, not in the `.qgz`, so it follows you between
 projects and is never sent to anyone you share a project file with. It is written
@@ -151,7 +152,8 @@ expired.
 optional *OnlyMap licence key* parameter; leave it blank and it falls back to the
 `ONLYMAP_LICENSE_KEY` environment variable, then to the key saved in the dialog.
 The environment variable is the route that works on a machine with no QGIS
-profile - a server, a container, or CI.
+profile - a server, a container, or CI. How to run those exports is in
+[exporting without the dialog](batch-export.md).
 
 ## Symbology
 
