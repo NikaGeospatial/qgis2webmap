@@ -12,6 +12,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -518,3 +519,123 @@ class TestProgressAndCancel:
         assert "From snapshot" in html
         for name in ("one", "two", "three"):
             assert name in html
+
+
+class TestSavedDialogChoices:
+    """A run exports what the dialog would for the same saved project: its
+    layers, popups and Appearance, not every layer with the defaults."""
+
+    @staticmethod
+    def _saved_project(project, make_memory_layer):
+        from nika_onlymap_exporter.core.settings import load_state, save_state
+
+        if discover_runtime_dir() is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        layers = {
+            name: make_memory_layer(name, features=[(f"{name} 1", [0.87, 51.15])])
+            for name in ("Kept", "Dropped", "Quiet")
+        }
+        for layer in layers.values():
+            project.addMapLayer(layer)
+        state = load_state(project)
+        state.for_layer(layers["Dropped"].id()).include = False
+        state.for_layer(layers["Quiet"].id()).popup = False
+        state.show_legend = False
+        state.widget_background = "#40e0d0"
+        state.map_name = "Saved name"
+        save_state(project, state)
+        context = qgis_core.QgsProcessingContext()
+        context.setProject(project)
+        return context
+
+    @staticmethod
+    def _run(context, parameters) -> str:
+        algorithm = ExportProjectAlgorithm()
+        algorithm.initAlgorithm()
+        results = algorithm.processAlgorithm(
+            parameters, context, qgis_core.QgsProcessingFeedback()
+        )
+        return Path(results["OUTPUT"]).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _dialog_export(qgis_app, destination: Path) -> str:
+        """The dialog's own read and writer, as its Export button runs them."""
+        from nika_onlymap_exporter.core.export_ir import OutputMode
+        from nika_onlymap_exporter.packaging.artifact_builder import build_artifact
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        dialog = MainDialog(FakeIface(), None)
+        dialog._pending_canvas_extent = None
+        dialog._pending_map_time = None
+        dialog._pending_license_key = dialog._license_key()
+        export, _report = dialog._read_current_project()
+        _result, outcome = build_artifact(
+            export,
+            destination,
+            mode=OutputMode.STANDALONE_HTML,
+            writer=dialog._writer(),
+        )
+        dialog.close()
+        return outcome.path.read_text(encoding="utf-8")
+
+    def test_it_writes_the_map_the_dialog_writes(
+        self, project, make_memory_layer, tmp_path, qgis_app
+    ) -> None:
+        context = self._saved_project(project, make_memory_layer)
+
+        batch = self._run(context, {"OUTPUT": str(tmp_path / "batch.html")})
+        dialog = self._dialog_export(qgis_app, tmp_path / "dialog.html")
+
+        # The same file, but for the minute each was generated in.
+        assert _undated(batch) == _undated(dialog)
+        # And what that map is: the saved choices, not the defaults.
+        assert 'label="Kept"' in batch
+        assert 'label="Dropped"' not in batch
+        assert '<div class="om-popup-title">Kept</div>' in batch
+        assert '<div class="om-popup-title">Quiet</div>' not in batch
+        assert '<om-widget type="legend"' not in batch
+        assert "--om-widget-bg: #40e0d0" in batch
+        assert "<title>Saved name</title>" in batch
+
+    def test_a_parameter_that_is_passed_wins_over_the_saved_choice(
+        self, project, make_memory_layer, tmp_path
+    ) -> None:
+        context = self._saved_project(project, make_memory_layer)
+
+        html = self._run(
+            context,
+            {"OUTPUT": str(tmp_path / "map.html"), "LEGEND": True, "TITLE": "Given"},
+        )
+
+        assert '<om-widget type="legend"' in html
+        assert "<title>Given</title>" in html
+        # What was not passed still comes from the project.
+        assert 'label="Dropped"' not in html
+        assert "--om-widget-bg: #40e0d0" in html
+
+    def test_a_project_never_opened_in_the_dialog_exports_every_layer(
+        self, project, make_memory_layer, tmp_path
+    ) -> None:
+        if discover_runtime_dir() is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        for name in ("First", "Second"):
+            project.addMapLayer(
+                make_memory_layer(name, features=[("a", [0.87, 51.15])])
+            )
+        context = qgis_core.QgsProcessingContext()
+        context.setProject(project)
+
+        html = self._run(context, {"OUTPUT": str(tmp_path / "map.html")})
+
+        assert 'label="First"' in html
+        assert 'label="Second"' in html
+        assert '<div class="om-popup-title">Second</div>' in html
+        assert '<om-widget type="legend"' in html
+
+
+def _undated(html: str) -> str:
+    return re.sub(r"(Generated by .*) on [^\n]*", r"\1", html)

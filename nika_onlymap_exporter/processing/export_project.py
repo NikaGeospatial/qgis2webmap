@@ -4,9 +4,10 @@ Issue #29's architecture table: *"a Processing provider makes export usable
 outside the main dialog and supports later batch/model workflows."*
 
 The load-bearing rule is that this is **not a second export implementation**.
-It reads the project with the same `read_project` and produces the artifact with
-the same `build_artifact` as the dialog. qgis2web's cost is that its dialog and
-its algorithm drifted; the only thing this file owns is turning Processing
+It reads the project with the same `prepare_from_state`, from the dialog's
+choices saved in the project, and produces the artifact with the same
+`build_artifact` as the dialog. qgis2web's cost is that its dialog and its
+algorithm drifted; the only thing this file owns is turning Processing
 parameters into the arguments those calls already take.
 
 Copyright (C) 2026 NIKA
@@ -27,11 +28,11 @@ from qgis.core import (
 )
 
 from ..core.cancellation import ExportCancelledError
-from ..core.export_ir import ExportSettings, OutputMode
+from ..core.export_ir import OutputMode
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import default_policy, report_verdict
-from ..core.project_reader import PendingProject, finish_project, prepare_project
-from ..core.settings import resolve_license_key
+from ..core.project_reader import PendingProject, finish_project, prepare_from_state
+from ..core.settings import DialogState, load_state, resolve_license_key
 from ..core.translatable import N_
 from ..packaging.artifact_builder import build_artifact
 from ..packaging.runtime_manager import (
@@ -53,6 +54,15 @@ OUTPUT_MODES = (
     (OutputMode.STANDALONE_HTML, N_("Standalone HTML (one file)")),
     (OutputMode.SHARE_ZIP, N_("Share ZIP")),
     (OutputMode.FOLDER, N_("Folder")),
+)
+
+# The map controls a run can set, each to the `DialogState` field it overrides.
+WIDGET_PARAMETERS = (
+    ("LEGEND", "show_legend"),
+    ("LAYER_SWITCHER", "show_layer_switcher"),
+    ("ZOOM_CONTROLS", "show_zoom_controls"),
+    ("SCALE_BAR", "show_scale_bar"),
+    ("MEASURE", "show_measure"),
 )
 
 
@@ -98,9 +108,13 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             "missing), the export stops and lists the problems, unless "
             "'Export even if some items are blocked' is ticked - then the map "
             "is written without them and each one is logged as a warning. "
-            "For the full fidelity report, and "
-            "for per-layer popup and label choices, use "
-            "Web → QGIS2WebMap by NIKA.\n\n"
+            "For the full fidelity report, use Web → QGIS2WebMap by NIKA.\n\n"
+            "The choices made in that dialog and saved with the project - which "
+            "layers to include, each layer's popup, labels and clustering, the "
+            "basemap and the rest of the Appearance tab - are used here too. A "
+            "title or control set here replaces the saved one; this window "
+            "always sends its control ticks, while a script or qgis_process "
+            "run that leaves one out keeps the saved choice.\n\n"
             "<b>First run on a new computer:</b> open Web → QGIS2WebMap by NIKA "
             "and export once from there. It shows the OnlyMap runtime licence "
             "and installs the runtime ({size}, once per "
@@ -122,7 +136,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterString(
                 self.TITLE,
-                tr("Map title (blank uses the project title)"),
+                tr("Map title (blank uses the saved map name, then the project title)"),
                 optional=True,
             )
         )
@@ -202,36 +216,39 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
 
     _prepared: tuple[PendingProject, FidelityReportBuilder] | None = None
 
-    def _settings_and_title(
-        self, parameters, context
-    ) -> tuple[OutputMode, ExportSettings, str | None]:
-        mode = OUTPUT_MODES[self.parameterAsEnum(parameters, self.MODE, context)][0]
-        title = (
-            self.parameterAsString(parameters, self.TITLE, context) or ""
-        ).strip() or None
+    def _mode(self, parameters, context) -> OutputMode:
+        return OUTPUT_MODES[self.parameterAsEnum(parameters, self.MODE, context)][0]
 
-        settings = ExportSettings(
-            output_mode=mode,
-            show_legend=self.parameterAsBool(parameters, self.LEGEND, context),
-            show_layer_switcher=self.parameterAsBool(
-                parameters, self.LAYER_SWITCHER, context
-            ),
-            show_zoom_controls=self.parameterAsBool(
-                parameters, self.ZOOM_CONTROLS, context
-            ),
-            show_scale_bar=self.parameterAsBool(parameters, self.SCALE_BAR, context),
-            show_measure=self.parameterAsBool(parameters, self.MEASURE, context),
-        )
-        return mode, settings, title
+    def _state(self, parameters, context) -> DialogState:
+        """The dialog's choices saved in the project, under the parameters given.
+
+        Saved, so a batch run exports what the dialog would for the same
+        project: its layers, popups, labels, basemap and Appearance. A
+        parameter that is passed wins over what was saved; one that is left out
+        (a script or `qgis_process` naming only `OUTPUT`) keeps it. The output
+        mode is always this run's own, since `OUTPUT` is named for it.
+        """
+        state = load_state(context.project())
+        state.output_mode = self._mode(parameters, context)
+        title = (self.parameterAsString(parameters, self.TITLE, context) or "").strip()
+        if title:
+            state.map_name = title
+        for key, attribute in WIDGET_PARAMETERS:
+            if parameters.get(key) is not None:
+                setattr(
+                    state, attribute, self.parameterAsBool(parameters, key, context)
+                )
+        return state
 
     def _prepare(
         self, parameters, context
     ) -> tuple[PendingProject, FidelityReportBuilder]:
         """Read the live project. Must run on the thread that owns it."""
-        _mode, settings, title = self._settings_and_title(parameters, context)
         report = FidelityReportBuilder()
-        pending = prepare_project(
-            context.project(), report, settings=settings, title_override=title
+        # No canvas here: an extent or clip set to the QGIS view is reported as
+        # unreadable and the map opens on its data, as for a dialog without one.
+        pending = prepare_from_state(
+            context.project(), report, self._state(parameters, context)
         )
         return pending, report
 
@@ -263,7 +280,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             self._prepared = self._prepare(parameters, context)
         pending, report = self._prepared
         self._prepared = None
-        mode, _settings, _title = self._settings_and_title(parameters, context)
+        mode = self._mode(parameters, context)
         destination = Path(self.parameterAsFileOutput(parameters, self.OUTPUT, context))
 
         license_key = resolve_license_key(

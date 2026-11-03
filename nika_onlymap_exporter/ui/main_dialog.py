@@ -123,11 +123,12 @@ from ..core.manifest_builder import (
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import (
     PendingProject,
+    available_layer_ids,
     extent_from_canvas,
     finish_project,
     map_time_from_canvas,
     needs_map_time,
-    prepare_project,
+    prepare_from_state,
     resolve_title,
     with_output_notes,
 )
@@ -3868,11 +3869,7 @@ class MainDialog(QDialog):
         return self.project.fileName() or self.project.baseName() or "untitled"
 
     def _available_layer_ids(self) -> list[str]:
-        return [
-            tree_layer.layer().id()
-            for tree_layer in self.project.layerTreeRoot().findLayers()
-            if tree_layer.layer() is not None
-        ]
+        return available_layer_ids(self.project)
 
     def _update_export_readiness(self) -> None:
         """Disable Export with the reason beside it, never silently."""
@@ -3999,15 +3996,10 @@ class MainDialog(QDialog):
         `background_job` for the boundary.
         """
         report = FidelityReportBuilder()
-        pending = prepare_project(
+        pending = prepare_from_state(
             self.project,
             report,
-            settings=self.state.to_export_settings(),
-            title_override=self.state.map_name or None,
-            selected_layer_ids=self.state.selected_layer_ids(
-                self._available_layer_ids()
-            ),
-            layer_settings=self.state.layers,
+            self.state,
             canvas_extent=self._pending_canvas_extent,
             map_time=self._pending_map_time,
         )

@@ -72,6 +72,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   carries an access key is left out. A cartograph's legend still lists the
   layer by name; the Checks tab says so.
 
+### Changed
+- **The Processing algorithm exports what the dialog would.** *Export to
+  OnlyMap web map* now uses the choices the dialog saved in the project -
+  which layers to include, each layer's popup, field and label choices,
+  clustering and point names, the map name, the basemap and the rest of the
+  Appearance tab - where it used to export every layer with the defaults. A
+  title or map control passed to the algorithm still replaces the saved one,
+  and a project never opened in the dialog exports as before.
+
 ### Fixed
 - Labels on multi-part features land where QGIS draws them
   ([qgis2web#1095](https://github.com/qgis2web/qgis2web/issues/1095)): every
