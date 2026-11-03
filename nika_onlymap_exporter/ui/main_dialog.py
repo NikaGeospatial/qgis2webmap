@@ -157,7 +157,6 @@ from ..packaging.dependency_scanner import (
 )
 from ..packaging.runtime_manager import read_lock
 from ..writers.onlymap_writer import (
-    PLUGIN_VERSION,
     ExportBlockedError,
     OnlyMapWriter,
 )
@@ -261,17 +260,14 @@ LAST_EXPORT_DIR_KEY = "qgis2webmap/lastExportDir"
 # it shorten its text.
 COMPACT_COMBO_WIDTH = 120
 
-# Which QGIS theme icon each Share row wears. A table rather than nine literals
-# at the call sites, so a test can check every name against the icons this QGIS
+# Which QGIS theme icon each Share row wears. A table rather than literals at
+# the call sites, so a test can check every name against the icons this QGIS
 # build actually has - which is the only part of an icon that can be verified
 # without a screen. See `TestShareMenuIcons` for why `isNull` cannot be used.
 SHARE_MENU_ICONS = {
     "copy_path": "mActionEditCopy.svg",
     "reveal": "mIconFolderOpen.svg",
     "publish": "mActionSharingExport.svg",
-    "enhance": "mActionShowAllLayers.svg",
-    "critique": "mActionShowAllLayers.svg",
-    "cartograph": "mActionSaveAsPDF.svg",
 }
 
 
@@ -3208,39 +3204,9 @@ class MainDialog(QDialog):
             self.on_reveal_map_file,
         )
 
-        add(
-            "cartograph",
-            tr("Make a cartograph..."),
-            tr(
-                "Builds a print layout from the current map view and switches "
-                "to the Cartograph (Beta) output"
-            ),
-            self._switch_to_cartograph,
-        )
-
         # What NIKA offers, after everything that works on the file itself,
-        # each named for what it does today: the hand-offs prepare a prompt
-        # for the user to take to NIKA - nothing is sent anywhere - and the
-        # hosting row joins a waitlist, it does not publish.
-        menu.addSection(tr("NIKA hand-off"))
-        add(
-            "enhance",
-            tr("Prepare enhancement prompt..."),
-            tr(
-                "Opens a prompt for improving this map, to copy into NIKA or "
-                "another AI assistant. Nothing is sent from here."
-            ),
-            lambda: self.on_handoff("enhance"),
-        )
-        add(
-            "critique",
-            tr("Prepare critique prompt..."),
-            tr(
-                "Opens a prompt asking for a critique of this map, to copy into "
-                "NIKA or another AI assistant. Nothing is sent from here."
-            ),
-            lambda: self.on_handoff("critique"),
-        )
+        # named for what it does today: the hosting row joins a waitlist, it
+        # does not publish.
         menu.addSection(tr("NIKA hosting"))
         add(
             "publish",
@@ -3270,9 +3236,10 @@ class MainDialog(QDialog):
 
         The plugin's two cartograph entry points - the Web menu action and the
         layout designer's "Export as cartograph (HTML)..." action - both call
-        this rather than touching `self.state` directly, for the reason
-        `_switch_to_cartograph` is: the switch's checked state has to move
-        with the output it names.
+        this rather than touching `self.state` directly: flipping the switch
+        is the one thing that both applies the output and keeps the button's
+        checked state in step with it, so the switch never shows the wrong
+        side pressed.
         """
         self.output_switcher.actions_by_output[DialogOutput.CARTOGRAPH].trigger()
         if layout_name:
@@ -3285,17 +3252,6 @@ class MainDialog(QDialog):
     def release_canvas_effects(self) -> None:
         """For the plugin's unload: undo canvas previews this dialog set."""
         self._cartograph.release_canvas_effects()
-
-    def _switch_to_cartograph(self) -> None:
-        """The web-map Share menu's "Make a cartograph..." row.
-
-        Flips the switch, which is the one thing that both applies the output
-        and keeps the button's checked state in step with it - setting
-        `self.state.output` directly would leave the switch showing the wrong
-        side pressed.
-        """
-        self.output_switcher.actions_by_output[DialogOutput.CARTOGRAPH].trigger()
-        self._cartograph.create_from_canvas()
 
     def _build_settings_tab(self) -> QWidget:
         """The person's own preferences, apart from the map's.
@@ -4313,10 +4269,10 @@ class MainDialog(QDialog):
     def _with_current_map_file(self, then) -> None:
         """Run `then(path)` once the map file on disk matches the project.
 
-        The one rule the whole Share menu is built on. Every action needs a file
-        that is current, and none of them should make the user think about
-        producing one: pressing Export before Copy file path was a step that
-        existed only because the dialog could not do it itself.
+        For a Share row that hands the file's *contents* on, which needs a file
+        that is current without making the user think about producing one. The
+        NIKA hand-off rows did; none of the web map's rows does in 0.3.1, since
+        Copy file path and Show in file manager ask only where the file lives.
 
         Rebuilds only when something actually changed - `_ensure_export` keys
         its cache on `data_snapshot`, so a run of Share actions after one write
@@ -4356,50 +4312,35 @@ class MainDialog(QDialog):
         """Show the map file in the platform's file manager (`reveal_file`:
         the file selected where the platform can, never a default folder opener
         that may be a code editor). Success is reported once the platform has
-        accepted the request; a failure names the path so it can be copied."""
+        accepted the request; a failure names the path so it can be copied.
 
-        def reveal(destination: Path) -> None:
-            def report(outcome: RevealOutcome) -> None:
-                if sip.isdeleted(self.status_label):
-                    return
-                if outcome.ok and outcome.selected:
-                    text = tr("Showing {name} in the file manager").format(
-                        name=destination.name
-                    )
-                elif outcome.ok:
-                    text = tr("Opened {path}").format(path=outcome.folder)
-                else:
-                    text = tr(
-                        "Could not show the file in a file manager: {reason}. "
-                        "Use Copy file path for {path}."
-                    ).format(reason=outcome.reason, path=destination)
-                self.status_label.setText(text)
-
-            reveal_file(destination, report)
-
-        self._with_current_map_file(reveal)
-
-    def on_handoff(self, task: str) -> None:
-        """Share > Enhance / Critique: the hand-off dialog, on a current file.
-
-        Through `_with_current_map_file` like every other Share row, so the
-        prompt never names a map file that is missing or out of date.
+        Does not build first, like Copy file path: it asks where the file
+        lives, not what is in it, and a rebuild put the export's own questions
+        in front of a request to open a folder. A file not written yet shows
+        the folder it will be written to.
         """
-        from .handoff_dialog import HandoffContext, HandoffDialog
+        destination = self._map_file()
+        if destination is None:
+            self._warn_no_map_file()
+            return
 
-        def show(destination: Path) -> None:
-            context = HandoffContext(
-                output="web_map",
-                file_path=destination,
-                source_name=self.state.map_name
-                or self.project.title()
-                or Path(self._project_identity()).stem,
-                plugin_version=PLUGIN_VERSION,
-                task="enhance" if task == "enhance" else "critique",
-            )
-            HandoffDialog(context, self).exec()
+        def report(outcome: RevealOutcome) -> None:
+            if sip.isdeleted(self.status_label):
+                return
+            if outcome.ok and outcome.selected:
+                text = tr("Showing {name} in the file manager").format(
+                    name=destination.name
+                )
+            elif outcome.ok:
+                text = tr("Opened {path}").format(path=outcome.folder)
+            else:
+                text = tr(
+                    "Could not show the file in a file manager: {reason}. "
+                    "Use Copy file path for {path}."
+                ).format(reason=outcome.reason, path=destination)
+            self.status_label.setText(text)
 
-        self._with_current_map_file(show)
+        reveal_file(destination, report)
 
     def on_publish(self) -> None:
         """Hosting, for as long as hosting is a form rather than a feature.

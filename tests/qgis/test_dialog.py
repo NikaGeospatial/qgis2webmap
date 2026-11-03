@@ -761,22 +761,21 @@ class TestShareIsADropdown:
     def test_nika_rows_say_what_they_do_after_the_file_actions(
         self, qgis_app, project, make_memory_layer
     ):
-        """Hand-offs prepare a prompt and the hosting row joins a waitlist -
-        neither publishes or sends anything - and both come after the rows
-        that act on the file."""
+        """The hosting row joins a waitlist - it publishes nothing - and comes
+        after the rows that act on the file. The hand-off rows and Make a
+        cartograph... are not on the web map's menu in 0.3.1."""
         dialog = self._dialog(project, make_memory_layer)
         try:
             rows = self._rows(dialog.share_button.menu())
             texts = [text for _section, text in rows]
-            assert ("NIKA hand-off", "Prepare enhancement prompt...") in rows
-            assert ("NIKA hand-off", "Prepare critique prompt...") in rows
+            assert texts == [
+                "Copy file path",
+                texts[1],  # the platform's own name for the reveal row
+                "Join NIKA hosting waitlist ↗",
+                "Ask on Discord ↗",
+            ]
             assert ("NIKA hosting", "Join NIKA hosting waitlist ↗") in rows
-            assert texts.index("Copy file path") < texts.index(
-                "Prepare enhancement prompt..."
-            )
-            assert texts.index("Prepare critique prompt...") < texts.index(
-                "Join NIKA hosting waitlist ↗"
-            )
+            assert not {"enhance", "critique", "cartograph"} & set(dialog.share_actions)
             assert dialog.share_actions["publish"].isEnabled()
             assert dialog.share_actions["publish"].shortcut().isEmpty()
         finally:
@@ -1327,9 +1326,8 @@ class TestShareBuildsWhatItNeeds:
             destination = tmp_path / "map.html"
             destination.write_text("<p>map</p>", encoding="utf-8")
             dialog.path_edit.setText(str(destination))
-            monkeypatch.setattr(
-                dialog, "_with_current_map_file", lambda then: then(destination)
-            )
+            exported: list[bool] = []
+            dialog.on_export = lambda: exported.append(True)
 
             dialog.on_reveal_map_file()
 
@@ -1337,6 +1335,38 @@ class TestShareBuildsWhatItNeeds:
                 ("ShowItems", QUrl.fromLocalFile(str(destination)).toString())
             ]
             assert "map.html" in dialog.status_label.text()
+            # It asks where the file lives, so it never rebuilds the map first:
+            # a rebuild put the export's own questions in front of the folder.
+            assert not exported
+        finally:
+            dialog.close()
+
+    def test_a_map_not_written_yet_shows_its_folder_without_exporting(
+        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtCore import QUrl
+
+        module = "nika_onlymap_exporter.ui.reveal_file"
+        asked: list[tuple[str, str]] = []
+        monkeypatch.setattr(f"{module}._platform", lambda: "linux")
+        monkeypatch.setattr(
+            f"{module}._ask_file_manager",
+            lambda method, uri, done: (asked.append((method, uri)), done(None)),
+        )
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            destination = tmp_path / "never-written.html"
+            dialog.path_edit.setText(str(destination))
+            exported: list[bool] = []
+            dialog.on_export = lambda: exported.append(True)
+
+            dialog.on_reveal_map_file()
+
+            assert not exported
+            assert not destination.exists()
+            assert asked == [
+                ("ShowFolders", QUrl.fromLocalFile(str(tmp_path)).toString())
+            ]
         finally:
             dialog.close()
 
@@ -1658,55 +1688,6 @@ class TestLivePreviewLifecycle:
             dialog._set_busy(True, "working")
             dialog._set_busy(False)
             assert dialog.share_actions["publish"].isEnabled()
-        finally:
-            dialog.close()
-
-    def test_the_hand_off_rows_open_the_dialog_on_the_current_map_file(
-        self, qgis_app, project, make_memory_layer, tmp_path, monkeypatch
-    ) -> None:
-        """Enhance and Critique open the hand-off dialog (issue #3 S4), on a
-        map file brought up to date first like every other Share row."""
-        from nika_onlymap_exporter.ui import handoff_dialog
-
-        shown = []
-        monkeypatch.setattr(
-            handoff_dialog.HandoffDialog,
-            "exec",
-            lambda self: shown.append(self.context) or 0,
-        )
-        dialog = self._dialog(project, make_memory_layer)
-        try:
-            target = tmp_path / "peaks.html"
-            dialog.path_edit.setText(str(target))
-            monkeypatch.setattr(
-                dialog, "_with_current_map_file", lambda then: then(target)
-            )
-            for key in ("enhance", "critique"):
-                action = dialog.share_actions[key]
-                assert action.isEnabled(), key
-                action.trigger()
-            assert [(c.output, c.file_path, c.task) for c in shown] == [
-                ("web_map", target, "enhance"),
-                ("web_map", target, "critique"),
-            ]
-        finally:
-            dialog.close()
-
-    def test_make_a_cartograph_is_enabled_and_switches_the_output(
-        self, qgis_app, project, make_memory_layer
-    ) -> None:
-        """Unlike the hand-off rows above, this one is no longer a stub: it
-        switches the dialog to the Cartograph (Beta) output (see
-        `ui/cartograph/`)."""
-        from nika_onlymap_exporter.core.settings import DialogOutput
-
-        dialog = self._dialog(project, make_memory_layer)
-        try:
-            action = dialog.share_actions["cartograph"]
-            assert action.isEnabled()
-            action.trigger()
-            assert dialog.state.output is DialogOutput.CARTOGRAPH
-            assert dialog.output_switcher.output() is DialogOutput.CARTOGRAPH
         finally:
             dialog.close()
 

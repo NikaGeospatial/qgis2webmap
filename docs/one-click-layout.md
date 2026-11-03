@@ -22,8 +22,7 @@ go the other way, back into QGIS as a layout.
 1. Set the canvas to the view you want on the page: the extent, the layers,
    even a rotation.
 2. On Cartograph, press **New from template...** beside the **Print layout**
-   list. On the web map, **Share → Make a cartograph...**
-   does the same and switches the dialog to Cartograph (Beta).
+   list.
 3. Pick a [template](#choose-a-template), a page size and an orientation, and
    click **Create layout**.
 
