@@ -4,7 +4,7 @@ qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
 description=Export QGIS projects to interactive, portable HTML maps, and print layouts to printable HTML cartographs (Beta). Open locally, share as a zip, or put them on any static host.
 about=Documentation: https://qgis2webmap.nikaplanet.com/ — installation, your first export, every dialog option, hosting and troubleshooting. QGIS2WebMap by NIKA turns a finished QGIS project into an interactive web map that opens locally — no account, web server, or coding required. The default export is a single HTML file another person can double-click. New in Beta: turn a QGIS print layout - or the current map view - into a cartograph, one printable HTML page with live or pixel-exact map frames, grids, legends, scale bars and atlas pages, that prints at true page size from any Chromium-based browser. Built by NIKA, powered by OnlyMap. On first use the plugin downloads the OnlyMap runtime from npm (registry.npmjs.org); exporting works offline after that. This is an independent third-party plugin and is not endorsed by QGIS.org.
-version=0.3.0
+version=0.3.1
 author=NIKA
 email=support@nikaplanet.com
 
@@ -38,7 +38,16 @@ deprecated=False
 license=GPL-2.0-or-later
 hasProcessingProvider=yes
 
-changelog=0.3.0
+changelog=0.3.1
+    WMS layers export as live layers when the service offers Web Mercator,
+    and so do WMTS layers on a Web Mercator grid and XYZ quadkey layers; they
+    need an internet connection to draw. The Fidelity tab says what to do
+    about a service that still cannot be exported. The OnlyMap runtime moves
+    to 0.13.3, its licence is shown only once, and it is kept compressed on
+    disk. Faster exports. Fixes: a Cloud-Optimized GeoTIFF compressed with
+    LZW, ZSTD or LERC exported as an empty layer; on relief maps the
+    attribution sat under a wrapped imagery credit.
+    0.3.0
     Cartograph (Beta): a "Make: Web map | Cartograph" switch turns a QGIS
     print layout - or the current map view - into one printable HTML page.
     Map items become live frames (pan and zoom) or static, pixel-exact images

@@ -4,7 +4,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.1] - Unreleased
 
 ### Added
 - **WMS layers export as live layers** ([#2](https://github.com/NikaGeospatial/qgis2webmap/issues/2)).
@@ -26,8 +26,20 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   ArcGIS map services and WCS. An XYZ address with a token the map cannot
   fill (such as `{s}`) is now refused with a reason instead of exported to
   request the token literally.
+- The OnlyMap runtime moves to 0.13.3.
+- The runtime licence is shown once, at the first download: a later runtime
+  version downloads without asking again.
+- The downloaded runtime is kept compressed on disk (about 2.8 MB), and older
+  runtime versions are deleted once a new one is installed and verified.
+- Faster exports and cartograph saves: only the fields the export keeps are
+  read from each layer, embedded data is compressed in a third of the time,
+  and label decluttering and point clustering do less work. Maps draw the
+  same.
 
 ### Fixed
+- On a relief map the imagery credit wraps to a second line, and the
+  attribution above it sat underneath it. The attribution, and the preview's
+  Host prompt, now keep clear of the credit at its measured height.
 - A raster whose file is already a Cloud-Optimized GeoTIFF compressed with
   LZW, ZSTD or LERC no longer exports as an empty layer: the web map cannot
   decode those compressions, so the file is now converted (to DEFLATE, as
