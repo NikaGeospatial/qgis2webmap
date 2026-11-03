@@ -883,19 +883,75 @@ class TileSpec:
 
 
 @dataclass(frozen=True)
+class PopupAttachment:
+    """A field QGIS edits with its Attachment (External Resource) widget.
+
+    Read from the widget's own configuration, never guessed from the values:
+    `picture` is its document viewer set to Image, `base_dir` the folder QGIS
+    resolves a relative path against (`None` when QGIS would resolve it against
+    the folder it happened to be started from, which no export can rely on),
+    and `file_name_label` a link shown by its file name, as the widget shows it
+    with "Display resource path as link" on and "Display full path" off.
+    """
+
+    picture: bool = False
+    base_dir: str | None = None
+    file_name_label: bool = False
+
+    def snapshot(self) -> dict[str, Any]:
+        # The folder is the author's own path, so only whether there is one.
+        return {
+            "picture": self.picture,
+            "relative": self.base_dir is not None,
+            "fileNameLabel": self.file_name_label,
+        }
+
+
+@dataclass(frozen=True)
 class PopupFieldSpec:
     """One attribute's presentation in a popup."""
 
     name: str
     alias: str | None = None
     mode: PopupFieldMode = PopupFieldMode.INLINE_WITH_DATA
+    attachment: PopupAttachment | None = None
+    # `name` is a property holding markup the exporter built and escaped
+    # itself - a link, a picture or plain text - so the template inserts it
+    # as it is (see `popup_media`). Never set for a property holding data.
+    markup: bool = False
 
     @property
     def display_name(self) -> str:
         return self.alias or self.name
 
     def snapshot(self) -> dict[str, Any]:
-        return {"name": self.name, "alias": self.alias, "mode": self.mode.value}
+        snapshot: dict[str, Any] = {
+            "name": self.name,
+            "alias": self.alias,
+            "mode": self.mode.value,
+        }
+        # Only when set, so the snapshot of an ordinary field is unchanged.
+        if self.attachment is not None:
+            snapshot["attachment"] = self.attachment.snapshot()
+        if self.markup:
+            snapshot["markup"] = True
+        return snapshot
+
+
+@dataclass(frozen=True)
+class PopupPicture:
+    """A picture a popup shows, carried with the map.
+
+    `name` is the file name the popup's markup refers to: the hash of the
+    bytes, so the same picture referenced twice is carried once, and a name
+    can never collide with another file of the export. The writer either
+    writes the bytes beside the page under it or replaces it with a `data:`
+    URI (`packaging.popup_pictures`).
+    """
+
+    name: str
+    data: bytes
+    media_type: str
 
 
 @dataclass(frozen=True)
@@ -1054,6 +1110,9 @@ class ExportLayer:
     # None keeps the manifest's own default. Per layer for the same reason as
     # `PopupSpec.on_hover` - qgis2web#132, open since 2015.
     highlight_color: Color | None = None
+    # The pictures this layer's popups show from files on this computer, ready
+    # to carry; see `PopupPicture`. Empty - almost always - carries nothing.
+    popup_pictures: tuple[PopupPicture, ...] = ()
 
     def __post_init__(self) -> None:
         # Read-only all the way down (`core.read_only_json`), so the text kept
@@ -1114,6 +1173,10 @@ class ExportLayer:
                 self.highlight_color.snapshot() if self.highlight_color else None
             ),
         }
+        if self.popup_pictures:
+            data["popupPictures"] = [
+                {"name": p.name, "sizeBytes": len(p.data)} for p in self.popup_pictures
+            ]
         if include_geometry:
             data["geojson"] = self.geojson
         return data

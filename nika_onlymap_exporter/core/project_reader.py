@@ -66,6 +66,7 @@ from .manifest_builder import (
     osm_from_file,
     terrain_note,
 )
+from .popup_media import attach_popup_media
 from .settings import LayerSettings
 from .widget_colors import resolve_widget_colors
 from .zoom_range import CSS_PIXEL_METRES, translate_scale_range
@@ -579,6 +580,10 @@ def finish_project(
             prepared = prepared.finish(report)
         if prepared is not None:
             layers.append(prepared)
+    # After every layer is read, because the pictures a map carries are capped
+    # for the map as a whole; here, so the Fidelity tab says which before the
+    # user exports.
+    layers = attach_popup_media(layers, report)
     for layer_id, name in pending.skipped_invalid:
         report.blocked(
             f"Layer '{name}'",

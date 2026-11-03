@@ -14,20 +14,69 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from .export_ir import PopupFieldMode, PopupFieldSpec, PopupSpec
+from .export_ir import PopupAttachment, PopupFieldMode, PopupFieldSpec, PopupSpec
 from .fidelity_report import FidelityReportBuilder
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Mapping
 
-    from qgis.core import QgsVectorLayer
+    from qgis.core import QgsField, QgsVectorLayer
 
 # Field types QGIS can hold that carry no useful popup text.
 _UNPRINTABLE_TYPE_NAMES = frozenset({"binary", "geometry"})
+
+# The Attachment widget's configuration keys and values, as QGIS 4.2's own
+# configuration dialog writes them (`QgsExternalResourceConfigDlg::config`).
+_ATTACHMENT_WIDGET = "ExternalResource"
+_DOCUMENT_VIEWER_IMAGE = 1  # QgsExternalResourceWidget.DocumentViewerContent.Image
+_RELATIVE_TO_PROJECT = 1  # QgsFileWidget.RelativeStorage.RelativeProject
+_RELATIVE_TO_ROOT = 2  # QgsFileWidget.RelativeStorage.RelativeDefaultPath
+
+
+def _config_int(config: Mapping[str, object], key: str) -> int:
+    """An enum-valued setting, 0 (QGIS's default) when absent or unreadable."""
+    value = config.get(key)
+    if not isinstance(value, (int, float, str)):
+        return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
+
+def attachment_of(field: QgsField, project_file: str) -> PopupAttachment | None:
+    """How QGIS shows `field`, when its editor widget is an Attachment.
+
+    `project_file` is the project's absolute file path, empty for a project
+    never saved. A relative path is resolved where QGIS resolves it -
+    measured on QGIS 4.2 with its own image viewer: beside the project file
+    for "relative to project path", under the default path for "relative to
+    default path", and against the folder QGIS was started from otherwise
+    (stored as absolute, or relative to a default path left empty). That last
+    is no folder an export can name, so it is `None` and such a path is
+    reported as not found.
+    """
+    setup = field.editorWidgetSetup()
+    if setup.type() != _ATTACHMENT_WIDGET:
+        return None
+    config = setup.config() or {}
+    storage = _config_int(config, "RelativeStorage")
+    root = str(config.get("DefaultRoot") or "")
+    base_dir: str | None = None
+    if storage == _RELATIVE_TO_PROJECT and project_file:
+        base_dir = os.path.dirname(project_file)
+    elif storage == _RELATIVE_TO_ROOT and root:
+        base_dir = root
+    return PopupAttachment(
+        picture=_config_int(config, "DocumentViewer") == _DOCUMENT_VIEWER_IMAGE,
+        base_dir=base_dir,
+        file_name_label=bool(config.get("UseLink")) and not config.get("FullUrl"),
+    )
 
 
 def hidden_field_names(layer: QgsVectorLayer) -> frozenset[str]:
@@ -109,9 +158,12 @@ def translate_popup(
     before the all-fields-hidden check below so the warning describes what the
     user will actually see, not what QGIS alone implied.
     """
+    from qgis.core import QgsProject
+
     layer_id = layer.id()
     subject = f"Popup fields of '{layer.name()}'"
     hidden = hidden_field_names(layer)
+    project_file = QgsProject.instance().absoluteFilePath()
 
     fields: list[PopupFieldSpec] = []
     skipped: list[str] = []
@@ -128,7 +180,14 @@ def translate_popup(
         mode = (
             PopupFieldMode.HIDDEN if name in hidden else PopupFieldMode.INLINE_WITH_DATA
         )
-        fields.append(PopupFieldSpec(name=name, alias=alias, mode=mode))
+        fields.append(
+            PopupFieldSpec(
+                name=name,
+                alias=alias,
+                mode=mode,
+                attachment=attachment_of(field, project_file),
+            )
+        )
 
     chosen = apply_field_modes(tuple(fields), field_modes)
 
