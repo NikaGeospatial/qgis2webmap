@@ -35,6 +35,8 @@ guides:
         url: /the-dialog.html
       - title: What gets exported
         url: /supported-features.html
+      - title: Exporting without the dialog
+        url: /batch-export.html
       - title: QGIS2WebMap or qgis2web
         url: /qgis2web-comparison.html
       - title: Alternatives for QGIS web export

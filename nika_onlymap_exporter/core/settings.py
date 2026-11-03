@@ -435,6 +435,7 @@ CHROME_FIELDS = (
     "show_layer_switcher",
     "show_zoom_controls",
     "show_scale_bar",
+    "show_measure",
     "show_title",
     "show_abstract",
     "title_corner",
@@ -474,6 +475,7 @@ class DialogState:
     show_layer_switcher: bool = True
     show_zoom_controls: bool = True
     show_scale_bar: bool = True
+    show_measure: bool = True
     popup_on_hover: bool = False
     # On by default: a map that does not say what it is arrives with no context,
     # and testing found people expected the title without having to look for a
@@ -616,6 +618,7 @@ class DialogState:
             show_layer_switcher=self.show_layer_switcher,
             show_zoom_controls=self.show_zoom_controls,
             show_scale_bar=self.show_scale_bar,
+            show_measure=self.show_measure,
             popup_on_hover=self.popup_on_hover,
             show_title=self.show_title,
             show_abstract=self.show_abstract,
@@ -670,6 +673,9 @@ def load_state(project: QgsProject) -> DialogState:
             state.show_layer_switcher = bool(widgets.get("layerSwitcher", True))
             state.show_zoom_controls = bool(widgets.get("zoomControls", True))
             state.show_scale_bar = bool(widgets.get("scaleBar", True))
+            # Absent from a project saved before the measure tool existed, which
+            # picks up the new default for the same reason `showTitle` does.
+            state.show_measure = bool(widgets.get("measure", True))
             state.popup_on_hover = bool(widgets.get("popupOnHover", False))
             # Defaults to on, matching `DialogState`. A project saved before the
             # caption existed has no `showTitle` key at all, and should pick up
@@ -801,6 +807,7 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "layerSwitcher": state.show_layer_switcher,
                 "zoomControls": state.show_zoom_controls,
                 "scaleBar": state.show_scale_bar,
+                "measure": state.show_measure,
                 "popupOnHover": state.popup_on_hover,
                 "showTitle": state.show_title,
                 "showAbstract": state.show_abstract,

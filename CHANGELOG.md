@@ -17,6 +17,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   kept, filters that read the map view (such as `@map_scale`) are worked out
   once at export, and symbol levels are not kept. Rule-based layers used to
   be refused unless every rule picked values of one field.
+- **A measure tool on exported maps**: whoever opens the map can measure a
+  distance or an area on it, in metric, imperial or nautical units, measured
+  on the ground whatever CRS the project uses. On by default, like the other
+  map controls; untick **Measure tool** on the Appearance tab, or the
+  Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
+  the zoom controls, bottom left, and is not drawn in a cartograph's
+  interactive frames.
+- **Exporting without the dialog**, a new guide: batch exports from the
+  Processing toolbox, the QGIS Python console and `qgis_process`, and the
+  one-time runtime setup they need first.
 - **Cloud Optimized GeoTIFFs QGIS reads over the web** (`/vsicurl/https://...`
   or an `https://` address) export as live layers: the map reads the parts it
   draws straight from the address, and nothing is carried or downloaded. For

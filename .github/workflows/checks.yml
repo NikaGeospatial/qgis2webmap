@@ -277,6 +277,14 @@ jobs:
           name: rule-based-fixtures
           path: rule-based-fixtures/
           if-no-files-found: error
+      # Real QGIS projects, geographic and projected, as file and Preview maps.
+      - name: Build the measure-tool browser fixtures
+        run: python3 tests/browser/measure_fixture_builder.py measure-fixtures
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: measure-fixtures
+          path: measure-fixtures/
+          if-no-files-found: error
 
   zip-smoke42:
     # The built zip installed into a throwaway plugins folder and used for real
@@ -378,7 +386,8 @@ jobs:
     # the plugin's own download-and-verify path, not a curl, so the code that
     # reaches the network on a user's machine is exercised here too.
     #
-    # The Cartograph, ground-size and legend-fit tests need real-QGIS output.
+    # The Cartograph, ground-size, legend-fit and measure-tool tests need
+    # real-QGIS output.
     # This job has no QGIS, so it runs them against the fixtures fixtures42 built
     # (CARTOGRAPH_FIXTURES_DIR and friends) rather than skipping them.
     needs: fixtures42
@@ -416,6 +425,10 @@ jobs:
         with:
           name: rule-based-fixtures
           path: rule-based-fixtures
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: measure-fixtures
+          path: measure-fixtures
       - run: pip install -r requirements-ci.txt
       # Browser builds are tied to the Playwright release that downloads them,
       # so its version (and the browser) is the cache key. System libraries are
@@ -447,6 +460,7 @@ jobs:
           LEGEND_FIT_FIXTURES_DIR: ${{ github.workspace }}/legend-fit-fixtures
           LABEL_FIXTURES_DIR: ${{ github.workspace }}/label-fixtures
           RULE_BASED_FIXTURES_DIR: ${{ github.workspace }}/rule-based-fixtures
+          MEASURE_FIXTURES_DIR: ${{ github.workspace }}/measure-fixtures
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

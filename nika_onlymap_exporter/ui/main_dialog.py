@@ -2395,6 +2395,7 @@ class MainDialog(QDialog):
             ("layerSwitcher", tr("Layer switcher"), self.state.show_layer_switcher),
             ("zoomControls", tr("Zoom controls"), self.state.show_zoom_controls),
             ("scaleBar", tr("Scale bar"), self.state.show_scale_bar),
+            ("measure", tr("Measure tool"), self.state.show_measure),
         ):
             check = QCheckBox(label, page)
             check.setChecked(current)
@@ -2504,9 +2505,9 @@ class MainDialog(QDialog):
             "",
             _help_label(
                 tr(
-                    "Scales the legend, layer switcher, zoom controls, scale bar "
-                    "and title together. The credit stays fixed so attribution "
-                    "cannot be shrunk out of legibility."
+                    "Scales the legend, layer switcher, zoom controls, scale bar, "
+                    "measure tool and title together. The credit stays fixed so "
+                    "attribution cannot be shrunk out of legibility."
                 ),
                 box,
             ),
@@ -2515,8 +2516,9 @@ class MainDialog(QDialog):
             "",
             _help_label(
                 tr(
-                    "Applies to the legend, layer switcher, zoom controls and "
-                    "scale bar. Leave both unset to keep the map's own styling."
+                    "Applies to the legend, layer switcher, zoom controls, scale "
+                    "bar and measure tool. Leave both unset to keep the map's own "
+                    "styling."
                 ),
                 box,
             ),
@@ -2572,6 +2574,7 @@ class MainDialog(QDialog):
             "layerSwitcher": "show_layer_switcher",
             "zoomControls": "show_zoom_controls",
             "scaleBar": "show_scale_bar",
+            "measure": "show_measure",
         }[key]
         setattr(self.state, attribute, value)
 

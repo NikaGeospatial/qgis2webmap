@@ -453,6 +453,31 @@ class TestChromeScale:
         assert "bottom: 116.0px !important" in block
         assert "bottom: 60.0px !important" in block
 
+    def test_the_measure_tool_is_lifted_clear_of_the_scaled_zoom_controls(
+        self,
+    ) -> None:
+        """A transform moves nothing out of the way, so the zoom controls grew up
+        into the measure tool above them. Lifted by their lift plus growth."""
+        block = self._block(2.0).split('om-widget[type="measure"] {')[-1]
+        assert (
+            "bottom: calc(116.0px + 1.0 * (var(--om-widget-size, 30px) * 2 + 8px))"
+            " !important" in block
+        )
+
+    def test_without_zoom_controls_it_clears_the_scale_bar(self) -> None:
+        from nika_onlymap_exporter.writers.onlymap_writer import _widget_color_block
+
+        block = _widget_color_block(
+            make_project(chrome_scale=2.0, show_zoom_controls=False)
+        ).split('om-widget[type="measure"] {')[-1]
+        assert "bottom: 95.0px !important" in block
+
+    def test_no_lift_when_the_measure_tool_is_off(self) -> None:
+        from nika_onlymap_exporter.writers.onlymap_writer import _widget_color_block
+
+        block = _widget_color_block(make_project(chrome_scale=2.0, show_measure=False))
+        assert 'om-widget[type="measure"] {\n        bottom' not in block
+
     def test_the_caption_scales_as_type(self) -> None:
         """It is our own element, so it can reflow rather than be stretched."""
         block = self._block(2.0)

@@ -200,6 +200,7 @@
       ],
       "browser": [
         "tests/browser/test_exported_map.py",
+        "tests/browser/test_measure_tool.py",
         "tests/browser/test_cartograph_acceptance.py",
         "tests/browser/test_cartograph_static.py",
         "tests/browser/test_cartograph_text.py"
@@ -301,7 +302,8 @@
         "tests/qgis/test_plugin_cartograph_entry.py"
       ],
       "browser": [
-        "tests/browser/test_exported_map.py"
+        "tests/browser/test_exported_map.py",
+        "tests/browser/test_measure_tool.py"
       ]
     },
     "i18n": {
@@ -319,6 +321,7 @@
         "tests/qgis/test_plugin_shortcut.py",
         "tests/qgis/test_runtime_setup.py",
         "tests/qgis/test_processing.py",
+        "tests/qgis/test_batch_export_recipe.py",
         "tests/qgis/test_processing_cartograph.py",
         "tests/qgis/test_hermetic.py"
       ],
@@ -392,6 +395,8 @@
     {"match": ["nika_onlymap_exporter/runtime/*"],
      "owner": ["rendering", "export_pipeline", "plugin"], "also": []},
     {"match": ["nika_onlymap_exporter/__init__.py", "nika_onlymap_exporter/plugin.py", "nika_onlymap_exporter/metadata.txt", "nika_onlymap_exporter/processing/*", "nika_onlymap_exporter/packaging/runtime_manager.py", "nika_onlymap_exporter/packaging/__init__.py", "nika_onlymap_exporter/ui/runtime_setup.py", "nika_onlymap_exporter/ui/__init__.py", "nika_onlymap_exporter/core/__init__.py", "nika_onlymap_exporter/exporters/__init__.py", "nika_onlymap_exporter/writers/__init__.py", "nika_onlymap_exporter/fonts/*", "scripts/zip_smoke.py", "scripts/package_plugin.py", "scripts/verify_package.py", "scripts/fetch_runtime.py", "scripts/lock_runtime.py", "scripts/check_runtime_updates.py"],
+     "owner": ["plugin"], "also": []},
+    {"match": ["docs/batch-export.md"],
      "owner": ["plugin"], "also": []},
     {"match": ["tests/fake_map_services.py"],
      "owner": ["rendering"], "also": []},

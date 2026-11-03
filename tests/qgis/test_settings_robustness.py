@@ -325,6 +325,7 @@ MAP_FLAGS = (
     "layerSwitcher",
     "zoomControls",
     "scaleBar",
+    "measure",
     "popupOnHover",
     "showTitle",
     "showAbstract",
@@ -335,6 +336,7 @@ MAP_FLAG_FIELDS = (
     "show_layer_switcher",
     "show_zoom_controls",
     "show_scale_bar",
+    "show_measure",
     "popup_on_hover",
     "show_title",
     "show_abstract",
@@ -417,7 +419,7 @@ class TestEveryValueAsIn030:
         _write(project, "cartographFrames", {"L": {"i": {}}})
         state = load_state(project)
         got = [getattr(state, name) for name in MAP_FLAG_FIELDS]
-        assert got == [True, True, True, True, False, True, False, False]
+        assert got == [True, True, True, True, True, False, True, False, False]
         assert (state.chrome_scale, state.quantize_precision) == (1.0, None)
         layer = state.layers["a"]
         assert (layer.include, layer.popup, layer.label, layer.cluster) == (

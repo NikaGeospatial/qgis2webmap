@@ -114,10 +114,11 @@ no field for one. Supply it either way round instead:
 
 - set the `ONLYMAP_LICENSE_KEY` environment variable, which is also the only
   route that works on a machine with no QGIS profile - a server, a container, CI;
-- or pass the **OnlyMap licence key** parameter to the *Export project to
-  OnlyMap* Processing algorithm.
+- or pass the **OnlyMap licence key** parameter to the *Export to OnlyMap web
+  map* Processing algorithm.
 
-Both are picked up by the dialog too, so a key set once applies to every export.
+The environment variable is picked up by the dialog too, so a key set there once
+applies to every export. The parameter applies to the run it is passed to.
 
 The key is stored on your computer, not in the `.qgz`, so it follows you between
 projects and is never sent to anyone you share a project file with. It is written
@@ -151,7 +152,8 @@ expired.
 optional *OnlyMap licence key* parameter; leave it blank and it falls back to the
 `ONLYMAP_LICENSE_KEY` environment variable, then to the key saved in the dialog.
 The environment variable is the route that works on a machine with no QGIS
-profile - a server, a container, or CI.
+profile - a server, a container, or CI. How to run those exports is in
+[exporting without the dialog](batch-export.md).
 
 ## Symbology
 
@@ -429,10 +431,15 @@ one, so if your source requires attribution, set it in QGIS before exporting.
 
 ## The map itself
 
-Legend, layer switcher, zoom controls and a scale bar are **on by default**. The
-layer switcher is left out of maps that have only one layer to switch, since it
-would hold a single ticked box; labels count as an entry of their own, so a
-labelled layer is enough to bring it back.
+Legend, layer switcher, zoom controls, a scale bar and a measure tool are **on
+by default**. The layer switcher is left out of maps that have only one layer
+to switch, since it would hold a single ticked box; labels count as an entry of
+their own, so a labelled layer is enough to bring it back.
+
+The measure tool measures distances and areas on the ground, in metric,
+imperial or nautical units, whatever CRS the project uses. It works in a map
+opened from a file, served from a website and in the Preview. It is not drawn
+in a cartograph's interactive frames, which are maps on a printed page.
 
 On the **Appearance** tab you can also:
 
@@ -440,8 +447,8 @@ On the **Appearance** tab you can also:
   of your choosing. The description is the abstract from
   *Project Properties → Metadata*; nothing appears if the project has none.
   Corners are shared with the map controls — the layer switcher is top left,
-  the legend top right, the zoom and scale bottom left, and the OnlyMap credit
-  bottom right.
+  the legend top right, the zoom, scale and measure tool bottom left, and the
+  OnlyMap credit bottom right.
 - **Set the colour of the controls**, background and text separately. Left
   alone, they use OnlyMap's own colours.
 - **Open popups on hover** instead of on click. Hover replaces click rather

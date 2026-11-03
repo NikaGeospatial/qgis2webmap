@@ -105,6 +105,7 @@ OnlyMap's cartograph runtime. Rules that differ from what you would assume:
 - [Your first export](https://qgis2webmap.nikaplanet.com/first-export.html): the full walkthrough, from a styled project to a file you can send.
 - [The dialog, tab by tab](https://qgis2webmap.nikaplanet.com/the-dialog.html): the header and every control on Map, Layers, Appearance and Fidelity, plus Settings and Help.
 - [What gets exported](https://qgis2webmap.nikaplanet.com/supported-features.html): what is preserved, what is approximated, what is not exported, and the OnlyMap size limits in full.
+- [Exporting without the dialog](https://qgis2webmap.nikaplanet.com/batch-export.html): batch and headless exports with the Processing toolbox, the Python console and `qgis_process`, and the one-time runtime setup they need.
 - [Sharing a map](https://qgis2webmap.nikaplanet.com/sharing.html): choosing between Standalone HTML, Share ZIP and Folder.
 - [Share a QGIS map with someone who doesn't have QGIS](https://qgis2webmap.nikaplanet.com/share-qgis-map-without-qgis.html): the same problem stated the way a non-GIS colleague states it.
 - [Putting a map online](https://qgis2webmap.nikaplanet.com/hosting.html): where an exported map can live, that NIKA hosting is not built yet, and the Content Security Policy trap.

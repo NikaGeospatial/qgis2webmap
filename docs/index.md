@@ -170,6 +170,11 @@ sections:
           Add filters, charts or your own branding by describing them to a
           coding assistant. The map stays a single portable file.
         url: /enhance-with-ai.html
+      - title: Exporting without the dialog
+        text: >-
+          Many maps in one go - from the Processing toolbox, the Python
+          console, or headless with qgis_process.
+        url: /batch-export.html
       - title: OnlyMap documentation
         text: >-
           The upstream map library your exported maps run on, documented in

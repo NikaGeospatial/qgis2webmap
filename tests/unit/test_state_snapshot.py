@@ -60,6 +60,7 @@ class TestSensitivity:
             ("show_layer_switcher", False),
             ("show_zoom_controls", False),
             ("show_scale_bar", False),
+            ("show_measure", False),
             ("popup_on_hover", True),
             ("show_title", False),
             ("show_abstract", True),

@@ -67,6 +67,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
     LAYER_SWITCHER = "LAYER_SWITCHER"
     ZOOM_CONTROLS = "ZOOM_CONTROLS"
     SCALE_BAR = "SCALE_BAR"
+    MEASURE = "MEASURE"
     EXPORT_BLOCKED = "EXPORT_BLOCKED"
 
     def createInstance(self):  # noqa: N802 -- QGIS Processing API
@@ -145,6 +146,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
             (self.LAYER_SWITCHER, N_("Layer switcher")),
             (self.ZOOM_CONTROLS, N_("Zoom controls")),
             (self.SCALE_BAR, N_("Scale bar")),
+            (self.MEASURE, N_("Measure tool")),
         ):
             self.addParameter(QgsProcessingParameterBoolean(key, tr(label), True))
 
@@ -218,6 +220,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
                 parameters, self.ZOOM_CONTROLS, context
             ),
             show_scale_bar=self.parameterAsBool(parameters, self.SCALE_BAR, context),
+            show_measure=self.parameterAsBool(parameters, self.MEASURE, context),
         )
         return mode, settings, title
 
