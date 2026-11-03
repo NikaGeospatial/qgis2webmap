@@ -1,5 +1,8 @@
 """Rasters inside a single HTML file, read the way the runtime reads a COG.
 
+The same script also goes on any page with a `COGLayer` that embeds nothing
+(a raster drawn live from the web), for its worker and EPSG:3857 parts.
+
 The runtime's `COGLayer` reads its file in pieces: a `Range: bytes=N-M` request
 through `fetch` for the header, then one per tile. A single file has nowhere to
 put a sibling to fetch, a `data:` URI answers every range with the whole body,

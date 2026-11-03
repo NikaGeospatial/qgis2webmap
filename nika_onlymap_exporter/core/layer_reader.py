@@ -1775,7 +1775,8 @@ def read_raster(
         return None
 
     # Before anything that would treat it as a file: a raster QGIS reads over
-    # the web is never downloaded, so it is refused with one row saying why.
+    # the web is never downloaded, so it is drawn live from its address or
+    # refused with one row saying why.
     if _is_network_path(path):
         return _read_remote_raster(layer, path, report, group_path, visible)
 
@@ -1934,8 +1935,9 @@ def _refuse_remote_raster(
     """Refuse a raster QGIS reads over the web, without reading it.
 
     The export carries a raster by converting the file, and never downloads
-    one from the web to do it. Drawing it live from its address is not done
-    yet, so the one outcome is a refusal that says how to export it.
+    one from the web to do it. Only an http(s) address can be drawn live
+    (`_read_remote_raster`); a cloud store or other GDAL network path is
+    refused here with a row that says how to export it.
     """
     from urllib.parse import urlsplit
 

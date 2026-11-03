@@ -1,10 +1,11 @@
-"""A raster QGIS reads over the web is refused with one row, and never read.
+"""A raster QGIS reads over the web is exported live or refused, and never read.
 
 QGIS opens a COG at `/vsicurl/https://...` (or a bare `https://...`) as an
-ordinary GDAL layer. The export must never download it, and until the map can
-draw it live it is refused with a row saying to save a local copy. A local
-server with Range support serves 64 x 64 COGs and counts the requests, so
-"never read" is measured, not assumed.
+ordinary GDAL layer. The export must never download it: a composite the map
+can draw from the address is exported live, and anything else is refused with
+a row saying to save a local copy. A local server with Range support serves
+1024 x 1024 COGs and counts the requests, so "never read" is measured, not
+assumed.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
