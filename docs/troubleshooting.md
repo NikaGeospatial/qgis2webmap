@@ -292,6 +292,11 @@ the cause on its `om-validation-error` event; only the service's provider can
 allow access. A service on
 `http://` is also blocked inside a map served over `https://`.
 
+Some services allow only maps published on an `https://` site. Their layers
+stay empty in a map opened from a file and in **Preview in browser**, which
+serves the map from your own computer over `http://`, but draw once the map is
+published over `https://`, such as on NIKA hosting or GitHub Pages.
+
 ### Basemap tiles do not load for the recipient
 
 The tiles come from the provider's servers on every open, so the recipient needs
