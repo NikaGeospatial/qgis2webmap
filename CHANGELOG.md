@@ -7,6 +7,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
+- **Rule-based styling exports.** Any rule-based layer is drawn with one
+  class per rule that draws a symbol, and the legend lists the rules by their
+  label. QGIS itself works out which rule draws each feature when you export
+  - nested rules, ELSE rules and switched-off rules behave as in QGIS - and
+  the answer travels in the data as a `rule` property that popups do not
+  show. Reported in the Fidelity tab where the web map differs: a feature two
+  rules draw shows only the symbol on top, scale ranges on rules are not
+  kept, filters that read the map view (such as `@map_scale`) are worked out
+  once at export, and symbol levels are not kept. Rule-based layers used to
+  be refused unless every rule picked values of one field.
 - **Cloud Optimized GeoTIFFs QGIS reads over the web** (`/vsicurl/https://...`
   or an `https://` address) export as live layers: the map reads the parts it
   draws straight from the address, and nothing is carried or downloaded. For
