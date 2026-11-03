@@ -261,6 +261,14 @@ jobs:
           name: legend-fit-fixtures
           path: legend-fit-fixtures/
           if-no-files-found: error
+      # A map labelled from an expression, and the text QGIS draws for it.
+      - name: Build the expression-label browser fixtures
+        run: python3 tests/browser/label_fixture_builder.py label-fixtures
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: label-fixtures
+          path: label-fixtures/
+          if-no-files-found: error
 
   zip-smoke42:
     # The built zip installed into a throwaway plugins folder and used for real
@@ -392,6 +400,10 @@ jobs:
         with:
           name: legend-fit-fixtures
           path: legend-fit-fixtures
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: label-fixtures
+          path: label-fixtures
       - run: pip install -r requirements-ci.txt
       # Browser builds are tied to the Playwright release that downloads them,
       # so its version (and the browser) is the cache key. System libraries are
@@ -421,6 +433,7 @@ jobs:
           CARTOGRAPH_FIXTURES_DIR: ${{ github.workspace }}/cartograph-fixtures
           GROUND_SIZE_FIXTURES_DIR: ${{ github.workspace }}/ground-size-fixtures
           LEGEND_FIT_FIXTURES_DIR: ${{ github.workspace }}/legend-fit-fixtures
+          LABEL_FIXTURES_DIR: ${{ github.workspace }}/label-fixtures
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

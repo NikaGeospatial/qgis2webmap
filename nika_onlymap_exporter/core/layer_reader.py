@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransformContext,
+    QgsExpression,
+    QgsExpressionContext,
     QgsFeatureRequest,
     QgsJsonExporter,
     QgsMapLayerType,
@@ -52,7 +54,7 @@ from .export_ir import (
     TileSpec,
 )
 from .fidelity_report import FidelityReportBuilder
-from .labeling_translator import translate_labeling
+from .labeling_translator import label_expression_context, translate_labeling
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
 from .renderer_translator import (
@@ -281,6 +283,87 @@ class FieldFormat:
 
 
 @dataclasses.dataclass(frozen=True)
+class LabelExpression:
+    """A label expression to work out for each feature as it is read.
+
+    Built on the GUI thread, where the layer is, and worked out on the worker
+    beside the shown values. `context` holds the global, project and layer
+    scopes QGIS labels in, short of a map: QGIS's own renderer builds them the
+    same way before its job leaves the GUI thread. The layer scope holds the
+    layer only weakly, so a layer removed meanwhile leaves an expression that
+    asks about it (`layer_property(@layer, ...)`) with NULL, not a crash.
+    """
+
+    expression: str
+    # The property the text is written under (`LabelingSpec.field_name`).
+    property_name: str
+    context: QgsExpressionContext
+    # The fields the expression reads, which the read must fetch; `None` when
+    # it may read any of them (`attribute(@feature, ...)`).
+    columns: frozenset[str] | None
+
+    def texts(
+        self,
+        features: list[QgsFeature],
+        report: FidelityReportBuilder,
+        layer_name: str,
+        layer_id: str,
+    ) -> list[dict[str, Any]]:
+        """Per feature, its label text under `property_name`, `None` for no
+        label. A feature the expression fails on has none, as in QGIS, and
+        the failures are reported once."""
+        # QGIS draws the result's `QVariant::toString()`, which PyQt6 does not
+        # offer; `to_string` is that same conversion, so a number, date or
+        # list reads exactly as QGIS draws it ("12" for 12.0, "1e+06" for a
+        # million, nothing for an array). On lines of its own, so a trailing
+        # `--` comment in the expression cannot swallow the parenthesis.
+        expression = QgsExpression(f"to_string(\n{self.expression}\n)")
+        context = QgsExpressionContext(self.context)
+        expression.prepare(context)
+        texts: list[dict[str, Any]] = []
+        failed = 0
+        first_error = ""
+        for feature in features:
+            context.setFeature(feature)
+            value = expression.evaluate(context)
+            if expression.hasEvalError():
+                failed += 1
+                first_error = first_error or expression.evalErrorString()
+                value = None
+            texts.append({self.property_name: value or None})
+        if failed:
+            report.approximated(
+                f"Labels on '{layer_name}'",
+                f"The label expression could not be worked out for {failed:,} "
+                f"of {len(features):,} feature(s) ({first_error}), so they have "
+                "no label, as in QGIS.",
+                layer_id,
+            )
+        return texts
+
+
+def label_expression(
+    layer: QgsVectorLayer, labeling: LabelingSpec
+) -> LabelExpression | None:
+    """What working out `labeling`'s expression needs, `None` when its labels
+    come from a field or are off. **GUI thread only.**"""
+    if not (labeling.enabled and labeling.expression and labeling.field_name):
+        return None
+    parsed = QgsExpression(labeling.expression)
+    columns = parsed.referencedColumns()
+    return LabelExpression(
+        expression=labeling.expression,
+        property_name=labeling.field_name,
+        context=label_expression_context(layer),
+        columns=(
+            None
+            if QgsFeatureRequest.ALL_ATTRIBUTES in columns
+            else frozenset(str(name) for name in columns)
+        ),
+    )
+
+
+@dataclasses.dataclass(frozen=True)
 class LayerFeatures:
     """Everything the feature read needs from a vector layer, copied out.
 
@@ -314,6 +397,9 @@ class LayerFeatures:
     # source: a wide table's other columns would be fetched and serialised
     # only to be stripped (see `keep_only_fields`). `None` reads every field.
     attribute_indexes: tuple[int, ...] | None = None
+    # The label expression worked out per feature as it is read, `None` for
+    # labels from a field or none at all.
+    label: LabelExpression | None = None
 
     def display_values(self, features: list[QgsFeature]) -> list[dict[str, Any]]:
         """Per feature, each formatted field's shown value under its display name."""
@@ -614,22 +700,28 @@ def snapshot_features(
     display_names: Mapping[str, str] | None = None,
     keep: Iterable[str] | None = None,
     scans: LayerScans | None = None,
+    label: LabelExpression | None = None,
 ) -> LayerFeatures:
     """Copy out what `export_geojson_from` needs. **GUI thread only.**
 
     `display_names` is `popup_display_names`: the fields to write a shown-value
     copy of, which is none for a caller that has no popup. `keep` is the names
-    of the fields the export keeps, which are then the only ones read; `None`
-    reads them all. `scans` as for `prepare_layer`.
+    of the fields the export keeps, which are then the only ones read, with
+    those `label`'s expression reads; `None` reads them all. `scans` as for
+    `prepare_layer`.
     """
     from qgis.core import QgsProject
 
     formats = _field_formats(layer, display_names or {}, scans)
     attribute_indexes = None
-    if keep is not None:
+    reads = frozenset() if label is None else label.columns
+    if keep is not None and reads is not None:
+        # The expression's fields are read but not kept: only its text is
+        # written, so a field it reads that the popup hides stays out.
+        read = set(keep) | reads
         fields = layer.fields()
         attribute_indexes = tuple(
-            sorted({i for i in map(fields.indexOf, keep) if i >= 0})
+            sorted({i for i in map(fields.indexOf, read) if i >= 0})
         )
     return LayerFeatures(
         source=QgsVectorLayerFeatureSource(layer),
@@ -641,6 +733,7 @@ def snapshot_features(
         formats=formats,
         formats_layer=layer.clone() if formats else None,
         attribute_indexes=attribute_indexes,
+        label=label,
     )
 
 
@@ -714,6 +807,11 @@ def export_geojson_from(
         collection = json.loads(exporter.exportFeatures(collected))
         if features.formats:
             _add_display_values(collection, features.display_values(collected))
+        if features.label is not None:
+            _add_display_values(
+                collection,
+                features.label.texts(collected, report, features.layer_name, layer_id),
+            )
     except (OSError, ValueError, RuntimeError) as exc:
         report.blocked(
             subject,
@@ -737,7 +835,8 @@ def export_geojson_from(
 def _add_display_values(
     collection: dict[str, Any], shown: list[dict[str, Any]]
 ) -> None:
-    """Write each feature's shown values into its properties, in place."""
+    """Write each feature's shown values (or label text) into its
+    properties, in place."""
     exported = collection.get("features") or []
     if len(exported) != len(shown):
         raise RuntimeError("the exporter returned a different number of features")
@@ -2154,6 +2253,7 @@ def point_names(labeling: LabelingSpec, field_name: str) -> LabelingSpec:
         labeling,
         enabled=True,
         field_name=field_name,
+        expression=None,
         halo_color=labeling.halo_color or NAME_HALO,
         halo_width=labeling.halo_width or 1.0,
     )
@@ -2419,7 +2519,14 @@ def prepare_layer(
         keep |= {field.name for field in popup.visible_fields}
     keep |= set(display_names)
     renumber_ids = primary_key_is_excluded(layer, keep)
-    features = snapshot_features(layer, clip_extent, display_names, keep, scans)
+    features = snapshot_features(
+        layer,
+        clip_extent,
+        display_names,
+        keep,
+        scans,
+        label=label_expression(layer, labeling),
+    )
 
     base = ExportLayer(
         layer_id=layer_id,

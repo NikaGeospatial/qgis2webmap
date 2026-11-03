@@ -1075,6 +1075,108 @@ class TestLabelsActuallyDraw:
         assert self._red_pixels(page, unlabelled_map) == 0
 
 
+# Red glyph pixels in a box around each of `points` ([lon, lat]), in CSS
+# pixels around where the map projects it.
+COUNT_RED_PIXELS_NEAR = """
+async ([points, halfWidth, halfHeight]) => {
+  const el = document.querySelector('om-map');
+  const url = await el.snapshot();
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = reject;
+    img.src = url;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const ratio = img.width / el.getBoundingClientRect().width;
+  return points.map(([lon, lat]) => {
+    const [px, py] = el.project([lon, lat]);
+    let red = 0;
+    const x0 = Math.max(0, Math.round((px - halfWidth) * ratio));
+    const x1 = Math.min(canvas.width, Math.round((px + halfWidth) * ratio));
+    const y0 = Math.max(0, Math.round((py - halfHeight) * ratio));
+    const y1 = Math.min(canvas.height, Math.round((py + halfHeight) * ratio));
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const i = (y * canvas.width + x) * 4;
+        const [r, g, b, a] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
+        if (r > 180 && g < 80 && b < 80 && a > 200) red++;
+      }
+    }
+    return red;
+  });
+}
+"""
+
+
+@pytest.fixture(scope="module")
+def expression_label_map(tmp_path_factory):
+    """A map labelled from a QGIS expression, and what QGIS draws for it.
+
+    Built by `label_fixture_builder.py` with real QGIS, since this tier's
+    interpreter has none; `QGIS_PYTHON` names QGIS's.
+    """
+    prebuilt = os.environ.get("LABEL_FIXTURES_DIR")
+    if prebuilt:
+        expected = Path(prebuilt) / "expected.json"
+        if not expected.exists():
+            pytest.fail(f"LABEL_FIXTURES_DIR has no expected.json: {prebuilt}")
+        return Path(prebuilt), json.loads(expected.read_text())
+    qgis_python = os.environ.get("QGIS_PYTHON")
+    if not qgis_python:
+        pytest.skip("set QGIS_PYTHON to QGIS's interpreter to build the fixtures")
+    out_dir = tmp_path_factory.mktemp("expression-labels")
+    builder = Path(__file__).resolve().parent / "label_fixture_builder.py"
+    completed = subprocess.run(
+        [qgis_python, str(builder), str(out_dir)],
+        env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    expected = out_dir / "expected.json"
+    assert expected.exists(), completed.stdout + completed.stderr
+    return out_dir, json.loads(expected.read_text())
+
+
+class TestExpressionLabelsDraw:
+    """Labels from a QGIS expression are worked out at export; the text that
+    reaches the page must be the text QGIS draws, and the browser must draw it.
+
+    The expression repeats a letter a different number of times per feature,
+    so the glyph pixels at each point grow with the text QGIS draws there,
+    and the feature QGIS labels with NULL shows none.
+    """
+
+    def test_each_point_shows_the_text_qgis_draws(
+        self, page, expression_label_map
+    ) -> None:
+        fixtures, expected = expression_label_map
+        points = expected["points"]
+        assert [p["text"] for p in points] == ["W", "WWWW", "W" * 12, None], (
+            "QGIS no longer draws what this test was written against"
+        )
+        page.set_viewport_size({"width": 1000, "height": 800})
+        open_map(page, fixtures / expected["entry"])
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        wait_until_drawn(page)
+
+        one, four, twelve, none = page.evaluate(
+            COUNT_RED_PIXELS_NEAR,
+            [[[p["lon"], p["lat"]] for p in points], 260, 22],
+        )
+        assert one > 0, "the one-letter label drew nothing"
+        assert four > 2.5 * one, f"four letters drew {four} px against {one}"
+        assert twelve > 2.0 * four, f"twelve letters drew {twelve} px against {four}"
+        assert none == 0, "a feature QGIS labels with NULL shows text"
+
+
 class TestDashedLinesReallyDash:
     """`dash` reaching the markup is not the same as deck.gl honouring it.
 

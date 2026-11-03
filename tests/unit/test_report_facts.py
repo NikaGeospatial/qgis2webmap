@@ -109,6 +109,17 @@ class TestVectorLayer:
             "From a file",
         ]
 
+    def test_labels_from_an_expression_do_not_name_the_generated_property(
+        self,
+    ) -> None:
+        layer = sites(
+            labeling=LabelingSpec(
+                enabled=True, field_name="label_text", expression="\"name\" || '!'"
+            )
+        )
+        assert "Labels from an expression" in values(layer_facts(layer))
+        assert "Labels from 'label_text'" not in values(layer_facts(layer))
+
     def test_a_graduated_layer_names_its_method(self) -> None:
         layer = sites(
             renderer=RendererSpec(

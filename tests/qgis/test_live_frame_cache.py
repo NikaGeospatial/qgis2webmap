@@ -307,6 +307,16 @@ def _label(world: World) -> None:
     world.sites.setLabelsEnabled(True)
 
 
+def _label_from_an_expression(world: World) -> None:
+    from qgis.core import QgsPalLayerSettings, QgsVectorLayerSimpleLabeling
+
+    settings = QgsPalLayerSettings()
+    settings.fieldName = "\"name\" || ' (' || \"pop\" || ')'"
+    settings.isExpression = True
+    world.sites.setLabeling(QgsVectorLayerSimpleLabeling(settings))
+    world.sites.setLabelsEnabled(True)
+
+
 def _rename(world: World) -> None:
     world.sites.setName("Sites renamed")
 
@@ -370,6 +380,7 @@ DATA_CHANGES = {
     "a restyle": _restyle,
     "a filter": _filter,
     "labels switched on": _label,
+    "labels from an expression switched on": _label_from_an_expression,
     "a layer renamed": _rename,
     "a layer hidden in the layers panel": _hide_in_the_tree,
     "a layer added to the frame": _add_a_layer,
@@ -379,6 +390,65 @@ DATA_CHANGES = {
     "the frame's CRS": _change_the_frame_crs,
     "a virtual field added": _add_a_virtual_field,
 }
+
+
+def _label_texts(built, layer_name: str) -> list[str]:
+    """The label text a build's live frame carries for `layer_name`."""
+    from nika_onlymap_exporter.core.label_points import (
+        LABEL_PROPERTY,
+        build_label_collection,
+    )
+
+    (layer,) = [
+        layer
+        for project in built[2]
+        for layer in project.layers
+        if layer.name == layer_name
+    ]
+    labeling = layer.labeling
+    collection = build_label_collection(layer.geojson, labeling.field_name)
+    return sorted(f["properties"][LABEL_PROPERTY] for f in collection["features"])
+
+
+class TestExpressionLabels:
+    """A live frame's labels from an expression are worked out as its layers
+    are read, and the read is reused while nothing they read changes."""
+
+    def test_the_frame_carries_the_worked_out_text(self, world, cache) -> None:
+        _label_from_an_expression(world)
+        built = _build(world, cache)
+        assert _label_texts(built, "sites") == [
+            f"site {index} ({index * 10})" for index in range(5)
+        ]
+
+    def test_a_note_edit_reuses_the_read(self, world, cache) -> None:
+        _label_from_an_expression(world)
+        _build(world, cache)
+        world.note.setText("Another note")
+        again = _build(world, cache)
+        assert cache.read_count == 1
+        _same_as_fresh(world, again)
+
+    def test_a_project_variable_the_labels_read_reads_again(self, world, cache) -> None:
+        from qgis.core import (
+            QgsExpressionContextUtils,
+            QgsPalLayerSettings,
+            QgsVectorLayerSimpleLabeling,
+        )
+
+        QgsExpressionContextUtils.setProjectVariable(world.project, "q2w_unit", "a")
+        settings = QgsPalLayerSettings()
+        settings.fieldName = "\"name\" || ' ' || @q2w_unit"
+        settings.isExpression = True
+        world.sites.setLabeling(QgsVectorLayerSimpleLabeling(settings))
+        world.sites.setLabelsEnabled(True)
+        first = _build(world, cache)
+        assert _label_texts(first, "sites")[0] == "site 0 a"
+        QgsExpressionContextUtils.setProjectVariable(world.project, "q2w_unit", "b")
+        again = _build(world, cache)
+        assert cache.read_count == 2
+        assert _label_texts(again, "sites")[0] == "site 0 b"
+        _same_as_fresh(world, again)
 
 
 class TestEditsThatTouchTheData:

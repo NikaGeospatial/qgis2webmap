@@ -622,11 +622,18 @@ class LabelingSpec:
 
     `character_set` exists because OnlyMap's `TextLayer` ships an ASCII-only font
     atlas by default; glyphs outside it render blank unless declared. The reader
-    collects the distinct characters actually present in the label field.
+    collects the distinct characters actually present in the label field; for
+    labels from an expression it stays `None` and the page collects them from
+    the label text once it is worked out.
     """
 
     enabled: bool = False
     field_name: str | None = None
+    # The QGIS label expression, when the labels come from one rather than a
+    # field. It is worked out per feature at export into the generated property
+    # `field_name` names, so everything downstream labels from that as from a
+    # field.
+    expression: str | None = None
     font_family: str | None = None
     font_size: float | None = None
     color: Color | None = None
@@ -653,11 +660,16 @@ class LabelingSpec:
     # `wrap_char` becomes a real newline, which deck.gl honours.
     wrap_char: str = ""
     auto_wrap_length: int = 0
+    # QGIS's "Label every part of multi-part features": a label on each line
+    # or polygon part rather than one on the longest or largest. A MultiPoint
+    # is labelled at every point either way (see `label_points.label_anchors`).
+    per_part: bool = False
 
     def snapshot(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
             "fieldName": self.field_name,
+            "expression": self.expression,
             "fontFamily": self.font_family,
             "fontSize": self.font_size,
             "color": self.color.snapshot() if self.color else None,
@@ -677,6 +689,7 @@ class LabelingSpec:
             "capitalization": self.capitalization,
             "wrapChar": self.wrap_char,
             "autoWrapLength": self.auto_wrap_length,
+            "perPart": self.per_part,
         }
 
 

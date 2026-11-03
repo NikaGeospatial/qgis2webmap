@@ -195,3 +195,33 @@ def test_stacked_samples_cluster_but_do_not_hold_their_labels_back() -> None:
     result = declutter_layer(layer, default_font_px=12)
     assert result.cluster_max_zoom is not None
     assert result.label_min_zoom is None or result.label_min_zoom <= 3
+
+
+def test_every_part_of_a_multipolygon_counts_towards_the_crowding() -> None:
+    """With "Label every part" a multi-part feature is many labels on the map,
+    so the zoom they wait for is worked out from all of them, not from one."""
+    squares = [
+        [[[x, 0.0], [x + 0.0005, 0.0], [x + 0.0005, 0.0005], [x, 0.0005], [x, 0.0]]]
+        for x in (i * 0.001 for i in range(50))
+    ]
+    feature = {
+        "type": "Feature",
+        "geometry": {"type": "MultiPolygon", "coordinates": squares},
+        "properties": {"name": "Shoals"},
+    }
+
+    def decluttered(per_part: bool) -> ExportLayer:
+        layer = ExportLayer(
+            layer_id="shoals",
+            name="Shoals",
+            geometry_kind=GeometryKind.POLYGON,
+            source_kind=SourceKind.FILE,
+            feature_count=1,
+            geojson={"type": "FeatureCollection", "features": [feature]},
+            renderer=RendererSpec(kind=RendererKind.SINGLE, symbol=SymbolSpec()),
+            labeling=LabelingSpec(enabled=True, field_name="name", per_part=per_part),
+        )
+        return declutter_layer(layer, default_font_px=12)
+
+    assert decluttered(per_part=False).label_min_zoom is None
+    assert decluttered(per_part=True).label_min_zoom is not None

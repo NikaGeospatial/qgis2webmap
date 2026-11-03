@@ -22,8 +22,21 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   an export with no QGIS map view to read the time from (Processing, a
   cartograph frame), a layer matched to the closest or whole range rather
   than the start or end of it, and a layer with a reference time.
+- **Labels from an expression** (concatenations, `CASE`, `format_number` and
+  any other QGIS expression) export, on web maps and in cartograph live
+  frames: the text is worked out for each feature at export, as QGIS works
+  it out, and saved with the map, so it shows the data as it was then. Only
+  the text is saved, not the fields the expression reads. Variables QGIS sets
+  only while drawing (`@map_scale`, atlas variables) have no value at export,
+  and the Fidelity tab says so. These layers used to export with no labels.
 
 ### Fixed
+- Labels on multi-part features land where QGIS draws them
+  ([qgis2web#1095](https://github.com/qgis2web/qgis2web/issues/1095)): every
+  point of a multipoint is labelled, not only the first; a multi-part line is
+  labelled on its longest part, not the one with the most vertices; and
+  **Label every part of multi-part features** is honoured, with a label on
+  every part of a line or polygon.
 - A raster QGIS reads over the web that is not exported live (see Added) is
   refused with one Fidelity row saying why and to save a local copy (Export >
   Save As...), without reading the file. It used to block the export as a

@@ -280,6 +280,11 @@ breaking** — both the wrap character you set and automatic wrapping at a
 character count — are applied to the label text itself, because that is what
 QGIS does too.
 
+**Multi-part features** are labelled where QGIS labels them: every point of a
+multipoint, and a multi-part line or polygon once, on its longest or largest
+part — or once on every part when **Label every part of multi-part features**
+is ticked in the layer's label placement settings.
+
 Collision handling, callouts and curved placement are not: the web map draws
 every label, so where a layer's labels would pile up they wait for a closer
 zoom - the one at which most of them have room - and the Fidelity tab names it.
@@ -302,7 +307,16 @@ picks a field whose value shows beside each point with a halo, without clicking
 for a popup. It replaces the layer's QGIS labels, and like them the names
 appear from the zoom where most have room.
 
-Labels using an expression rather than a single field are not translated yet.
+**Labels from an expression** are worked out for each feature when the map is
+exported, the way QGIS works them out, and the text is saved with the map: it
+shows the data as it was at export and does not change if the data changes
+later. Text case and line breaking apply to it as to a field's labels. Only the
+text is saved, not the fields the expression reads, so a field hidden from the
+popups stays out of the map. A feature the expression gives no value for (NULL)
+or fails on has no label, as in QGIS. Variables QGIS sets only while it draws a
+map, a layout or an atlas (`@map_scale`, `@map_extent`, `@atlas_feature` and
+the like) have no value at export, and an expression using `now()` or `rand()`
+keeps the value it gave at export; the Fidelity tab names both.
 Rule-based labelling with a single unfiltered rule is translated like simple
 labelling; anything with several rules, filters or scale ranges is reported and
 shows no labels. A layer set to act only as an obstacle for other labels shows
