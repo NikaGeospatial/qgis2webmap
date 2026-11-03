@@ -143,6 +143,7 @@
       "tests": [
         "tests/qgis/test_renderer_translator.py",
         "tests/qgis/test_labeling_translator.py",
+        "tests/qgis/test_label_parts.py",
         "tests/qgis/test_symbol_rasterizer.py",
         "tests/qgis/test_raster_smoothing.py",
         "tests/qgis/test_attribute_representation.py",

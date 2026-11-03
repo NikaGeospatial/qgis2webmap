@@ -653,6 +653,10 @@ class LabelingSpec:
     # `wrap_char` becomes a real newline, which deck.gl honours.
     wrap_char: str = ""
     auto_wrap_length: int = 0
+    # QGIS's "Label every part of multi-part features": a label on each line
+    # or polygon part rather than one on the longest or largest. A MultiPoint
+    # is labelled at every point either way (see `label_points.label_anchors`).
+    per_part: bool = False
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -677,6 +681,7 @@ class LabelingSpec:
             "capitalization": self.capitalization,
             "wrapChar": self.wrap_char,
             "autoWrapLength": self.auto_wrap_length,
+            "perPart": self.per_part,
         }
 
 

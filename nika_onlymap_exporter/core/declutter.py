@@ -315,6 +315,7 @@ def declutter_noting_stacks(
             capitalization=labeling.capitalization,
             wrap_char=labeling.wrap_char,
             auto_wrap_length=labeling.auto_wrap_length,
+            per_part=labeling.per_part,
         )
         if collection is not None:
             labels = label_min_zoom(

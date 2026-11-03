@@ -280,6 +280,11 @@ breaking** — both the wrap character you set and automatic wrapping at a
 character count — are applied to the label text itself, because that is what
 QGIS does too.
 
+**Multi-part features** are labelled where QGIS labels them: every point of a
+multipoint, and a multi-part line or polygon once, on its longest or largest
+part — or once on every part when **Label every part of multi-part features**
+is ticked in the layer's label placement settings.
+
 Collision handling, callouts and curved placement are not: the web map draws
 every label, so where a layer's labels would pile up they wait for a closer
 zoom - the one at which most of them have room - and the Fidelity tab names it.

@@ -2,7 +2,8 @@
 
 OnlyMap draws labels with deck.gl's `TextLayer`, which takes a **point** per
 label. QGIS labels a feature of any geometry, so a line or polygon needs one
-representative point computed for it.
+representative point computed for it - or for each of its parts, when QGIS
+labels every part of a multi-part feature.
 
 Why a separate, reduced FeatureCollection rather than reusing the layer's own
 data: the geometry layer's GeoJSON is the single largest thing in the artifact,
@@ -19,6 +20,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -81,8 +83,19 @@ def _middle_vertex(coordinates: Sequence[Sequence[float]]) -> tuple[float, float
     return float(middle[0]), float(middle[1])
 
 
+def _line_length(coordinates: Sequence[Sequence[float]]) -> float:
+    """Planar length of a line in its own coordinates, Z dropped."""
+    return sum(
+        math.hypot(end[0] - start[0], end[1] - start[1])
+        for start, end in zip(coordinates, coordinates[1:])
+    )
+
+
 def representative_point(geometry: dict[str, Any] | None) -> tuple[float, float] | None:
-    """A point at which to draw this geometry's label, or `None`.
+    """A point at which to draw this geometry's label once, or `None`.
+
+    One point for the whole geometry; `label_anchors` is every point QGIS
+    labels it at, which for a MultiPoint is each of its points.
 
     `None` means the geometry is empty or of a kind 0.1.0 does not label; the
     caller drops the label rather than guessing a coordinate.
@@ -105,10 +118,14 @@ def representative_point(geometry: dict[str, Any] | None) -> tuple[float, float]
         return _middle_vertex(coordinates)
 
     if kind == "MultiLineString":
-        # The longest part by vertex count: the label belongs on the piece a
-        # reader is most likely to be looking at.
-        longest = max(coordinates, key=len)
-        return _middle_vertex(longest)
+        # The longest part, measured along it, as QGIS picks it when it labels
+        # a multi-part line once. Not the part with the most vertices: a long
+        # straight road of two vertices beside a short winding spur of fifty
+        # labelled the spur.
+        parts = [part for part in coordinates if part]
+        if not parts:
+            return None
+        return _middle_vertex(max(parts, key=_line_length))
 
     if kind == "Polygon":
         outer = coordinates[0]
@@ -150,6 +167,52 @@ def representative_point(geometry: dict[str, Any] | None) -> tuple[float, float]
                 return point
 
     return None
+
+
+def label_anchors(
+    geometry: dict[str, Any] | None, per_part: bool = False
+) -> list[tuple[float, float]]:
+    """Every point QGIS draws a label of this geometry at, in part order.
+
+    Measured against QGIS 4.2 by rendering a multi-part feature of each kind
+    and reading back where its labels landed (`QgsLabelingResults`):
+
+    * a MultiPoint is labelled at every one of its points, whether or not
+      "Label every part of multi-part features" (`per_part`) is on;
+    * a MultiLineString or MultiPolygon is labelled once, on its longest or
+      largest part, unless `per_part` is on, and then once on every part.
+
+    Empty for a geometry `representative_point` would not label.
+    """
+    if not geometry:
+        return []
+    kind = geometry.get("type")
+    coordinates = geometry.get("coordinates") or ()
+
+    if kind == "MultiPoint":
+        return [
+            (float(point[0]), float(point[1]))
+            for point in coordinates
+            if len(point) >= 2
+        ]
+
+    if per_part and kind in ("MultiLineString", "MultiPolygon"):
+        single = "LineString" if kind == "MultiLineString" else "Polygon"
+        parts = (
+            representative_point({"type": single, "coordinates": part})
+            for part in coordinates
+        )
+        return [point for point in parts if point is not None]
+
+    if per_part and kind == "GeometryCollection":
+        return [
+            point
+            for member in geometry.get("geometries", ())
+            for point in label_anchors(member, per_part)
+        ]
+
+    point = representative_point(geometry)
+    return [] if point is None else [point]
 
 
 def apply_capitalization(text: str, capitalization: str) -> str:
@@ -233,8 +296,12 @@ def build_label_collection(
     capitalization: str = "none",
     wrap_char: str = "",
     auto_wrap_length: int = 0,
+    per_part: bool = False,
 ) -> dict[str, Any] | None:
-    """A point FeatureCollection carrying one label per labelled feature.
+    """A point FeatureCollection carrying a labelled feature's label at each
+    point QGIS draws it at (`label_anchors`): one per feature, or one per part
+    of a multi-part feature with `per_part`, and always one per point of a
+    MultiPoint.
 
     Features whose label value is empty are skipped outright -- deck.gl renders
     an empty string as an invisible glyph that still consumes a picking slot,
@@ -262,22 +329,20 @@ def build_label_collection(
         text = apply_capitalization(text, capitalization)
         text = apply_wrapping(text, wrap_char, auto_wrap_length)
 
-        point = representative_point(feature.get("geometry"))
-        if point is None:
-            continue
-
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    # Rounded to ~1cm. Label anchors do not need more, and full
-                    # float repr would bloat the payload for no visible gain.
-                    "coordinates": [round(point[0], 7), round(point[1], 7)],
-                },
-                "properties": {LABEL_PROPERTY: text},
-            }
-        )
+        for point in label_anchors(feature.get("geometry"), per_part):
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        # Rounded to ~1cm. Label anchors do not need more, and
+                        # full float repr would bloat the payload for no
+                        # visible gain.
+                        "coordinates": [round(point[0], 7), round(point[1], 7)],
+                    },
+                    "properties": {LABEL_PROPERTY: text},
+                }
+            )
 
     if not features:
         return None

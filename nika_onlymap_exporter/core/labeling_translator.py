@@ -323,6 +323,7 @@ def translate_labeling(
         capitalization=capitalization,
         wrap_char=wrap_char,
         auto_wrap_length=auto_wrap,
+        per_part=bool(getattr(settings, "labelPerPart", False)),
     )
 
 

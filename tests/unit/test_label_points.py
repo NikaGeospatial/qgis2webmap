@@ -17,6 +17,7 @@ from nika_onlymap_exporter.core.label_points import (
     apply_wrapping,
     build_label_collection,
     collect_character_set,
+    label_anchors,
     representative_point,
 )
 
@@ -198,6 +199,79 @@ class TestLabelCollection:
         )
         assert build_label_collection(source, "name") is None
         assert build_label_collection(None, "name") is None
+
+
+# A long straight line of two vertices, and a short wiggly one of many: the
+# longest part by length is not the one with the most vertices.
+LONG_PART = [[3.0, 8.0], [6.0, 8.0], [9.0, 8.0]]
+SHORT_PART = [[1.0, 1.0], [1.2, 1.1], [1.4, 1.2], [1.6, 1.3], [1.8, 1.4]]
+SMALL_SQUARE = [[10.0, 10.0], [11.0, 10.0], [11.0, 11.0], [10.0, 11.0], [10.0, 10.0]]
+
+
+class TestMultiPartAnchors:
+    """Where QGIS labels a multi-part feature, measured on a QGIS 4.2 render:
+    every point of a MultiPoint always; a line or polygon once on its longest
+    or largest part, or once on every part with "Label every part"."""
+
+    def test_a_multipoint_is_labelled_at_every_point_either_way(self) -> None:
+        geometry = {"type": "MultiPoint", "coordinates": [[1.0, 1.0], [5.0, 5.0]]}
+        for per_part in (False, True):
+            assert label_anchors(geometry, per_part) == [(1.0, 1.0), (5.0, 5.0)]
+
+    def test_a_multipoint_z_drops_the_height(self) -> None:
+        geometry = {"type": "MultiPoint", "coordinates": [[1.0, 2.0, 30.0]]}
+        assert label_anchors(geometry) == [(1.0, 2.0)]
+
+    def test_a_multiline_labels_its_longest_part_by_length(self) -> None:
+        geometry = {"type": "MultiLineString", "coordinates": [SHORT_PART, LONG_PART]}
+        assert label_anchors(geometry) == [(6.0, 8.0)]
+
+    def test_every_part_of_a_multiline_with_per_part(self) -> None:
+        geometry = {"type": "MultiLineString", "coordinates": [SHORT_PART, LONG_PART]}
+        assert label_anchors(geometry, per_part=True) == [(1.4, 1.2), (6.0, 8.0)]
+
+    def test_a_multipolygon_labels_its_largest_part(self) -> None:
+        geometry = {
+            "type": "MultiPolygon",
+            "coordinates": [[SMALL_SQUARE], [SQUARE]],
+        }
+        assert label_anchors(geometry) == [(1.0, 1.0)]
+
+    def test_every_part_of_a_multipolygon_with_per_part(self) -> None:
+        geometry = {
+            "type": "MultiPolygon",
+            "coordinates": [[SMALL_SQUARE], [SQUARE]],
+        }
+        assert label_anchors(geometry, per_part=True) == [(10.5, 10.5), (1.0, 1.0)]
+
+    def test_an_unlabellable_part_is_skipped_not_fatal(self) -> None:
+        geometry = {"type": "MultiPolygon", "coordinates": [[[]], [SQUARE]]}
+        assert label_anchors(geometry, per_part=True) == [(1.0, 1.0)]
+        assert label_anchors({"type": "MultiLineString", "coordinates": [[]]}) == []
+
+    def test_single_part_geometries_are_labelled_once_either_way(self) -> None:
+        for per_part in (False, True):
+            assert label_anchors(
+                {"type": "Polygon", "coordinates": [SQUARE]}, per_part
+            ) == [(1.0, 1.0)]
+            assert label_anchors(None, per_part) == []
+
+    def test_the_collection_repeats_the_text_at_every_part(self) -> None:
+        source = collection(
+            feature(
+                {"type": "MultiPolygon", "coordinates": [[SMALL_SQUARE], [SQUARE]]},
+                name="Isles",
+            )
+        )
+        once = build_label_collection(source, "name")
+        every = build_label_collection(source, "name", per_part=True)
+
+        assert [f["geometry"]["coordinates"] for f in once["features"]] == [[1.0, 1.0]]
+        assert [f["geometry"]["coordinates"] for f in every["features"]] == [
+            [10.5, 10.5],
+            [1.0, 1.0],
+        ]
+        assert {f["properties"][LABEL_PROPERTY] for f in every["features"]} == {"Isles"}
 
 
 class TestCharacterSet:
