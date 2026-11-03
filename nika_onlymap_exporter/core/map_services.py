@@ -306,6 +306,7 @@ def wms_get_map_template(
     image_format: str,
     crs: str,
     extra: Sequence[tuple[str, str]] = (),
+    time: str | None = None,
 ) -> str:
     """The GetMap request QGIS would send, in Web Mercator, as a tile template.
 
@@ -313,12 +314,14 @@ def wms_get_map_template(
     kept (a MapServer `map=`, say) unless they are one this request sets.
     Layer and style names are percent-encoded one by one and joined with a
     literal comma, as the LAYERS list separator must stay. `extra` are
-    further parameters QGIS sends verbatim (FILTER, OPACITIES).
+    further parameters QGIS sends verbatim (FILTER, OPACITIES). `time` is
+    the WMS-T `TIME` value QGIS sends, when it sends one.
     """
     base, _, query = url.partition("?")
+    reserved = _WMS_RESERVED | {"TIME"} if time is not None else _WMS_RESERVED
     pairs = [
         (_query_value(key), _query_value(found, safe="/:,"))
-        for key, found in _kept_url_parameters(query, _WMS_RESERVED)
+        for key, found in _kept_url_parameters(query, reserved)
     ]
     crs_key = "SRS" if version.startswith("1.1") else "CRS"
     pairs += [
@@ -336,6 +339,8 @@ def wms_get_map_template(
     if lowered == "image/x-jpegorpng" or not opaque:
         pairs.append(("TRANSPARENT", "TRUE"))
     pairs += [(key, _query_value(found, safe=":,")) for key, found in extra]
+    if time is not None:
+        pairs.append(("TIME", _query_value(time, safe=":/")))
     pairs += [
         (crs_key, crs),
         ("WIDTH", "{width}"),

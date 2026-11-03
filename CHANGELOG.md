@@ -18,11 +18,18 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **WMTS layers on a Web Mercator tile grid** (such as GoogleMapsCompatible)
   export as live layers too.
 - **XYZ layers with a `{q}` quadkey** (Bing-style) export as live layers.
+- **Time-enabled WMS (WMS-T) layers that follow QGIS's time** export as a
+  fixed snapshot: the map asks the service for the time QGIS draws at export
+  (from the temporal controller, or the layer's predefined date) and has no
+  time slider; the Fidelity tab says which time. Still refused, with a reason:
+  an export with no QGIS map view to read the time from (Processing, a
+  cartograph frame), a layer matched to the closest or whole range rather
+  than the start or end of it, and a layer with a reference time.
 
 ### Changed
 - Clearer Fidelity rows for the map services that are still not exported,
   each saying what to do: a WMS without Web Mercator, a WMTS on another tile
-  grid, a WMS-T layer that follows QGIS's time, a service that needs a login,
+  grid, a service that needs a login,
   ArcGIS map services and WCS. An XYZ address with a token the map cannot
   fill (such as `{s}`) is now refused with a reason instead of exported to
   request the token literally.

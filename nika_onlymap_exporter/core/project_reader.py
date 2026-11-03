@@ -50,7 +50,7 @@ from .export_ir import (
 )
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
-from .layer_reader import WGS84, PendingLayer, prepare_layer
+from .layer_reader import WGS84, MapTime, PendingLayer, prepare_layer
 from .manifest_builder import (
     DEFAULT_LABEL_SIZE,
     OSM_FILE_NOTE,
@@ -185,6 +185,21 @@ def extent_from_canvas(canvas: Any) -> Extent | None:
     )
 
 
+def map_time_from_canvas(canvas: Any) -> MapTime | None:
+    """The time the QGIS canvas draws, for WMS-T layers that follow it.
+
+    Beside `extent_from_canvas` for the same reason. `None` on anything
+    unreadable, which the reader treats as having no view to read.
+    """
+    try:
+        settings = canvas.mapSettings()
+        return MapTime(
+            is_temporal=bool(settings.isTemporal()), range=settings.temporalRange()
+        )
+    except (AttributeError, RuntimeError):
+        return None
+
+
 def _project_terrain_kind(project: QgsProject) -> str | None:
     """The project's own terrain source, or `None` if the ground is flat."""
     provider = project.elevationProperties().terrainProvider()
@@ -311,6 +326,7 @@ def read_project(
     progress: Callable[[int, int, str], None] | None = None,
     layer_order: Sequence[str] | None = None,
     report_map_title: bool = True,
+    map_time: MapTime | None = None,
 ) -> ExportProject:
     """Read a whole project into the normalized model, on the calling thread.
 
@@ -330,6 +346,7 @@ def read_project(
         canvas_extent=canvas_extent,
         layer_order=layer_order,
         report_map_title=report_map_title,
+        map_time=map_time,
     )
     return finish_project(pending, report, progress)
 
@@ -346,6 +363,7 @@ def prepare_project(
     layer_order: Sequence[str] | None = None,
     report_map_title: bool = True,
     scans: LayerScans | None = None,
+    map_time: MapTime | None = None,
 ) -> PendingProject:
     """Read a whole project up to its features. **GUI thread only.**
 
@@ -467,6 +485,7 @@ def prepare_project(
             name_field=per_layer.name_field,
             cluster=per_layer.cluster,
             scans=scans,
+            map_time=map_time,
         )
         entries.append((map_layer.name(), prepared))
 

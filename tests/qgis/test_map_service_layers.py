@@ -13,7 +13,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote, urlsplit
 
 import pytest
 
@@ -69,9 +69,9 @@ def _wmts(url: str, matrix_set="GoogleMapsCompatible", extra=""):
     return qgis_core.QgsRasterLayer(source, "WMTS", "wms")
 
 
-def _read(layer):
+def _read(layer, map_time=None):
     report = FidelityReportBuilder()
-    return read_layer(layer, report), report
+    return read_layer(layer, report, map_time=map_time), report
 
 
 def _rows(report, status: FidelityStatus) -> str:
@@ -233,15 +233,158 @@ class TestCredentials:
         assert "SENTINEL" not in rendered
 
 
+YEAR_EXTENT = (
+    "&type=wmst&timeDimensionExtent=2020-01-01T00:00:00Z/2020-12-31T00:00:00Z/P1D"
+)
+
+
+def _utc(day: int, hour: int = 0):
+    from qgis.PyQt.QtCore import QDate, QDateTime, QTime, QTimeZone
+
+    return QDateTime(QDate(2020, 3, day), QTime(hour, 0), QTimeZone.utc())
+
+
+def _no_time():
+    from qgis.PyQt.QtCore import QDateTime
+
+    return qgis_core.QgsDateTimeRange(QDateTime(), QDateTime())
+
+
+def _qgis_time(services, layer, map_time) -> str | None:
+    """The TIME QGIS itself sends when it draws `layer` with the map set to
+    `map_time`, or None when it sends none: the ground truth."""
+    from qgis.PyQt.QtCore import QSize
+
+    settings = qgis_core.QgsMapSettings()
+    settings.setLayers([layer])
+    settings.setDestinationCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"))
+    settings.setExtent(qgis_core.QgsRectangle(1280174, 6813860, 1308004, 6841175))
+    settings.setOutputSize(QSize(32, 32))
+    if map_time.is_temporal:
+        settings.setIsTemporal(True)
+        settings.setTemporalRange(map_time.range)
+    before = len(services.requests)
+    job = qgis_core.QgsMapRendererSequentialJob(settings)
+    job.start()
+    job.waitForFinished()
+    (get_map,) = [
+        r for r in services.requests[before:] if r["params"].get("REQUEST") == "GetMap"
+    ]
+    return get_map["params"].get("TIME")
+
+
 class TestTime:
-    def test_a_wms_t_following_qgis_time_is_refused(self, qgis_app, services) -> None:
+    """A WMS-T layer that follows QGIS's time is a snapshot of the time QGIS
+    draws: the map must ask the service for exactly the TIME QGIS sends."""
+
+    @pytest.mark.parametrize(
+        ("extra", "temporal", "method"),
+        [
+            ("", True, None),
+            ("", True, "MatchExactUsingEndOfRange"),
+            ("&enableTime=false", True, None),
+            ("&time=2020-02-01T00:00:00Z/2020-02-03T00:00:00Z", False, None),
+            ("&time=2020-02-01T00:00:00Z/2020-02-03T00:00:00Z", True, None),
+            ("", False, None),
+            # Past the service's own extent: QGIS still asks, and so does the map.
+            ("", "2031", None),
+        ],
+    )
+    def test_the_map_asks_for_the_time_qgis_draws(
+        self, qgis_app, services, extra, temporal, method
+    ) -> None:
+        from nika_onlymap_exporter.core.layer_reader import MapTime
+
         layer = _wms(
-            services.url("cors/wms"),
-            extra="&type=wmst&timeDimensionExtent=2020-01-01/2020-12-31/P1D",
+            services.url("cors/wms"), crs="EPSG:3857", extra=YEAR_EXTENT + extra
         )
-        exported, report = _read(layer)
+        assert layer.isValid()
+        if method is not None:
+            layer.temporalProperties().setIntervalHandlingMethod(
+                getattr(qgis_core.Qgis.TemporalIntervalMatchMethod, method)
+            )
+        if temporal == "2031":
+            later = _utc(5).addYears(11)
+            map_time = MapTime(True, qgis_core.QgsDateTimeRange(later, later))
+        else:
+            map_time = MapTime(
+                is_temporal=temporal,
+                range=qgis_core.QgsDateTimeRange(_utc(5), _utc(6))
+                if temporal
+                else _no_time(),
+            )
+        before = len(services.requests)
+        exported, report = _read(layer, map_time=map_time)
+        assert len(services.requests) == before, "reading contacted the service"
+        expected = _qgis_time(services, layer, map_time)
+
+        assert exported is not None
+        assert exported.tiles is not None
+        asked = dict(parse_qsl(urlsplit(exported.tiles.url).query)).get("TIME")
+        assert asked == expected
+        row = " ".join(
+            item.detail
+            for item in report.items
+            if item.subject == "Time of 'WMS'"
+            and item.status is FidelityStatus.APPROXIMATED
+        )
+        assert "fixed snapshot" in row and "no time slider" in row
+        if expected is not None:
+            assert expected.split("/")[0] in row
+        else:
+            assert "default time" in row
+
+    def test_the_canvas_time_is_what_the_temporal_controller_set(
+        self, qgis_app
+    ) -> None:
+        """What the dialog reads: the canvas's own map settings, which the
+        temporal controller sets, and which an unchanged view reads equal to
+        (the read cache is keyed on it)."""
+        from qgis.gui import QgsMapCanvas
+
+        from nika_onlymap_exporter.core.project_reader import map_time_from_canvas
+
+        canvas = QgsMapCanvas()
+        try:
+            assert map_time_from_canvas(canvas).is_temporal is False
+            frame = qgis_core.QgsDateTimeRange(_utc(5), _utc(6))
+            canvas.setTemporalRange(frame)
+            read = map_time_from_canvas(canvas)
+            assert read.is_temporal is True
+            assert read.range == frame
+            assert read == map_time_from_canvas(canvas)
+            canvas.setTemporalRange(_no_time())
+            assert map_time_from_canvas(canvas).is_temporal is False
+        finally:
+            canvas.deleteLater()
+
+    def test_without_a_qgis_view_it_is_refused(self, qgis_app, services) -> None:
+        """No canvas to read the time from (Processing, a cartograph frame)."""
+        exported, report = _read(_wms(services.url("cors/wms"), extra=YEAR_EXTENT))
         assert exported is None
-        assert "Server default" in _rows(report, FidelityStatus.UNSUPPORTED)
+        assert "no QGIS map view" in _rows(report, FidelityStatus.UNSUPPORTED)
+
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "FindClosestMatchToStartOfRange",
+            "FindClosestMatchToEndOfRange",
+            "MatchUsingWholeRange",
+        ],
+    )
+    def test_a_matching_it_does_not_repeat_is_refused(
+        self, qgis_app, services, method
+    ) -> None:
+        from nika_onlymap_exporter.core.layer_reader import MapTime
+
+        layer = _wms(services.url("cors/wms"), crs="EPSG:3857", extra=YEAR_EXTENT)
+        layer.temporalProperties().setIntervalHandlingMethod(
+            getattr(qgis_core.Qgis.TemporalIntervalMatchMethod, method)
+        )
+        map_time = MapTime(True, qgis_core.QgsDateTimeRange(_utc(5, 7), _utc(5, 7)))
+        exported, report = _read(layer, map_time=map_time)
+        assert exported is None
+        assert "start or end of the range" in _rows(report, FidelityStatus.UNSUPPORTED)
 
     def test_a_wms_t_on_the_server_default_exports(self, qgis_app, services) -> None:
         """`allowTemporalUpdates=false` is the Server default choice: QGIS

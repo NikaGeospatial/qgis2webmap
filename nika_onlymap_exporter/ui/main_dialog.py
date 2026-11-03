@@ -125,6 +125,7 @@ from ..core.project_reader import (
     PendingProject,
     extent_from_canvas,
     finish_project,
+    map_time_from_canvas,
     prepare_project,
     resolve_title,
     with_output_notes,
@@ -663,8 +664,10 @@ class MainDialog(QDialog):
         self._cached_report = None
         self._cached_signature: str | None = None
         self._cached_canvas_extent = None
+        self._cached_map_time = None
         # Captured on this thread before each job starts; see `_ensure_export`.
         self._pending_canvas_extent = None
+        self._pending_map_time = None
         self._pending_license_key: str | None = None
 
         # Which tier the write in flight is producing, and what to do once it
@@ -3986,6 +3989,20 @@ class MainDialog(QDialog):
         except Exception:  # never let a canvas quirk block an export
             return None
 
+    def _canvas_time(self):
+        """The time the QGIS view draws, for WMS-T layers that follow it.
+
+        Read on every project read, like the extent: the temporal controller
+        can move between opening the dialog and pressing Export.
+        """
+        canvas = getattr(self.iface, "mapCanvas", None)
+        if canvas is None:
+            return None
+        try:
+            return map_time_from_canvas(canvas())
+        except Exception:  # never let a canvas quirk block an export
+            return None
+
     @staticmethod
     def _writing_progress(progress: Progress) -> Callable[[int, int | None], None]:
         """The writer's raster progress `(done, total)` on the bar's writing share.
@@ -4027,6 +4044,7 @@ class MainDialog(QDialog):
             ),
             layer_settings=self.state.layers,
             canvas_extent=self._pending_canvas_extent,
+            map_time=self._pending_map_time,
         )
         return pending, report
 
@@ -4088,10 +4106,12 @@ class MainDialog(QDialog):
         # cache is keyed on: None unless an extent setting uses the view, so a
         # pan only costs a re-read when the export actually depends on it.
         canvas_extent = self._canvas_extent()
+        map_time = self._canvas_time()
         if (
             self._cached_export is not None
             and self._cached_signature == signature
             and self._cached_canvas_extent == canvas_extent
+            and self._cached_map_time == map_time
         ):
             # The read is reused, but the settings it carries are the ones it
             # was taken with: a colour or control changed since would never
@@ -4106,6 +4126,7 @@ class MainDialog(QDialog):
             return False
 
         self._pending_canvas_extent = canvas_extent
+        self._pending_map_time = map_time
         self._pending_license_key = self._license_key()
 
         # On this thread: it reads the live project. The job gets the snapshot.
@@ -4138,6 +4159,7 @@ class MainDialog(QDialog):
             self._cached_report = report
             self._cached_signature = signature
             self._cached_canvas_extent = canvas_extent
+            self._cached_map_time = map_time
             self._show_fidelity(report, signature)
             self._update_size_note()
             then(export, report)
@@ -4155,6 +4177,7 @@ class MainDialog(QDialog):
         self._cached_report = None
         self._cached_signature = None
         self._cached_canvas_extent = None
+        self._cached_map_time = None
         # Tells a read or write already running that it started on the old
         # project, so it must not record itself as current when it lands.
         self._project_generation += 1

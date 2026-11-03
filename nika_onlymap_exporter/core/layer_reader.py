@@ -1251,6 +1251,21 @@ def read_tile_service(
     )
 
 
+@dataclasses.dataclass(frozen=True)
+class MapTime:
+    """The time the QGIS map view draws, as its map settings hold it.
+
+    `is_temporal` and `range` are `QgsMapSettings.isTemporal()` and
+    `temporalRange()` (a `QgsDateTimeRange`) of the canvas: the temporal
+    controller sets both, and an empty range with `is_temporal` off when it is
+    switched off. Read on the GUI thread and handed in, as the canvas extent
+    is; `None` in its place means there is no view to read it from.
+    """
+
+    is_temporal: bool
+    range: Any = None
+
+
 # Source-string keys that carry a login QGIS sends with every request. A web
 # page cannot send it without publishing it, and without it the service
 # refuses, so such a layer cannot be drawn by the exported map at all.
@@ -1311,6 +1326,7 @@ def read_map_service(
     report: FidelityReportBuilder,
     group_path: tuple[str, ...] = (),
     visible: bool = True,
+    map_time: MapTime | None = None,
 ) -> ExportLayer | None:
     """Read a WMS or WMTS layer as a live tile layer, or refuse it with a reason.
 
@@ -1321,6 +1337,10 @@ def read_map_service(
     with a row saying what to do: a login, a format that is not an image, a
     time the layer takes from QGIS's temporal controls, a WMS without Web
     Mercator and a WMTS on another tile grid.
+
+    A WMS-T layer that follows QGIS's time is a snapshot: the template asks
+    for the `TIME` QGIS sends now, worked out from `map_time` as QGIS works
+    it out (`_wms_snapshot_time`), and is refused when that cannot be told.
     """
     from urllib.parse import urlsplit
 
@@ -1357,19 +1377,15 @@ def read_map_service(
         )
         return None
 
-    if map_services.value(pairs, "type") == "wmst" and map_services.value(
+    snapshot = map_services.value(pairs, "type") == "wmst" and map_services.value(
         pairs, "allowTemporalUpdates"
-    ).lower() not in ("false", "0"):
-        report.unsupported(
-            subject,
-            "This WMS layer has a time dimension, and QGIS asks it for the time "
-            "set in the layer's temporal settings or the project's temporal "
-            "controls, which the web map does not have. To export the service's "
-            "default time, set the layer's Static WMS-T Temporal Range to "
-            "Server default in its properties. The layer is omitted from the map.",
-            layer_id,
-        )
-        return None
+    ).lower() not in ("false", "0")
+    time: str | None = None
+    if snapshot:
+        time, refusal = _wms_snapshot_time(layer, pairs, map_time)
+        if refusal is not None:
+            report.unsupported(subject, refusal, layer_id)
+            return None
 
     capabilities = _cached_capabilities(map_services.capabilities_url(url))
     if is_wmts:
@@ -1449,6 +1465,7 @@ def read_map_service(
         image_format,
         request_crs,
         extra,
+        time=time,
     )
     template, dependency = _live_dependency(template, name)
     host = urlsplit(template).netloc
@@ -1465,7 +1482,124 @@ def read_map_service(
         f"in Web Mercator (EPSG:3857){projection}. " + _CORS_NOTE,
         layer_id,
     )
+    if snapshot:
+        report.approximated(
+            f"Time of '{name}'",
+            (
+                f"Exported as a fixed snapshot at {time.replace('/', ' to ')}, "
+                "the time QGIS draws now: the web map asks the service for that "
+                "time only and has no time slider. To export another time, set "
+                "it in QGIS and export again."
+            )
+            if time is not None
+            else (
+                "Exported as a fixed snapshot at the service's default time: "
+                "QGIS asks the service for no time for this layer now (no "
+                "temporal range applies to it and it has no predefined date), "
+                "and neither does the web map, which has no time slider."
+            ),
+            layer_id,
+        )
     return _map_service_layer(layer, tiles, dependency, group_path, visible)
+
+
+def _wms_snapshot_time(
+    layer: QgsRasterLayer,
+    pairs: list[tuple[str, str]],
+    map_time: MapTime | None,
+) -> tuple[str | None, str | None]:
+    """`(TIME, None)` with the WMS-T time QGIS sends for `layer` now (`None`
+    when it sends none), or `(None, why not)` when that cannot be told.
+
+    The same steps QGIS takes: `QgsRasterLayerRenderer` hands the provider the
+    map's range only while the layer's dynamic temporal control is on and the
+    map is temporal, and `QgsWmsProvider::addWmstParameters` falls back to the
+    layer's predefined `time`, applies the layer's interval matching and
+    formats the result. Closest-match matching needs the times the service
+    lists, the whole range a rule not repeated here, and a reference time a
+    second dimension; all three are refused.
+    """
+    from qgis.core import Qgis, QgsDateTimeRange
+    from qgis.PyQt.QtCore import QDateTime, Qt
+
+    from . import map_services
+
+    retry = (
+        "set the layer's Static WMS-T Temporal Range to Server default or a "
+        "predefined date in its properties, and export again. The layer is "
+        "omitted from the map."
+    )
+    properties = layer.temporalProperties()
+    requested = QgsDateTimeRange(QDateTime(), QDateTime())
+    if properties.isActive():
+        if map_time is None:
+            return None, (
+                "This WMS layer has a time dimension and follows QGIS's "
+                "temporal controller, and this export has no QGIS map view to "
+                "read the time from, so it cannot tell which time to ask the "
+                "service for. Export from the QGIS2WebMap dialog, or " + retry
+            )
+        follows = Qgis.RasterTemporalMode.TemporalRangeFromDataProvider
+        if map_time.is_temporal:
+            if properties.mode() != follows:
+                return None, (
+                    "This WMS layer has a time dimension, and its temporal "
+                    "settings do not pass QGIS's time to the service, so the "
+                    "export cannot tell which time the service draws. Set its "
+                    "dynamic temporal control to the provider's time, or " + retry
+                )
+            requested = map_time.range
+
+    if map_services.value(pairs, "reference_time"):
+        return None, (
+            "This WMS layer also asks the service for a reference time, which "
+            "the web map cannot ask for. The layer is omitted from the map."
+        )
+    if requested.isInfinite():
+        predefined = map_services.value(pairs, "time")
+        if predefined:
+            parts = predefined.split("/")
+            if len(parts) != 2:
+                return None, (
+                    f"This WMS layer's predefined time '{predefined}' is not a "
+                    "start and an end, so the export cannot tell which time QGIS "
+                    "asks for. Choose the date again in the layer's properties. "
+                    "The layer is omitted from the map."
+                )
+            requested = QgsDateTimeRange(
+                QDateTime.fromString(parts[0], Qt.DateFormat.ISODateWithMs),
+                QDateTime.fromString(parts[1], Qt.DateFormat.ISODateWithMs),
+            )
+    begin, end = requested.begin(), requested.end()
+    if not (begin.isValid() and end.isValid()):
+        return None, None
+
+    # Only the exact matches are repeated. For the closest matches QGIS
+    # picks from the times the service lists, and for the whole range QGIS
+    # 4.2 was seen sending no TIME at all, by a rule not worked out here.
+    method = properties.intervalHandlingMethod()
+    match = Qgis.TemporalIntervalMatchMethod
+    if method == match.MatchExactUsingStartOfRange:
+        end = begin
+    elif method == match.MatchExactUsingEndOfRange:
+        begin = end
+    else:
+        return None, (
+            "This WMS layer matches QGIS's time to the service's times in a "
+            "way the export does not repeat (only a match to the start or the "
+            "end of the range is), so it cannot tell which time QGIS asks for. "
+            "Set the layer's matching to the start or end of the range in its "
+            "Temporal properties, or " + retry
+        )
+    enable_time = map_services.value(pairs, "enableTime").lower() not in (
+        "false",
+        "0",
+    )
+    pattern = "yyyy-MM-ddThh:mm:ssZ" if enable_time else "yyyy-MM-dd"
+    time = begin.toString(pattern)
+    if begin != end:
+        time += "/" + end.toString(pattern)
+    return time, None
 
 
 # The one condition of a live service that nothing in QGIS can check: QGIS is
@@ -1537,6 +1671,7 @@ def read_raster(
     report: FidelityReportBuilder,
     group_path: tuple[str, ...] = (),
     visible: bool = True,
+    map_time: MapTime | None = None,
 ) -> ExportLayer | None:
     """Read one raster layer into the normalized model.
 
@@ -1574,7 +1709,9 @@ def read_raster(
     if provider_key == "wms" and xyz_template(layer) is not None:
         return read_tile_service(layer, report, group_path=group_path, visible=visible)
     if provider_key == "wms" and _source_type(layer) in ("", "wmst", "wmts"):
-        return read_map_service(layer, report, group_path=group_path, visible=visible)
+        return read_map_service(
+            layer, report, group_path=group_path, visible=visible, map_time=map_time
+        )
 
     if provider_key == "arcgismapserver":
         report.unsupported(
@@ -1879,6 +2016,7 @@ def read_layer(
     clip_extent: Any | None = None,
     name_field: str | None = None,
     cluster: bool = True,
+    map_time: MapTime | None = None,
 ) -> ExportLayer | None:
     """Read one layer into the normalized model, on the calling thread.
 
@@ -1900,6 +2038,7 @@ def read_layer(
         clip_extent=clip_extent,
         name_field=name_field,
         cluster=cluster,
+        map_time=map_time,
     )
     if isinstance(prepared, PendingLayer):
         return prepared.finish(report)
@@ -1922,6 +2061,7 @@ def prepare_layer(
     name_field: str | None = None,
     cluster: bool = True,
     scans: LayerScans | None = None,
+    map_time: MapTime | None = None,
 ) -> ExportLayer | PendingLayer | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
@@ -1942,6 +2082,9 @@ def prepare_layer(
     manifest builder: a user who unticked labels should not pay for the label
     points in the artifact, and the fidelity report should not list translation
     notes for something the user asked not to export.
+
+    `map_time` is the time the QGIS map view draws, for a WMS-T layer that
+    follows it; `None` when there is no view (see `MapTime`).
     """
     layer_id = layer.id()
     name = layer.name()
@@ -1950,7 +2093,9 @@ def prepare_layer(
         # Rasters take none of the vector arguments above: they have no fields
         # to hide, no popup to build, no labels and no geometry to quantise.
         # Passing them along would only make the seam look wider than it is.
-        return read_raster(layer, report, group_path=group_path, visible=visible)
+        return read_raster(
+            layer, report, group_path=group_path, visible=visible, map_time=map_time
+        )
 
     if layer.type() != QgsMapLayerType.VectorLayer:
         report.unsupported(

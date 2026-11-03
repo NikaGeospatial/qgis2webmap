@@ -211,6 +211,26 @@ class TestGetMapTemplate:
         )
         assert "&FILTER=a:%22x%22%20%3D%201&" in template
 
+    def test_a_wms_t_time_is_asked_for_and_replaces_the_services_own(self) -> None:
+        template = wms_get_map_template(
+            BASE + "?TIME=1999-01-01",
+            "1.3.0",
+            ["a"],
+            [""],
+            "image/png",
+            "EPSG:3857",
+            time="2020-03-05T00:00:00Z/2020-03-06T00:00:00Z",
+        )
+        assert "&TIME=2020-03-05T00:00:00Z/2020-03-06T00:00:00Z&" in template
+        assert template.count("TIME=") == 1
+
+    def test_without_a_time_the_services_own_is_kept(self) -> None:
+        template = wms_get_map_template(
+            BASE + "?TIME=1999-01-01", "1.3.0", ["a"], [""], "image/png", "EPSG:3857"
+        )
+        assert template.startswith(BASE + "?TIME=1999-01-01&SERVICE=WMS&")
+        assert template.count("TIME=") == 1
+
 
 def _fill(template: str, x: int, y: int, z: int) -> str:
     """The runtime's own filling (0.13.3 `fillTileTemplate`), for the check
