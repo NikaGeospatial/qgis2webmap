@@ -86,6 +86,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   resolution*, when passed, replace every map's saved choice.
 
 ### Fixed
+- A long popup value with nowhere to wrap - a file path, a web address, an
+  ID - breaks onto the next line inside the popup instead of running past its
+  edge. Text with spaces still wraps between its words.
 - A WMS layer made of several sublayers stacks them as QGIS draws them. The
   web map asked the service for them in the reverse order, so the one QGIS
   draws at the bottom covered the others; each sublayer's style stays with it.

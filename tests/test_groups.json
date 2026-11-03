@@ -172,6 +172,7 @@
       "browser": [
         "tests/browser/test_exported_map.py",
         "tests/browser/test_popup_media.py",
+        "tests/browser/test_popup_wrapping.py",
         "tests/browser/test_map_services.py",
         "tests/browser/test_remote_cog.py"
       ]
