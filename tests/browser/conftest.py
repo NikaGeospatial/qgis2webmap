@@ -28,6 +28,7 @@ from nika_onlymap_exporter.core.export_ir import (
     GeometryKind,
     IconAtlasSpec,
     LabelingSpec,
+    LineLabelRepeat,
     PopupFieldMode,
     PopupFieldSpec,
     PopupSpec,
@@ -36,6 +37,7 @@ from nika_onlymap_exporter.core.export_ir import (
     SourceKind,
     SymbolSpec,
 )
+from nika_onlymap_exporter.core.label_points import build_label_collection
 from nika_onlymap_exporter.packaging.runtime_manager import (
     LocalRuntime,
     discover_runtime_dir,
@@ -706,6 +708,75 @@ def labelled_map(runtime, tmp_path_factory):
             color=Color(r=255, g=0, b=0),
         ),
     )
+
+
+# A long line across the map, black so the only red is its labels.
+REPEATED_LINE_GEOJSON = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[-0.9, 51.4], [0.9, 51.4]],
+            },
+            "properties": {"name": "W"},
+        }
+    ],
+}
+
+# 40 km in Web Mercator metres: the 200 km line in five pieces, each labelled
+# at its middle, about 90 px apart on the view the map opens on.
+LINE_REPEAT = LineLabelRepeat(40_000.0, 500.0, from_qgis=True)
+
+
+def _repeated_line_map(runtime, tmp_path_factory, name, repeat):
+    layer = ExportLayer(
+        layer_id="road",
+        name="Road",
+        geometry_kind=GeometryKind.LINE,
+        source_kind=SourceKind.FILE,
+        feature_count=1,
+        geojson=REPEATED_LINE_GEOJSON,
+        renderer=RendererSpec(
+            kind=RendererKind.SINGLE,
+            symbol=SymbolSpec(stroke_color=Color(r=0, g=0, b=0), stroke_width=1.0),
+        ),
+        labeling=LabelingSpec(
+            enabled=True,
+            field_name="name",
+            font_size=20.0,
+            bold=True,
+            color=Color(r=255, g=0, b=0),
+            repeat=repeat,
+        ),
+        popup=PopupSpec(enabled=False),
+    )
+    project = ExportProject(
+        title=name,
+        layers=(layer,),
+        extent=Extent(west=-1.0, south=51.3, east=1.1, north=51.5),
+        settings=ExportSettings(show_title=False, show_legend=False),
+    )
+    destination = tmp_path_factory.mktemp(name)
+    entry = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    # Where the repeated labels go, the same for the control, which looks there.
+    places = build_label_collection(
+        REPEATED_LINE_GEOJSON, "name", repeat=LINE_REPEAT, font_px=20.0
+    )
+    return entry.entry_path, [f["geometry"]["coordinates"] for f in places["features"]]
+
+
+@pytest.fixture(scope="session")
+def repeated_line_labels_map(runtime, tmp_path_factory):
+    """A line labelled at five places along it, and those places."""
+    return _repeated_line_map(runtime, tmp_path_factory, "repeated", LINE_REPEAT)
+
+
+@pytest.fixture(scope="session")
+def single_line_label_map(runtime, tmp_path_factory):
+    """The control: the same line labelled once, at its middle."""
+    return _repeated_line_map(runtime, tmp_path_factory, "once", None)
 
 
 @pytest.fixture(scope="session")

@@ -317,6 +317,24 @@ multipoint, and a multi-part line or polygon once, on its longest or largest
 part — or once on every part when **Label every part of multi-part features**
 is ticked in the layer's label placement settings.
 
+**Lines** are labelled at half their length along them, measured as QGIS
+measures them: in degrees in a project whose CRS is geographic, and in Web
+Mercator otherwise, which is exact for an EPSG:3857 project and close for
+other projected ones. With **Repeat** set in the label placement, labels repeat
+where QGIS repeats them: the line is cut into equal pieces at least the repeat
+distance long — stretched to a whole multiple of it where the label is longer
+— and each piece is labelled at its middle. A distance in millimetres, points,
+pixels or inches is taken at the view where the layer fills the map, so it
+matches QGIS there and the repeats spread apart as you zoom in; one in map
+units or metres on the ground is kept as set. A map unit scale on the distance
+changes nothing, as in QGIS 4.2. With no Repeat set, a long line is labelled
+again every 250 pixels at that view, either side of the label QGIS draws at
+its middle, so a line keeps a label in view as you zoom in; a line shorter
+than three spacings keeps its one label. The repeats are fixed along the line,
+so a layer's labels show from the zoom where no repeat overlaps the next. At
+most 50 labels sit on one line and 5,000 on one layer; past either the repeats
+spread further apart, and the Fidelity tab says so.
+
 Collision handling, callouts and curved placement are not: the web map draws
 every label, so where a layer's labels would pile up they wait for a closer
 zoom - the one at which most of them have room - and the Fidelity tab names it.

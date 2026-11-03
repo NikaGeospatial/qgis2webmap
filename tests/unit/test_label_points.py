@@ -11,6 +11,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import pytest
+
 from nika_onlymap_exporter.core.label_points import (
     LABEL_PROPERTY,
     apply_capitalization,
@@ -68,13 +70,18 @@ class TestRepresentativePoint:
         centroid = representative_point({"type": "Polygon", "coordinates": [dense]})
         assert centroid == (1.0, 1.0)
 
-    def test_line_label_sits_on_a_vertex(self) -> None:
-        """Never the bbox centre: on an L-shaped line that is off the feature."""
+    def test_a_line_is_labelled_on_it_not_at_its_bbox_centre(self) -> None:
+        """On an L-shaped line the bbox centre is off the feature. Half its
+        length along it is on it: at the corner measured in degrees, and just
+        short of it in Web Mercator, where the north-south leg is longer."""
         geometry = {
             "type": "LineString",
             "coordinates": [[0.0, 0.0], [0.0, 10.0], [10.0, 10.0]],
         }
-        assert representative_point(geometry) in {(0.0, 10.0)}
+        assert representative_point(geometry, "degrees") == (0.0, 10.0)
+        x, y = representative_point(geometry)
+        assert x == 0.0
+        assert 9.9 < y < 10.0
 
     def test_multipolygon_labels_the_largest_part(self) -> None:
         tiny = [[10.0, 10.0], [10.1, 10.0], [10.1, 10.1], [10.0, 10.1], [10.0, 10.0]]
@@ -224,11 +231,14 @@ class TestMultiPartAnchors:
 
     def test_a_multiline_labels_its_longest_part_by_length(self) -> None:
         geometry = {"type": "MultiLineString", "coordinates": [SHORT_PART, LONG_PART]}
-        assert label_anchors(geometry) == [(6.0, 8.0)]
+        assert label_anchors(geometry) == [pytest.approx((6.0, 8.0))]
 
     def test_every_part_of_a_multiline_with_per_part(self) -> None:
         geometry = {"type": "MultiLineString", "coordinates": [SHORT_PART, LONG_PART]}
-        assert label_anchors(geometry, per_part=True) == [(1.4, 1.2), (6.0, 8.0)]
+        assert label_anchors(geometry, per_part=True, plane="degrees") == [
+            pytest.approx((1.4, 1.2)),
+            (6.0, 8.0),
+        ]
 
     def test_a_multipolygon_labels_its_largest_part(self) -> None:
         geometry = {

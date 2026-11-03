@@ -15,22 +15,37 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import math
 import string
 from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
+    Qgis,
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsCsException,
     QgsExpression,
     QgsExpressionContext,
     QgsExpressionContextUtils,
     QgsExpressionNodeColumnRef,
     QgsFeatureRequest,
+    QgsPalLayerSettings,
+    QgsPointXY,
+    QgsProject,
     QgsRuleBasedLabeling,
+    QgsUnitTypes,
 )
 
-from .export_ir import MM_TO_PIXELS, Color, LabelingSpec
+from .export_ir import (
+    MM_TO_PIXELS,
+    Color,
+    LabelingSpec,
+    LineLabelRepeat,
+)
 from .fidelity_report import FidelityReportBuilder
-from .label_points import apply_capitalization
+from .label_points import apply_capitalization, to_plane
 from .render_units import to_pixels
+from .renderer_translator import reference_render_context, reference_scale
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsVectorLayer
@@ -388,6 +403,8 @@ def translate_labeling(
     anchor, baseline = read_quadrant(settings)
     wrap_char = str(getattr(settings, "wrapChar", "") or "")
     auto_wrap = int(getattr(settings, "autoWrapLength", 0) or 0)
+    plane = measure_plane()
+    repeat = _line_repeat(layer, settings, plane, report, subject, layer_id)
 
     report.approximated(
         subject,
@@ -423,7 +440,120 @@ def translate_labeling(
         wrap_char=wrap_char,
         auto_wrap_length=auto_wrap,
         per_part=bool(getattr(settings, "labelPerPart", False)),
+        measure_plane=plane,
+        repeat=repeat,
     )
+
+
+def measure_plane() -> str:
+    """The plane QGIS measures lines in for labelling: its map CRS's, which
+    for a geographic CRS is plain degrees (`label_points.MEASURE_PLANES`)."""
+    crs = QgsProject.instance().crs()
+    return "degrees" if crs.isValid() and crs.isGeographic() else "mercator"
+
+
+# The web map's own repeat for line labels where QGIS sets none: MapLibre's
+# default `symbol-spacing`, the spacing web maps repeat line labels at. Fixed at
+# the layer's reference scale, where the layer fills the view, so a line that
+# crosses it carries a few labels there - none on a line shorter than three
+# spacings - and one about every screen two zooms in.
+DEFAULT_LINE_REPEAT_PX = 250.0
+
+
+def _line_repeat(
+    layer: QgsVectorLayer,
+    settings: Any,
+    plane: str,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+) -> LineLabelRepeat | None:
+    """How far apart a line layer's labels repeat, in `plane` units, or `None`
+    for any other layer, or one with no reference scale to fix it at.
+
+    QGIS's "Repeat" distance is converted by QGIS itself
+    (`QgsRenderContext.convertToMapUnits`, in its unit) at the layer's
+    reference scale, as the layer's map-unit symbol sizes are. Without its map
+    unit scale: QGIS 4.2's labelling draws a repeat in map units with a
+    minimum size or a scale limit set exactly as without one (measured by
+    rendering both), so applying it would repeat where QGIS does not.
+    """
+    if layer.geometryType() != Qgis.GeometryType.Line:
+        return None
+    scale = reference_scale(layer)
+    context = reference_render_context(layer)
+    per_map_unit = _plane_units_per_map_unit(layer, plane)
+    if scale is None or context is None or per_map_unit is None:
+        return None
+    context.setRendererScale(scale.scale_denominator)
+    units_per_pixel = context.mapToPixel().mapUnitsPerPixel() * per_map_unit
+
+    distance = float(getattr(settings, "repeatDistance", 0.0) or 0.0)
+    if _data_defined(settings, "RepeatDistance", "RepeatDistanceUnit"):
+        report.approximated(
+            subject,
+            "The labels' repeat distance is set by a data-defined override, "
+            "which the web map cannot work out per feature, so the layer's own "
+            "repeat setting is used.",
+            layer_id,
+        )
+    if not distance > 0:
+        return LineLabelRepeat(
+            DEFAULT_LINE_REPEAT_PX * units_per_pixel, units_per_pixel
+        )
+
+    unit = settings.repeatDistanceUnit
+    map_units = context.convertToMapUnits(distance, unit)
+    if not (map_units > 0 and math.isfinite(map_units)):
+        return None
+    report.approximated(
+        subject,
+        f"QGIS repeats these labels along each line every {distance:g} "
+        f"{QgsUnitTypes.toAbbreviatedString(unit)}, afresh at every scale. The "
+        "web map places the repeats once, at that spacing where the layer fills "
+        "the view, so they spread apart as you zoom in, and the labels show "
+        "from the zoom where the repeats have room.",
+        layer_id,
+    )
+    return LineLabelRepeat(map_units * per_map_unit, units_per_pixel, from_qgis=True)
+
+
+def _plane_units_per_map_unit(layer: QgsVectorLayer, plane: str) -> float | None:
+    """How long one of the layer CRS's map units is in `plane`, measured
+    across the middle of the layer's extent."""
+    extent = layer.extent()
+    if extent.isNull() or extent.isEmpty():
+        return None
+    centre = extent.center()
+    step = max(extent.width(), extent.height()) / 1000.0
+    try:
+        to_wgs84 = QgsCoordinateTransform(
+            layer.crs(),
+            QgsCoordinateReferenceSystem("EPSG:4326"),
+            QgsProject.instance().transformContext(),
+        )
+        west = to_wgs84.transform(QgsPointXY(centre.x() - step / 2, centre.y()))
+        east = to_wgs84.transform(QgsPointXY(centre.x() + step / 2, centre.y()))
+    except QgsCsException:
+        return None
+    (x0, y0), (x1, y1) = (
+        to_plane((west.x(), west.y()), plane),
+        to_plane((east.x(), east.y()), plane),
+    )
+    length = math.hypot(x1 - x0, y1 - y0)
+    return length / step if length > 0 and step > 0 else None
+
+
+def _data_defined(settings: Any, *names: str) -> bool:
+    """Whether any of the named label properties is data-defined."""
+    try:
+        properties = settings.dataDefinedProperties()
+        return any(
+            properties.isActive(getattr(QgsPalLayerSettings.Property, name))
+            for name in names
+        )
+    except (AttributeError, TypeError):  # pragma: no cover
+        return False
 
 
 # `QgsStringUtils::Capitalization`, by value rather than by name: the enum is

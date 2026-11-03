@@ -451,7 +451,7 @@ def test_whole_layer_matches_and_stacks_are_noted(
         },
     ):
         layer = _layer(points, **overrides)
-        result, stacked = declutter_noting_stacks(layer, 12.0)
+        result, stacked, _repeated = declutter_noting_stacks(layer, 12.0)
         expected = _old_declutter_layer(layer, 12.0)
         assert result == expected, (name, overrides)
         assert (result is layer) is (expected is layer)
@@ -622,7 +622,7 @@ def test_sites_a_float_from_the_seventh_decimal_match(
         {"labeling": LabelingSpec(enabled=True, field_name="name", font_size=1)},
     ):
         layer = _layer(points, **overrides)
-        result, stacked = declutter_noting_stacks(layer, 12.0)
+        result, stacked, _repeated = declutter_noting_stacks(layer, 12.0)
         assert result == _old_declutter_layer(layer, 12.0), (name, overrides)
         assert result.cluster_max_zoom is not None, name
         assert stacked is _old_has_stacks(result), (name, overrides)

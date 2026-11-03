@@ -72,7 +72,23 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   carries an access key is left out. A cartograph's legend still lists the
   layer by name; the Checks tab says so.
 
+- **Line labels repeat along long lines.** With **Repeat** set in a line
+  layer's label placement, labels repeat where QGIS repeats them: the line cut
+  into equal pieces at least that long, each labelled at its middle, the
+  distance in millimetres, points, pixels or inches taken at the view where
+  the layer fills the map, and in map units or metres on the ground as set.
+  With no Repeat set, a long line is labelled again every 250 pixels at that
+  view, either side of the label QGIS draws at its middle, so a line keeps a
+  label in view as you zoom in; a line shorter than three spacings keeps its
+  one label. The repeats are fixed along the line, so a layer's labels show
+  from the zoom where no repeat overlaps the next. At most 50 labels sit on
+  one line and 5,000 on one layer; past either the repeats spread out, and the
+  Fidelity tab says so.
+
 ### Fixed
+- A line's label sits at half its length along it, as QGIS places it. It was
+  on the line's middle vertex, which on a line of two vertices is one of its
+  ends.
 - Labels on multi-part features land where QGIS draws them
   ([qgis2web#1095](https://github.com/qgis2web/qgis2web/issues/1095)): every
   point of a multipoint is labelled, not only the first; a multi-part line is

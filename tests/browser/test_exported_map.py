@@ -1177,6 +1177,34 @@ class TestExpressionLabelsDraw:
         assert none == 0, "a feature QGIS labels with NULL shows text"
 
 
+class TestRepeatedLineLabelsDraw:
+    """A line labelled at several places along it draws text at each, not only
+    the first: the anchors reaching the markup is not the same as deck.gl
+    drawing a label at every one."""
+
+    def _red_near_anchors(self, page, fixture) -> list[int]:
+        artifact, anchors = fixture
+        assert len(anchors) == 5
+        page.set_viewport_size({"width": 1000, "height": 800})
+        open_map(page, artifact)
+        require_webgl(page)
+        page.wait_for_selector("om-map canvas", timeout=30_000)
+        wait_until_drawn(page)
+        return page.evaluate(COUNT_RED_PIXELS_NEAR, [anchors, 30, 18])
+
+    def test_a_label_draws_at_every_repeat(
+        self, page, repeated_line_labels_map
+    ) -> None:
+        counts = self._red_near_anchors(page, repeated_line_labels_map)
+        assert all(count > 0 for count in counts), counts
+
+    def test_once_draws_only_at_the_middle(self, page, single_line_label_map) -> None:
+        """The control: the boxes around the other places stay empty."""
+        counts = self._red_near_anchors(page, single_line_label_map)
+        assert counts[2] > 0
+        assert counts[:2] + counts[3:] == [0, 0, 0, 0], counts
+
+
 class TestDashedLinesReallyDash:
     """`dash` reaching the markup is not the same as deck.gl honouring it.
 
