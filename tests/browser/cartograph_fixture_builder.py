@@ -21,6 +21,8 @@ download instead. It writes:
   and where QGIS puts its corners.
 - `raster-live.html`: a live map of a raster (a red square on white) whose
   source file is deleted once exported, so it can only draw from the page.
+- `raster-lzw-live.html`, `raster-zstd-live.html`: the same raster, its source
+  already a Web Mercator COG in a compression the runtime cannot decode.
 - `story-live.html`: one Web Mercator map, live, with a scale token label.
 - `atlas-live.html`: a live atlas over three parcels, one page each.
 - `atlas-fixed.html`: the same atlas at QGIS's Fixed scale, with where
@@ -82,6 +84,11 @@ def main(out_dir: Path) -> int:
         QgsProject.instance().clear()
         expected["raster_live"] = _write_raster_live(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
+        for compression in ("LZW", "ZSTD"):
+            expected[f"raster_{compression.lower()}_live"] = _write_raster_live(
+                QgsProject.instance(), out_dir, compression
+            )
+            QgsProject.instance().clear()
         expected["story"] = _write_story(QgsProject.instance(), out_dir)
         QgsProject.instance().clear()
         expected["atlas"] = _write_atlas(QgsProject.instance(), out_dir)
@@ -257,7 +264,11 @@ def _write_geo_live(project, out_dir: Path) -> dict:
     }
 
 
-def _write_raster_live(project, out_dir: Path) -> dict:
+def _write_raster_live(
+    project, out_dir: Path, source_compression: str | None = None
+) -> dict:
+    """`source_compression` makes the source a COG in that compression, which
+    the export must not carry through as it stands."""
     from osgeo import gdal
     from qgis.core import (
         QgsCoordinateReferenceSystem,
@@ -291,6 +302,18 @@ def _write_raster_live(project, out_dir: Path) -> dict:
             rows[y * size + 10 : y * size + 30] = bytes([value]) * 20
         dataset.GetRasterBand(band).WriteRaster(0, 0, size, size, bytes(rows))
     dataset = None
+    name = "raster-live.html"
+    if source_compression is not None:
+        plain = source
+        source = plain.with_name(f"square-{source_compression.lower()}.tif")
+        gdal.Translate(
+            str(source),
+            str(plain),
+            format="COG",
+            creationOptions=[f"COMPRESS={source_compression}"],
+        )
+        plain.unlink()
+        name = f"raster-{source_compression.lower()}-live.html"
     raster = QgsRasterLayer(str(source), "square", "gdal")
     project.addMapLayer(raster)
     project.setCrs(mercator)
@@ -310,7 +333,7 @@ def _write_raster_live(project, out_dir: Path) -> dict:
         FidelityReportBuilder(),
         frame_modes={map_item.uuid(): "live"},
     )
-    (out_dir / "raster-live.html").write_text(html, encoding="utf-8")
+    (out_dir / name).write_text(html, encoding="utf-8")
     project.removeMapLayer(raster.id())
     source.unlink()
     to_wgs84 = QgsCoordinateTransform(
