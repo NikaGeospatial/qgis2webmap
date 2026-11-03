@@ -278,12 +278,12 @@ class TestSavePdf:
         assert _state_of(dialog, layout) == before
         assert _share_action(dialog, "Save PDF…").isEnabled()
 
-    def test_ctrl_p_saves_the_pdf(self, survey_dialog, chosen_pdf, qgis_app) -> None:
+    def test_ctrl_s_saves_the_pdf(self, survey_dialog, chosen_pdf, qgis_app) -> None:
         dialog, layout = survey_dialog
         dialog.show()
         dialog.activateWindow()
         qgis_app.processEvents()
-        QTest.keyClick(dialog, Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier)
+        QTest.keyClick(dialog, Qt.Key.Key_S, Qt.KeyboardModifier.ControlModifier)
         assert _wait_for(qgis_app, chosen_pdf.target.exists)
         assert _pdf_pages(chosen_pdf.target) == layout.pageCollection().pageCount()
         assert chosen_pdf.opened == []  # no browser opened
