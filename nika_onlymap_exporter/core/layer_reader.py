@@ -714,8 +714,9 @@ def snapshot_features(
 
     `display_names` is `popup_display_names`: the fields to write a shown-value
     copy of, which is none for a caller that has no popup. `keep` is the names
-    of the fields the export keeps, which are then the only ones written; they
-    are read with the fields `label`'s expression and `rules` read. `None`
+    of the fields the export keeps, which are then the only ones read, with
+    those `label`'s expression reads (written, then dropped by
+    `keep_only_fields`) and those `rules` read (read, never written); `None`
     reads them all. `scans` as for `prepare_layer`.
     """
     from qgis.core import QgsProject
@@ -749,11 +750,9 @@ def snapshot_features(
         formats=formats,
         formats_layer=layer.clone() if formats else None,
         attribute_indexes=attribute_indexes,
-    reads = frozenset() if label is None else label.columns
-    if keep is not None and reads is not None:
-        # The expression's fields are read but not kept: only its text is
-        # written, so a field it reads that the popup hides stays out.
-        read = set(keep) | reads
+        label=label,
+        rules=rules,
+        rule_indexes=rule_indexes,
     )
 
 
