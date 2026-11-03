@@ -3255,9 +3255,9 @@ class CartographController:
         add(
             "save_pdf",
             tr("Save PDF…"),
-            tr("Save every page of this layout as a PDF (Ctrl+P)"),
+            tr("Save every page of this layout as a PDF (Ctrl+S)"),
             self.on_save_pdf,
-            "Ctrl+P",
+            "Ctrl+S",
         )
         add(
             "save_atlas_pdf",

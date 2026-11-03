@@ -17,7 +17,7 @@ yourself, sending it to someone who will, and preparing it for a print shop.
 
 ## Save PDF
 
-**Save PDF…** in the dialog's header (or **Ctrl+P** there) opens the system save
+**Save PDF…** in the dialog's header (or **Ctrl+S** there) opens the system save
 dialog, suggesting the layout's name, and QGIS writes every page of the layout
 as it is right now, edits included. It needs no saved HTML and never opens a
 browser. Interactive frames are drawn static in the PDF; the HTML keeps them
@@ -29,7 +29,7 @@ come from [PDF settings](#print-settings).
 
 ## Print from the browser
 
-For a PDF from the plugin, use **Save PDF…** (**Ctrl+P** in the dialog): QGIS
+For a PDF from the plugin, use **Save PDF…** (**Ctrl+S** in the dialog): QGIS
 writes it from the layout, with no browser involved - see
 [Save PDF](#save-pdf). To print the HTML cartograph itself, open it in a browser
 (**Share → Preview in browser**) and print with **Ctrl+P** (**Cmd+P** on
