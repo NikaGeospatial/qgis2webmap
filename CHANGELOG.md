@@ -7,17 +7,6 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ## [Unreleased]
 
 ### Added
-- **WMS layers export as live layers** ([#2](https://github.com/NikaGeospatial/qgis2webmap/issues/2)).
-  The web map asks the service for Web Mercator (EPSG:3857) tiles itself,
-  whatever CRS the project uses, so a WMS layer needs an internet connection
-  and the service must allow web pages to load its images (CORS); if it does
-  not, only that layer stays empty, and the map page reports why on its
-  `om-validation-error` event. A WMS is exported when the capabilities QGIS
-  stored for it list EPSG:3857 (or the layer already uses it): exporting
-  never contacts the service. Needs the OnlyMap runtime 0.13.3.
-- **WMTS layers on a Web Mercator tile grid** (such as GoogleMapsCompatible)
-  export as live layers too.
-- **XYZ layers with a `{q}` quadkey** (Bing-style) export as live layers.
 - **Cloud Optimized GeoTIFFs QGIS reads over the web** (`/vsicurl/https://...`
   or an `https://` address) export as live layers: the map reads the parts it
   draws straight from the address, and nothing is carried or downloaded. For
@@ -34,14 +23,6 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   cartograph frame), a layer matched to the closest or whole range rather
   than the start or end of it, and a layer with a reference time.
 
-### Changed
-- Clearer Fidelity rows for the map services that are still not exported,
-  each saying what to do: a WMS without Web Mercator, a WMTS on another tile
-  grid, a service that needs a login,
-  ArcGIS map services and WCS. An XYZ address with a token the map cannot
-  fill (such as `{s}`) is now refused with a reason instead of exported to
-  request the token literally.
-
 ### Fixed
 - A raster QGIS reads over the web that is not exported live (see Added) is
   refused with one Fidelity row saying why and to save a local copy (Export >
@@ -50,6 +31,43 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - OGC API Features and SensorThings layers are described as web services in
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
+
+## [0.3.1] - Unreleased
+
+### Added
+- **WMS layers export as live layers** ([#2](https://github.com/NikaGeospatial/qgis2webmap/issues/2)).
+  The web map asks the service for Web Mercator (EPSG:3857) tiles itself,
+  whatever CRS the project uses, so a WMS layer needs an internet connection
+  and the service must allow web pages to load its images (CORS); if it does
+  not, only that layer stays empty, and the map page reports why on its
+  `om-validation-error` event. A WMS is exported when the capabilities QGIS
+  stored for it list EPSG:3857 (or the layer already uses it): exporting
+  never contacts the service. Needs the OnlyMap runtime 0.13.3.
+- **WMTS layers on a Web Mercator tile grid** (such as GoogleMapsCompatible)
+  export as live layers too.
+- **XYZ layers with a `{q}` quadkey** (Bing-style) export as live layers.
+
+### Changed
+- Clearer Fidelity rows for the map services that are still not exported,
+  each saying what to do: a WMS without Web Mercator, a WMTS on another tile
+  grid, a WMS-T layer that follows QGIS's time, a service that needs a login,
+  ArcGIS map services and WCS. An XYZ address with a token the map cannot
+  fill (such as `{s}`) is now refused with a reason instead of exported to
+  request the token literally.
+- The OnlyMap runtime moves to 0.13.3.
+- The runtime licence is shown once, at the first download: a later runtime
+  version downloads without asking again.
+- The downloaded runtime is kept compressed on disk (about 2.8 MB), and older
+  runtime versions are deleted once a new one is installed and verified.
+- Faster exports and cartograph saves: only the fields the export keeps are
+  read from each layer, embedded data is compressed in a third of the time,
+  and label decluttering and point clustering do less work. Maps draw the
+  same.
+
+### Fixed
+- On a relief map the imagery credit wraps to a second line, and the
+  attribution above it sat underneath it. The attribution, and the preview's
+  Host prompt, now keep clear of the credit at its measured height.
 - A raster whose file is already a Cloud-Optimized GeoTIFF compressed with
   LZW, ZSTD or LERC no longer exports as an empty layer: the web map cannot
   decode those compressions, so the file is now converted (to DEFLATE, as
