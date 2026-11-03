@@ -219,7 +219,8 @@ class CogVerdict:
 
     @property
     def is_web_ready(self) -> bool:
-        """A COG *and* already in Web Mercator, so it can be hosted as-is."""
+        """A COG, already in Web Mercator and in a compression the web map decodes,
+        so it can be hosted as-is."""
         return self.is_cog and not self.needs_reprojection and self.is_web_decodable
 
     def describe(self) -> str:
@@ -678,7 +679,7 @@ def to_cog(
     for and will not think to clean up.
 
     `skip_if_ready` short-circuits when the source is already a COG in the
-    target CRS. Nothing is copied in that case and `CogResult.destination`
+    target CRS, in a compression the web map decodes. Nothing is copied in that case and `CogResult.destination`
     points at the *source*; copying a 2 GB file to prove we looked at it is
     pure cost. Pass False when the caller needs its own copy regardless -- for
     instance to keep an artifact self-contained.
