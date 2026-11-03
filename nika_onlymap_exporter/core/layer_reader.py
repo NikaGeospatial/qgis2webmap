@@ -1377,9 +1377,7 @@ def read_map_service(
         )
         return None
 
-    snapshot = map_services.value(pairs, "type") == "wmst" and map_services.value(
-        pairs, "allowTemporalUpdates"
-    ).lower() not in ("false", "0")
+    snapshot = _is_wmst_snapshot(pairs)
     time: str | None = None
     if snapshot:
         time, refusal = _wms_snapshot_time(layer, pairs, map_time)
@@ -1501,6 +1499,33 @@ def read_map_service(
             layer_id,
         )
     return _map_service_layer(layer, tiles, dependency, group_path, visible)
+
+
+def _is_wmst_snapshot(pairs: list[tuple[str, str]]) -> bool:
+    """Whether a WMS source string is a WMS-T layer exported as a snapshot."""
+    from . import map_services
+
+    return map_services.value(pairs, "type") == "wmst" and map_services.value(
+        pairs, "allowTemporalUpdates"
+    ).lower() not in ("false", "0")
+
+
+def follows_map_time(layer: QgsMapLayer) -> bool:
+    """Whether reading `layer` uses the time the QGIS map view draws.
+
+    True only for what `_wms_snapshot_time` reads `map_time` for: a WMS-T
+    snapshot whose dynamic temporal control is on. For every other layer the
+    time is never read, so a project without one does not need it at all.
+    """
+    from . import map_services
+
+    if (layer.providerType() or "").lower() != "wms":
+        return False
+    pairs = map_services.source_pairs(layer.source())
+    if not _is_wmst_snapshot(pairs):
+        return False
+    properties = layer.temporalProperties()
+    return properties is not None and bool(properties.isActive())
 
 
 def _wms_snapshot_time(

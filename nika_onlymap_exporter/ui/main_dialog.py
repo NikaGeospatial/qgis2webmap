@@ -126,6 +126,7 @@ from ..core.project_reader import (
     extent_from_canvas,
     finish_project,
     map_time_from_canvas,
+    needs_map_time,
     prepare_project,
     resolve_title,
     with_output_notes,
@@ -3995,6 +3996,11 @@ class MainDialog(QDialog):
         Read on every project read, like the extent: the temporal controller
         can move between opening the dialog and pressing Export.
         """
+        # None unless a layer follows QGIS's time, as the extent is None unless
+        # a setting uses the view: the read cache is keyed on it, and moving
+        # the temporal controller must not cost a re-read when nothing uses it.
+        if not needs_map_time(self.project):
+            return None
         canvas = getattr(self.iface, "mapCanvas", None)
         if canvas is None:
             return None

@@ -50,7 +50,13 @@ from .export_ir import (
 )
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
-from .layer_reader import WGS84, MapTime, PendingLayer, prepare_layer
+from .layer_reader import (
+    WGS84,
+    MapTime,
+    PendingLayer,
+    follows_map_time,
+    prepare_layer,
+)
 from .manifest_builder import (
     DEFAULT_LABEL_SIZE,
     OSM_FILE_NOTE,
@@ -198,6 +204,16 @@ def map_time_from_canvas(canvas: Any) -> MapTime | None:
         )
     except (AttributeError, RuntimeError):
         return None
+
+
+def needs_map_time(project: QgsProject) -> bool:
+    """Whether any layer of `project` reads the time the QGIS view draws.
+
+    Only a WMS-T snapshot that follows QGIS's time does (`follows_map_time`);
+    without one the time is neither read nor part of the dialog's read cache,
+    so moving the temporal controller costs nothing.
+    """
+    return any(follows_map_time(layer) for layer in project.mapLayers().values())
 
 
 def _project_terrain_kind(project: QgsProject) -> str | None:

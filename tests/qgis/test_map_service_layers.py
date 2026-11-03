@@ -400,6 +400,84 @@ class TestTime:
         assert "TIME=" not in exported.tiles.url
 
 
+class TestTimeInTheReadCache:
+    """The dialog's read cache is keyed on the QGIS view's time only when a
+    layer follows it: moving the temporal controller in any other project must
+    reuse the last read, as it did before WMS-T snapshots."""
+
+    def _dialog(self, canvas):
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+            def mapCanvas(self):  # noqa: N802 - mirrors the QGIS interface
+                return canvas
+
+        return MainDialog(FakeIface(), None)
+
+    def _reads_after_moving_time(self, qgis_app, dialog, canvas) -> list[str]:
+        """Prime the cache, move the temporal controller, and ask again."""
+        canvas.setTemporalRange(qgis_core.QgsDateTimeRange(_utc(5), _utc(5)))
+        export, report = dialog._read_current_project(None)
+        dialog._cached_export, dialog._cached_report = export, report
+        dialog._cached_signature = dialog.state.data_snapshot()
+        dialog._cached_canvas_extent = dialog._canvas_extent()
+        dialog._cached_map_time = dialog._canvas_time()
+
+        reads: list[str] = []
+        dialog._start_job = lambda *a, **k: reads.append("read") or False
+        used: list[object] = []
+        dialog._ensure_export(lambda e, r: used.append(e), "Reading", quiet=True)
+        assert reads == [] and len(used) == 1, "an unmoved view reuses the read"
+
+        canvas.setTemporalRange(qgis_core.QgsDateTimeRange(_utc(6), _utc(6)))
+        dialog._ensure_export(lambda e, r: used.append(e), "Reading", quiet=True)
+        if not reads:
+            assert len(used) == 2
+        return reads
+
+    def test_without_a_layer_that_follows_time_the_cache_survives(
+        self, qgis_app, project, services, make_memory_layer
+    ) -> None:
+        from qgis.gui import QgsMapCanvas
+
+        project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+        # A WMS-T on the Server default takes no time from QGIS either.
+        project.addMapLayer(
+            _wms(
+                services.url("cors/wms"),
+                crs="EPSG:3857",
+                extra="&type=wmst&allowTemporalUpdates=false"
+                "&timeDimensionExtent=2020-01-01/2020-12-31/P1D",
+            )
+        )
+        canvas = QgsMapCanvas()
+        dialog = self._dialog(canvas)
+        try:
+            assert self._reads_after_moving_time(qgis_app, dialog, canvas) == []
+        finally:
+            dialog.close()
+            canvas.deleteLater()
+
+    def test_with_a_layer_that_follows_time_moving_it_re_reads(
+        self, qgis_app, project, services
+    ) -> None:
+        from qgis.gui import QgsMapCanvas
+
+        project.addMapLayer(
+            _wms(services.url("cors/wms"), crs="EPSG:3857", extra=YEAR_EXTENT)
+        )
+        canvas = QgsMapCanvas()
+        dialog = self._dialog(canvas)
+        try:
+            assert self._reads_after_moving_time(qgis_app, dialog, canvas) == ["read"]
+        finally:
+            dialog.close()
+            canvas.deleteLater()
+
+
 class TestWmts:
     def test_the_google_grid_becomes_a_tile_template(self, qgis_app, services) -> None:
         layer = _wmts(services.url("cors/wmts"))
