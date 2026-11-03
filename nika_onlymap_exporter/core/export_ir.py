@@ -864,6 +864,47 @@ class RasterSpec:
         }
 
 
+class FilterKind(str, Enum):
+    """What a layer's filter panel offers, from its field's type.
+
+    A number or a date is a range slider; text is a tick box per value. A date
+    and a date and time differ only in how the slider labels its ends.
+    """
+
+    NUMBER = "number"
+    DATE = "date"
+    DATETIME = "datetime"
+    TEXT = "text"
+
+
+@dataclass(frozen=True)
+class LayerFilterSpec:
+    """A panel on the web map that filters one layer by one of its fields.
+
+    `field_name` is the property the runtime filters on: the field itself, or
+    for a date its time in milliseconds, the only form the runtime's slider
+    reads (`core.attribute_filter`). `title` is the field's alias, the panel's
+    heading. A slider spans `value_range`, every feature's value; tick boxes
+    list `categories`, every value, all ticked, so the map opens showing what
+    QGIS shows.
+    """
+
+    field_name: str
+    title: str
+    kind: FilterKind
+    value_range: tuple[float, float] | None = None
+    categories: tuple[str, ...] = ()
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "field": self.field_name,
+            "title": self.title,
+            "kind": self.kind.value,
+            "range": list(self.value_range) if self.value_range else None,
+            "categories": list(self.categories),
+        }
+
+
 @dataclass(frozen=True)
 class LegendImage:
     """A legend picture a map service draws, loaded by the viewer's browser.
@@ -1124,6 +1165,8 @@ class ExportLayer:
     # The dialog's per-layer "Cluster dense points". Off, `declutter` leaves the
     # layer's points as they are however crowded.
     cluster_allowed: bool = True
+    # The dialog's per-layer "Filter by"; `None` - the default - is no filter.
+    filter: LayerFilterSpec | None = None
     renderer: RendererSpec = field(
         default_factory=lambda: RendererSpec(kind=RendererKind.UNSUPPORTED)
     )
@@ -1216,6 +1259,8 @@ class ExportLayer:
                 self.highlight_color.snapshot() if self.highlight_color else None
             ),
         }
+        if self.filter is not None:
+            data["filter"] = self.filter.snapshot()
         if self.popup_pictures:
             data["popupPictures"] = [
                 {"name": p.name, "sizeBytes": len(p.data)} for p in self.popup_pictures

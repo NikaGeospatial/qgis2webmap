@@ -249,6 +249,10 @@ class LayerSettings:
     # beside it, always, with a halo - the names without clicking for a popup.
     cluster: bool = True
     name_field: str | None = None
+    # Any vector layer: the field the web map's filter panel filters it by.
+    # `None` is no filter. A filtered layer does not cluster (see
+    # `project_reader._unclustered_for_its_filter`).
+    filter_field: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -269,6 +273,8 @@ class LayerSettings:
             data["cluster"] = False
         if self.name_field:
             data["nameField"] = self.name_field
+        if self.filter_field:
+            data["filterField"] = self.filter_field
         return data
 
     @classmethod
@@ -285,6 +291,9 @@ class LayerSettings:
             quantize_precision=_read_layer_precision(data.get("quantizePrecision")),
             cluster=bool(data.get("cluster", True)),
             name_field=str(data["nameField"]) if data.get("nameField") else None,
+            filter_field=(
+                str(data["filterField"]) if data.get("filterField") else None
+            ),
         )
 
     def resolved_hover(self, map_wide: bool) -> bool:

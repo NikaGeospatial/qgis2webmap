@@ -24,6 +24,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
   the zoom controls, bottom left, and is not drawn in a cartograph's
   interactive frames.
+- **Filter by**, a new choice on a vector layer's *This layer only* row in
+  the Layers tab: the web map gets a panel, top left, that filters the layer
+  by that field - a slider for a number or a date, a tick box per value for
+  text of up to 50 values (a field with more is refused and the Fidelity tab
+  says so). Headed by the field's alias. The Fidelity tab also says what it
+  cannot do: features with no value in the field are hidden while the filter
+  is there, a filtered layer's points are not merged into count bubbles, and
+  its labels are not filtered.
 - **Let readers switch basemap**, a new switch under the basemap on the Map
   tab, off by default: the map carries a Basemap panel, top left under the
   layer switcher, listing the keyless basemaps with the map's own ticked. In a

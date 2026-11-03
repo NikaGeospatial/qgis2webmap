@@ -230,9 +230,30 @@ Expand a layer to list its fields. Each gets its own setting:
 
 **One exception, and it is deliberate.** A field the map *draws* with — the one a
 categorised or graduated style is based on, the one labels read their text from,
-or an extrusion height — stays in the file even when you hide it. Removing it
-would conceal nothing, since it is visible on the map either way; it would only
-break the drawing.
+an extrusion height, or the one the layer is filtered by — stays in the file
+even when you hide it. Removing it would conceal nothing, since it is visible on
+the map either way; it would only break the drawing.
+
+### Filter by
+
+The **This layer only** row of an expanded vector layer has **Filter by**,
+on *none* to start. Choose one of the layer's fields and the map gets a panel,
+top left under the layer switcher, headed by the field's alias, that filters
+the layer by it:
+
+- a **number** or a **date** gets a slider with a low and a high end, which
+  start at the smallest and largest value, so the map opens showing every
+  feature;
+- **text** gets a tick box for each of its values, with how many features have
+  it, all ticked. A field with more than 50 different values is refused — a
+  list that long is not a filter — and the Fidelity tab says so.
+
+Only those three kinds of field are offered. A feature with no value in the
+field is hidden while the layer has a filter, since the filter keeps features
+by their value; the Fidelity tab counts them. A filtered layer's points are not
+merged into count bubbles, because the map's filter cannot count the bubbles
+again, and its labels stay on for features the filter hides. Cartograph frames
+carry no filter panel.
 
 ### Set every field to … Apply to all layers
 

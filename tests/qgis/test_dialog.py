@@ -2214,7 +2214,7 @@ class TestDialogConstruction:
         row = _options_row(dialog, dialog.layer_tree.topLevelItem(0))
 
         combos = row.findChildren(QComboBox)
-        assert len(combos) == 2, "hover and precision"
+        assert len(combos) == 3, "hover, precision and the filter"
         assert row.findChild(QgsColorButton) is not None, "highlight colour"
         # Everything starts on "same as the map", so an untouched project is
         # unchanged by the existence of this row.

@@ -32,8 +32,10 @@ from qgis.core import (
     QgsVectorLayerFeatureSource,
     QgsWkbTypes,
 )
+from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtXml import QDomDocument
 
+from .attribute_filter import FilterOutcome, FilterRequest, build_filter
 from .elevation_translator import translate_elevation
 from .export_ir import (
     AssetDependency,
@@ -42,6 +44,7 @@ from .export_ir import (
     ElevationSpec,
     ExportLayer,
     Extent,
+    FilterKind,
     GeometryKind,
     LabelingSpec,
     LegendImage,
@@ -2421,6 +2424,8 @@ class PendingLayer:
     clip_extent: Any | None
     drawing: frozenset[str]
     renumber_ids: bool = False
+    # The dialog's "Filter by", worked out in `finish` from the data itself.
+    filter_request: FilterRequest | None = None
 
     def finish(self, report: FidelityReportBuilder) -> ExportLayer | None:
         """Read the features and complete the layer. **Safe off the GUI thread.**"""
@@ -2466,6 +2471,12 @@ class PendingLayer:
             base.layer_id,
         )
 
+        layer_filter = None
+        if self.filter_request is not None:
+            outcome = build_filter(geojson, self.filter_request)
+            geojson, layer_filter = outcome.geojson, outcome.spec
+            _report_filter(base, popup, self.filter_request, outcome, report)
+
         feature_count = len(geojson.get("features") or ())
         if feature_count == 0 and read_count > 0:
             report.unsupported(
@@ -2490,6 +2501,96 @@ class PendingLayer:
             feature_count=feature_count,
             geojson=geojson,
             feature_ids=feature_ids,
+            filter=layer_filter,
+        )
+
+
+def filter_kind(field: Any) -> FilterKind | None:
+    """What a filter by this `QgsField` would be, or `None` for a type no
+    filter panel reads: a yes/no, a time of day, a list, a blob."""
+    kind = field.type()
+    if kind == QMetaType.Type.Bool:
+        return None
+    if field.isNumeric():
+        return FilterKind.NUMBER
+    if kind == QMetaType.Type.QDate:
+        return FilterKind.DATE
+    if kind == QMetaType.Type.QDateTime:
+        return FilterKind.DATETIME
+    if kind == QMetaType.Type.QString:
+        return FilterKind.TEXT
+    return None
+
+
+def _filter_request(
+    layer: QgsVectorLayer, field_name: str, report: FidelityReportBuilder
+) -> FilterRequest | None:
+    """The dialog's "Filter by" for `layer`, or `None` after saying why not."""
+    index = layer.fields().lookupField(field_name)
+    field = layer.fields().at(index) if index >= 0 else None
+    kind = filter_kind(field) if field is not None else None
+    if field is None or kind is None:
+        report.unsupported(
+            f"Filter on '{layer.name()}'",
+            f"The layer is set to be filtered by '{field_name}', which "
+            + (
+                "it no longer has"
+                if field is None
+                else "is not a number, a date or text"
+            )
+            + ", so the map has no filter for it. Choose another field under "
+            "This layer only on the Layers tab.",
+            layer.id(),
+        )
+        return None
+    return FilterRequest(field.name(), field.displayName() or field.name(), kind)
+
+
+def _report_filter(
+    base: ExportLayer,
+    popup: PopupSpec,
+    request: FilterRequest,
+    outcome: FilterOutcome,
+    report: FidelityReportBuilder,
+) -> None:
+    """The Fidelity rows for a layer's filter panel, or for its absence."""
+    subject = f"Filter on '{base.name}'"
+    spec = outcome.spec
+    if spec is None:
+        report.unsupported(subject, outcome.refusal or "", base.layer_id)
+        return
+    how = (
+        f"a tick box for each of its {len(spec.categories)} values"
+        if spec.kind is FilterKind.TEXT
+        else "a slider over the range of its values"
+    )
+    shown = {field.name for field in popup.visible_fields} if popup.enabled else set()
+    carried = (
+        ""
+        if request.field_name in shown
+        else " Its values travel in the map's data, though its popup row is hidden."
+    )
+    report.preserved(
+        subject,
+        f"A panel in the map's top-left corner filters the layer by "
+        f"'{spec.title}', with {how}.{carried}",
+        base.layer_id,
+    )
+    if outcome.missing:
+        report.approximated(
+            subject,
+            f"{outcome.missing:,} feature{' has' if outcome.missing == 1 else 's have'}"
+            f" no '{spec.title}', and the filter hides "
+            f"{'it' if outcome.missing == 1 else 'them'}: it keeps a feature by "
+            "its value.",
+            base.layer_id,
+        )
+    if base.labeling.enabled:
+        report.approximated(
+            subject,
+            "The filter does not reach the layer's labels: a label stays on "
+            "the map when its feature is filtered out.",
+            base.layer_id,
         )
 
 
@@ -2509,6 +2610,7 @@ def read_layer(
     name_field: str | None = None,
     cluster: bool = True,
     map_time: MapTime | None = None,
+    filter_field: str | None = None,
 ) -> ExportLayer | None:
     """Read one layer into the normalized model, on the calling thread.
 
@@ -2531,6 +2633,7 @@ def read_layer(
         name_field=name_field,
         cluster=cluster,
         map_time=map_time,
+        filter_field=filter_field,
     )
     if isinstance(prepared, PendingLayer):
         return prepared.finish(report)
@@ -2554,6 +2657,7 @@ def prepare_layer(
     cluster: bool = True,
     scans: LayerScans | None = None,
     map_time: MapTime | None = None,
+    filter_field: str | None = None,
 ) -> ExportLayer | PendingLayer | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
@@ -2577,6 +2681,10 @@ def prepare_layer(
 
     `map_time` is the time the QGIS map view draws, for a WMS-T layer that
     follows it; `None` when there is no view (see `MapTime`).
+
+    `filter_field` is the dialog's "Filter by": the field the web map's filter
+    panel filters this vector layer by, kept in the data whatever the popup
+    shows. `None` is no filter.
     """
     layer_id = layer.id()
     name = layer.name()
@@ -2656,9 +2764,17 @@ def prepare_layer(
     display_names = popup_display_names(layer, popup)
     popup = popup_reading_display(popup, display_names)
 
+    filter_request = (
+        _filter_request(layer, filter_field, report) if filter_field else None
+    )
+    # The filter reads its field by name, like everything that draws.
+    drawing = set(drawing_fields(renderer, labeling, elevation))
+    if filter_request is not None:
+        drawing.add(filter_request.field_name)
+
     # The primary-key check reads the live layer, so it is made here; the strip
     # it guards happens in `PendingLayer.finish`.
-    keep = set(drawing_fields(renderer, labeling, elevation))
+    keep = set(drawing)
     if popup.enabled:
         keep |= {field.name for field in popup.visible_fields}
     keep |= set(display_names)
@@ -2704,6 +2820,7 @@ def prepare_layer(
         features=features,
         precision=GEOJSON_PRECISION if precision is None else precision,
         clip_extent=clip_extent,
-        drawing=frozenset(drawing_fields(renderer, labeling, elevation)),
+        drawing=frozenset(drawing),
         renumber_ids=renumber_ids,
+        filter_request=filter_request,
     )

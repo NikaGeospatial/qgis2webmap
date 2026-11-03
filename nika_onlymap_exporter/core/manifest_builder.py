@@ -38,7 +38,9 @@ from .export_ir import (
     ExportLayer,
     ExportProject,
     ExportSettings,
+    FilterKind,
     GeometryKind,
+    LayerFilterSpec,
     OutputMode,
     PopupFieldMode,
     PopupFieldSpec,
@@ -1315,6 +1317,9 @@ def build_layer_element(
         )
         attributes.append(("get-cluster-radius", cluster_radius_expression(layer)))
 
+    if layer.filter is not None:
+        attributes.extend(_filter_attributes(layer.filter))
+
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))
 
@@ -1849,6 +1854,8 @@ WIDGET_POSITIONS = {
     "layer-switcher": "top-left",
     # Under the layer switcher: the other list of what the map shows.
     "basemap-switcher": "top-left",
+    # Under both: each narrows one layer the switcher lists.
+    "filter": "top-left",
     "zoom-controls": "bottom-left",
     "scale-bar": "bottom-left",
     "measure": "bottom-left",
@@ -2094,6 +2101,48 @@ def _legend_image_markup(layer: ExportLayer, indent: str) -> list[str]:
     return lines
 
 
+def _filter_attributes(spec: LayerFilterSpec) -> list[tuple[str, str | None]]:
+    """The filter a layer's filter panel drives, as the map opens: a range
+    over every value, or every value kept. The panel reads its mode - slider
+    or tick boxes - from which of the two the layer declares."""
+    if spec.kind is FilterKind.TEXT:
+        return [
+            ("filter-category", spec.field_name),
+            (
+                "filter-categories",
+                json.dumps(list(spec.categories), ensure_ascii=False),
+            ),
+        ]
+    low, high = spec.value_range or (0.0, 0.0)
+    return [
+        ("filter-field", spec.field_name),
+        ("filter-range", f"[{_number(low)}, {_number(high)}]"),
+    ]
+
+
+def build_filter_widget(layer: ExportLayer, indent: str) -> str:
+    """The runtime's filter panel for `layer`, headed by its field's alias.
+
+    A date's ends are labelled in UTC, the zone its milliseconds were counted
+    in (`core.attribute_filter`), so they read as the dates QGIS shows.
+    """
+    spec = layer.filter
+    if spec is None:
+        return ""
+    attributes = (
+        f'layer="{escape_attr(layer.layer_id)}" '
+        f'field="{escape_attr(spec.field_name)}" '
+        f'title="{escape_attr(spec.title)}"'
+    )
+    if spec.kind in (FilterKind.DATE, FilterKind.DATETIME):
+        style = "date" if spec.kind is FilterKind.DATE else "datetime"
+        attributes += f' format="date" date-style="{style}" time-zone="UTC"'
+    return (
+        f'{indent}<om-widget type="filter" {attributes} '
+        f'position="{WIDGET_POSITIONS["filter"]}"></om-widget>'
+    )
+
+
 def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     """A static legend whose swatches are the map's own markers.
 
@@ -2193,6 +2242,12 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
             f'options="{" ".join(basemaps)}" '
             f'position="{WIDGET_POSITIONS["basemap-switcher"]}"></om-widget>'
         )
+    # One panel per filtered layer, in draw order, under the switchers.
+    widgets.extend(
+        build_filter_widget(layer, indent)
+        for layer in project.exportable_layers
+        if layer.filter is not None
+    )
     if settings.show_measure:
         widgets.append(
             f'{indent}<om-widget type="measure" '

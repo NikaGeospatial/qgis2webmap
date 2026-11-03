@@ -332,7 +332,7 @@ stopped merging, and its popups open on points, not bubbles. Points at exactly
 the same spot stay one bubble showing how many there are. The Fidelity tab
 gives the zoom at which the points show one by one. Untick **Cluster dense
 points** on the layer's **Points** row in the **Layers** tab to show every
-point instead.
+point instead. A layer with a filter (see *Filter by* below) does not cluster.
 
 **Names beside every point.** On a point layer's **Points** row, **Names**
 picks a field whose value shows beside each point with a halo, without clicking
@@ -439,6 +439,15 @@ settings can be overridden for that layer alone:
 A point layer also has a **Points** row: **Names** shows a field's value beside
 every point, with a halo, and **Cluster dense points** (on by default) can be
 unticked to show every point rather than count bubbles.
+
+**Filter by**, on the **This layer only** row, gives the web map a panel that
+filters the layer by one of its fields: a slider for a number or a date, a tick
+box per value for text of up to 50 values. The panel sits top left, under the
+layer switcher, one per filtered layer, headed by the field's alias. It works
+in a map opened from a file and over http. What it cannot do is reported in the
+Fidelity tab: a feature with no value in the field is hidden while the filter
+is there, a filtered layer's points do not merge into count bubbles (the filter
+cannot count the bubbles again), and the layer's labels are not filtered.
 
 Each starts on *"same as map"*, so a layer you never touch follows the map-wide
 choice. This is deliberately something qgis2web has never offered: the same

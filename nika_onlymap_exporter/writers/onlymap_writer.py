@@ -607,6 +607,7 @@ _WIDGET_ORIGINS = {
     "legend": "top right",
     "layer-switcher": "top left",
     "basemap-switcher": "top left",
+    "filter": "top left",
     "zoom-controls": "bottom left",
     "scale-bar": "bottom left",
     "measure": "bottom left",
@@ -702,13 +703,16 @@ def _top_left_stack_block(project: ExportProject) -> str:
 
     A transform moves nothing out of the way, so each panel scaled on its own
     grew down over the one under it. The layer switcher was alone up there
-    until the basemap switcher joined it; with company, the corner's slot is
-    scaled from its corner instead, and the panels in it are not scaled again.
+    until the basemap switcher and the filter panels joined it; with company,
+    the corner's slot is scaled from its corner instead, and the panels in it
+    are not scaled again.
     A narrow map that folds them into a drawer takes them out of the slot,
     where each keeps its own scale. Empty for a corner with the switcher alone,
     which keeps the rules it always had.
     """
-    if not switcher_basemaps(project.settings):
+    if not switcher_basemaps(project.settings) and not any(
+        layer.filter is not None for layer in project.exportable_layers
+    ):
         return ""
     scale = project.settings.chrome_scale
     return "\n".join(

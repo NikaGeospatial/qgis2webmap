@@ -508,6 +508,9 @@ def prepare_project(
             cluster=per_layer.cluster,
             scans=scans,
             map_time=map_time,
+            # Not in a cartograph's frames (`layer_order`): a filter panel is a
+            # control on the web map, and a frame is a map on a printed page.
+            filter_field=per_layer.filter_field if layer_order is None else None,
         )
         entries.append((map_layer.name(), prepared))
 
@@ -783,6 +786,8 @@ def _declutter(
     """
     decluttered: list[ExportLayer] = []
     for layer in layers:
+        if layer.filter is not None and layer.cluster_allowed:
+            layer = _unclustered_for_its_filter(layer, report)
         layer, stacked = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)
         if layer.cluster_max_zoom is not None:
             report.approximated(
@@ -828,6 +833,28 @@ def _declutter(
             )
         decluttered.append(layer)
     return decluttered
+
+
+def _unclustered_for_its_filter(
+    layer: ExportLayer, report: FidelityReportBuilder
+) -> ExportLayer:
+    """`layer`, which has a filter, kept from clustering - and said so when it
+    would have clustered.
+
+    The runtime's filter hides points but does not count the bubbles again,
+    so a bubble would go on counting the points the reader filtered out.
+    """
+    clustered = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)[0]
+    if clustered.cluster_max_zoom is not None:
+        report.approximated(
+            f"Markers of '{layer.name}'",
+            f"{layer.feature_count:,} points pile up when zoomed out, but they "
+            "are not merged into count bubbles, because the layer has a filter "
+            "and the map's filter cannot count the bubbles again. Every point "
+            "shows at every zoom.",
+            layer.layer_id,
+        )
+    return dataclasses.replace(layer, cluster_allowed=False)
 
 
 @dataclasses.dataclass(frozen=True)
