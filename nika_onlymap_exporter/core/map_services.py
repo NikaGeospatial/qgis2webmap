@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import math
 import re
+
 # Parses capabilities QGIS stored, and refuses entity declarations first.
 import xml.etree.ElementTree as ET  # nosec B405
 from collections.abc import Iterable, Sequence

@@ -27,6 +27,7 @@ import functools
 import hashlib
 import re
 import threading
+
 # Parses QGIS's own layer XML only, and refuses entity declarations first.
 import xml.etree.ElementTree as ElementTree  # nosec B405
 from collections import OrderedDict
