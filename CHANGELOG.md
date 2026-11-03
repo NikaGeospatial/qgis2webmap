@@ -86,6 +86,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   resolution*, when passed, replace every map's saved choice.
 
 ### Fixed
+- A WMS layer made of several sublayers stacks them as QGIS draws them. The
+  web map asked the service for them in the reverse order, so the one QGIS
+  draws at the bottom covered the others; each sublayer's style stays with it.
 - Labels on multi-part features land where QGIS draws them
   ([qgis2web#1095](https://github.com/qgis2web/qgis2web/issues/1095)): every
   point of a multipoint is labelled, not only the first; a multi-part line is

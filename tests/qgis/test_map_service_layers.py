@@ -203,6 +203,84 @@ class TestWms:
         assert "not as images" in _rows(report, FidelityStatus.UNSUPPORTED)
 
 
+def _qgis_get_map(services, layer) -> tuple[str, str]:
+    """The LAYERS and STYLES QGIS itself sends when it draws `layer` in Web
+    Mercator: the ground truth, from what reached the service."""
+    from qgis.PyQt.QtCore import QSize
+
+    settings = qgis_core.QgsMapSettings()
+    settings.setLayers([layer])
+    settings.setDestinationCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"))
+    settings.setExtent(qgis_core.QgsRectangle(*TARGET))
+    settings.setOutputSize(QSize(32, 32))
+    before = len(services.requests)
+    job = qgis_core.QgsMapRendererSequentialJob(settings)
+    job.start()
+    job.waitForFinished()
+    (get_map,) = [
+        r for r in services.requests[before:] if r["params"].get("REQUEST") == "GetMap"
+    ]
+    return get_map["params"]["LAYERS"], get_map["params"]["STYLES"]
+
+
+# Around `fake_map_services.TARGET_3857`, where every sublayer draws.
+TARGET = (1280174, 6813860, 1308004, 6841175)
+
+
+class TestSublayerOrder:
+    """A WMS layer of several sublayers stacks them as QGIS does: the web map
+    asks for LAYERS and STYLES in the order QGIS's own GetMap does."""
+
+    @pytest.mark.parametrize("service", ["cors/wms", "cors/wms111"])
+    @pytest.mark.parametrize(
+        ("layers", "styles"),
+        [
+            (("target", "boundary"), ("", "")),
+            (("target", "boundary"), ("outlined", "")),
+            (("target", "boundary", "utm_only"), ("outlined", "", "")),
+            (("boundary", "target", "utm_only"), ("", "outlined", "")),
+        ],
+    )
+    def test_the_template_asks_as_qgis_asks(
+        self, qgis_app, services, service, layers, styles
+    ) -> None:
+        made = _wms(
+            services.url(service), layers=layers, styles=styles, crs="EPSG:3857"
+        )
+        # And the same layer read back from its own source string, which QGIS
+        # 4.2 lists the other way round: a project saved and opened again.
+        for layer in (made, qgis_core.QgsRasterLayer(made.source(), "again", "wms")):
+            assert layer.isValid()
+            exported, _ = _read(layer)
+            assert exported is not None
+            assert exported.tiles is not None
+            ours = dict(parse_qsl(urlsplit(exported.tiles.url).query))
+
+            assert (ours["LAYERS"], ours["STYLES"]) == _qgis_get_map(services, layer)
+
+    def test_the_legend_lists_the_top_sublayer_first(self, qgis_app, services) -> None:
+        """Top first, as a legend lists layers - the reverse of the GetMap,
+        which names the bottom one first - each picture in its own style."""
+        layer = _wms(
+            services.url("cors/wms"),
+            layers=("target", "boundary", "utm_only"),
+            styles=("outlined", "", ""),
+            crs="EPSG:3857",
+        )
+        exported, _ = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        asked_layers, asked_styles = _qgis_get_map(services, layer)
+        drawn = dict(zip(asked_layers.split(","), asked_styles.split(","), strict=True))
+
+        listed = []
+        for image in exported.tiles.legend:
+            query = dict(parse_qsl(urlsplit(image.url).query, keep_blank_values=True))
+            listed.append((query["LAYER"], query["STYLE"]))
+        assert [name for name, _ in listed] == asked_layers.split(",")[::-1]
+        assert all(drawn[name] == style for name, style in listed)
+
+
 class TestCredentials:
     """No login travels, and no key reaches the model or the report."""
 
