@@ -123,6 +123,7 @@ TOPIC_BY_HEAD = {
     "Raster": Topic.DATA,
     "Raster files": Topic.DATA,
     "Feature count": Topic.DATA,
+    "Time": Topic.DATA,
     "Artifact size": Topic.DATA,
     "Basemap": Topic.MAP,
     "Terrain": Topic.MAP,
