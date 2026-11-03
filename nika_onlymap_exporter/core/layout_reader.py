@@ -92,6 +92,7 @@ from qgis.core import (
     QgsPrintLayout,
     QgsProject,
     QgsRasterLayer,
+    QgsRuleBasedRenderer,
     QgsSimpleFillSymbolLayer,
     QgsUnitTypes,
     QgsVectorLayer,
@@ -141,6 +142,7 @@ from .layout_reading import _name
 from .legend_edit import support_left_out
 from .locator_context import has_wider_context
 from .raster_legend import layers_with_unavailable_range
+from .renderer_translator import drawn_rules
 from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
 from .settings import default_frame_mode
 
@@ -1182,12 +1184,15 @@ def _classed_legend_layers(
             count = len(renderer.categories())
         elif isinstance(renderer, QgsGraduatedSymbolRenderer):
             count = len(renderer.ranges())
+        elif isinstance(renderer, QgsRuleBasedRenderer):
+            # Exported as categories, one per rule that draws.
+            count = len(drawn_rules(renderer))
         else:
             continue
         classed.append(
             ClassedLayer(
                 geometry=_legend_shape_for_geometry(layer) or "polygon",
-                categorized=isinstance(renderer, QgsCategorizedSymbolRenderer),
+                categorized=not isinstance(renderer, QgsGraduatedSymbolRenderer),
                 class_count=count,
             )
         )

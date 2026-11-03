@@ -338,20 +338,17 @@ class TestGraduated:
 
 
 class TestUnsupportedRenderer:
-    def test_rule_based_is_named_in_the_report(
-        self, project, make_memory_layer
-    ) -> None:
+    def test_a_heatmap_is_named_in_the_report(self, project, make_memory_layer) -> None:
         layer = make_memory_layer("pts", features=[("a", [0.0, 0.0])])
-        root_rule = qgis_core.QgsRuleBasedRenderer.Rule(marker_symbol())
-        layer.setRenderer(qgis_core.QgsRuleBasedRenderer(root_rule))
+        layer.setRenderer(qgis_core.QgsHeatmapRenderer())
 
         report = FidelityReportBuilder()
         spec = translate_renderer(layer, report)
 
         assert spec.kind is RendererKind.UNSUPPORTED
-        assert spec.unsupported_reason == "QgsRuleBasedRenderer"
+        assert spec.unsupported_reason == "QgsHeatmapRenderer"
         unsupported = report.by_status(FidelityStatus.UNSUPPORTED)
-        assert any("QgsRuleBasedRenderer" in i.detail for i in unsupported)
+        assert any("QgsHeatmapRenderer" in i.detail for i in unsupported)
 
 
 RULE_RED, RULE_GREEN, RULE_BLUE = "#ff0000", "#00ff00", "#0000ff"
@@ -439,18 +436,345 @@ class TestRuleBasedAsCategories:
         ],
         ids=["range", "and", "two-fields", "same-value-twice", "no-filter", "no-field"],
     )
-    def test_any_other_rules_stay_unsupported(self, project, rules) -> None:
+    def test_any_other_rules_get_a_class_per_rule(self, project, rules) -> None:
+        """Not one field's values: QGIS matches them as the features are read
+        (see `TestRuleTree`)."""
         report = FidelityReportBuilder()
         spec = translate_renderer(_rule_layer(rules), report)
 
-        assert spec.kind is RendererKind.UNSUPPORTED
-        assert report.by_status(FidelityStatus.UNSUPPORTED)
+        assert spec.kind is RendererKind.CATEGORIZED
+        assert spec.field_generated
+        assert [c.value for c in spec.categories] == [rule[3] for rule in rules]
+        assert not report.by_status(FidelityStatus.UNSUPPORTED)
 
     def test_the_qgis_symbols_pair_with_the_classes(self, project) -> None:
         layer = _rule_layer([*CONTOURS, ("\"v\" = 'x'", RULE_BLUE, False, "off")])
         spec = translate_renderer(layer, FidelityReportBuilder())
 
         assert len(class_symbols(layer.renderer())) == len(spec.categories) == 2
+
+
+YELLOW, MAGENTA, CYAN, SLATE = "#ffff00", "#ff00ff", "#00ffff", "#808080"
+
+# One square per (v, c), 8 units wide and 10 apart along x.
+TREE_VALUES = [
+    (1, "x"),
+    (3, "x"),
+    (7, "y"),
+    (9, "x"),
+    (None, "z"),
+    (3, "y"),
+    (None, "y"),
+    (7, "z"),
+]
+
+
+def _tree_layer(rules, extra_field: str | None = None):
+    """Squares of `TREE_VALUES` drawn by the rule tree `rules`, each rule
+    `(label, filter, colour or None for no symbol, active, children)`."""
+    fields = "field=n:integer&field=v:integer&field=c:string"
+    if extra_field:
+        fields += f"&field={extra_field}:string"
+    layer = qgis_core.QgsVectorLayer(
+        f"Polygon?crs=EPSG:3857&{fields}", "tree", "memory"
+    )
+    features = []
+    for number, (value, kind) in enumerate(TREE_VALUES):
+        feature = qgis_core.QgsFeature(layer.fields())
+        attributes = [number, value, kind]
+        feature.setAttributes([*attributes, "real"] if extra_field else attributes)
+        feature.setGeometry(
+            qgis_core.QgsGeometry.fromRect(
+                qgis_core.QgsRectangle(number * 10, 0, number * 10 + 8, 8)
+            )
+        )
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.updateExtents()
+
+    def append(parent, specs):
+        for label, expression, colour, active, children in specs:
+            symbol = (
+                qgis_core.QgsFillSymbol.createSimple(
+                    {"color": colour, "outline_style": "no"}
+                )
+                if colour
+                else None
+            )
+            rule = qgis_core.QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression, label)
+            rule.setActive(active)
+            parent.appendChild(rule)
+            append(rule, children)
+
+    root = qgis_core.QgsRuleBasedRenderer.Rule(None)
+    append(root, rules)
+    layer.setRenderer(qgis_core.QgsRuleBasedRenderer(root))
+    return layer
+
+
+def _drawn_colours(layer) -> dict[int, str | None]:
+    """The colour QGIS draws on top in the middle of each square, `None`
+    where it draws nothing - its own drawing, not its API's answers."""
+    count = len(TREE_VALUES)
+    settings = qgis_core.QgsMapSettings()
+    settings.setLayers([layer])
+    settings.setDestinationCrs(layer.crs())
+    settings.setOutputSize(QtCore.QSize(40 * count, 40))
+    settings.setExtent(qgis_core.QgsRectangle(-1, -1, 10 * count - 1, 9))
+    settings.setBackgroundColor(QtGui.QColor("#ffffff"))
+    job = qgis_core.QgsMapRendererSequentialJob(settings)
+    job.start()
+    job.waitForFinished()
+    image = job.renderedImage()
+    colours: dict[int, str | None] = {}
+    for feature in layer.getFeatures():
+        middle = settings.mapToPixel().transform(
+            feature.geometry().centroid().asPoint()
+        )
+        colour = QtGui.QColor(image.pixel(int(middle.x()), int(middle.y()))).name()
+        colours[feature["n"]] = None if colour == "#ffffff" else colour
+    return colours
+
+
+def _classes(exported) -> dict[int, str | None]:
+    """The class the exported data gives each square, `None` once dropped."""
+    field = exported.renderer.field_name
+    classes: dict[int, str | None] = {n: None for n in range(len(TREE_VALUES))}
+    for feature in exported.geojson["features"]:
+        classes[feature["properties"]["n"]] = feature["properties"][field]
+    return classes
+
+
+NESTED = [
+    ("Above 1", '"v" > 1', RULE_RED, True, []),
+    (
+        "Kind x",
+        "\"c\" = 'x'",
+        None,
+        True,
+        [
+            ("Small x", '"v" < 5', YELLOW, True, []),
+            ("Other x", "ELSE", MAGENTA, True, []),
+        ],
+    ),
+    ("Rest", "ELSE", CYAN, True, []),
+]
+PARENT_AND_CHILD = [
+    ("Kind x", "\"c\" = 'x'", SLATE, True, [("Big x", '"v" > 5', RULE_BLUE, True, [])])
+]
+OVERLAPPING = [
+    ("Above 1", '"v" > 1', RULE_RED, True, []),
+    ("Above 5", '"v" > 5', RULE_BLUE, True, []),
+]
+SWITCHED_OFF = [
+    ("Off", "\"c\" = 'y'", RULE_GREEN, False, []),
+    (
+        "Off group",
+        "\"c\" = 'x'",
+        None,
+        False,
+        [("Under it", '"v" > 0', RULE_RED, True, [])],
+    ),
+    ("Rest", "ELSE", CYAN, True, []),
+]
+NO_FILTER = [
+    ("Broken", '"nope" = 1', RULE_RED, True, []),
+    ("Everything", "", RULE_GREEN, True, []),
+    ("Never", "ELSE", RULE_BLUE, True, []),
+]
+
+
+class TestRuleTree:
+    """Any rule-based renderer, as one class per rule that draws: which rule
+    draws each feature is QGIS's own answer, written into the data. The oracle
+    is QGIS's drawing - the colour on top in the middle of each square."""
+
+    @pytest.mark.parametrize(
+        "rules",
+        [NESTED, PARENT_AND_CHILD, OVERLAPPING, SWITCHED_OFF, NO_FILTER],
+        ids=["nested-and-else", "parent-and-child", "overlapping", "off", "no-filter"],
+    )
+    def test_every_feature_gets_the_colour_qgis_draws_on_top(
+        self, project, rules
+    ) -> None:
+        layer = _tree_layer(rules)
+
+        assert _exported_colours(layer) == _drawn_colours(layer)
+
+    def test_each_feature_carries_the_rule_that_draws_it(self, project) -> None:
+        exported = read_layer(_tree_layer(NESTED), FidelityReportBuilder())
+
+        assert exported.renderer.field_name == "rule"
+        assert _classes(exported) == {
+            0: "Small x",
+            1: "Small x",  # Above 1 too, under it
+            2: "Above 1",
+            3: "Other x",  # Above 1 too, under it
+            4: "Rest",
+            5: "Above 1",
+            6: "Rest",
+            7: "Above 1",
+        }
+
+    def test_switched_off_rules_draw_nothing_and_keep_else_away(self, project) -> None:
+        exported = read_layer(_tree_layer(SWITCHED_OFF), FidelityReportBuilder())
+
+        assert [c.label for c in exported.renderer.categories] == ["Rest"]
+        # What the switched-off rules pick is not drawn, and not by ELSE either.
+        assert _classes(exported) == {
+            0: None,
+            1: None,
+            2: None,
+            3: None,
+            4: "Rest",
+            5: None,
+            6: None,
+            7: "Rest",
+        }
+
+    def test_the_legend_lists_the_rules_that_draw_by_their_labels(
+        self, project
+    ) -> None:
+        spec = translate_renderer(_tree_layer(NESTED), FidelityReportBuilder())
+
+        labels = ["Above 1", "Small x", "Other x", "Rest"]
+        assert [c.label for c in spec.categories] == labels
+        # The built-in legend lists a class by its value: the same labels.
+        runtime = derive_runtime_legend(fill_expression(spec, GeometryKind.POLYGON))
+        assert runtime is not None
+        assert list(runtime.labels) == labels
+
+    def test_rules_qgis_lists_alike_are_told_apart(self, project) -> None:
+        rules = [
+            ("Same", '"v" > 5', RULE_RED, True, []),
+            ("Same", '"v" < 2', RULE_BLUE, True, []),
+            ("", "ELSE", RULE_GREEN, True, []),
+        ]
+        layer = _tree_layer(rules)
+        spec = translate_renderer(layer, FidelityReportBuilder())
+
+        assert [c.label for c in spec.categories] == ["Same", "Same (2)", "ELSE"]
+        assert _exported_colours(layer) == _drawn_colours(layer)
+
+    def test_a_feature_two_rules_draw_is_counted(self, project) -> None:
+        report = FidelityReportBuilder()
+        read_layer(_tree_layer(OVERLAPPING), report)
+
+        assert any(
+            item.detail.startswith("3 features are drawn by more than one rule")
+            for item in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    def test_the_class_property_does_not_take_a_fields_name(self, project) -> None:
+        exported = read_layer(
+            _tree_layer(OVERLAPPING, extra_field="rule"), FidelityReportBuilder()
+        )
+
+        assert exported.renderer.field_name == "rule_2"
+        properties = [f["properties"] for f in exported.geojson["features"]]
+        assert {p["rule"] for p in properties} == {"real"}
+        assert {p["rule_2"] for p in properties} == {"Above 1", "Above 5"}
+
+    def test_the_popup_does_not_show_the_class(self, project) -> None:
+        exported = read_layer(_tree_layer(NESTED), FidelityReportBuilder())
+
+        assert exported.popup.enabled
+        shown = {field.name for field in exported.popup.visible_fields}
+        assert shown == {"n", "v", "c"}
+
+    def test_the_fields_the_filters_read_are_read_but_not_written(
+        self, project, tmp_path
+    ) -> None:
+        """No popup keeps no field but the class - and the filters' fields
+        must still be read for QGIS to match the rules. From a GeoPackage:
+        a memory layer hands back every field whatever is asked for."""
+        memory = _tree_layer(NESTED)
+        path = str(tmp_path / "tree.gpkg")
+        options = qgis_core.QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName = "GPKG"
+        error = qgis_core.QgsVectorFileWriter.writeAsVectorFormatV3(
+            memory, path, qgis_core.QgsCoordinateTransformContext(), options
+        )
+        assert error[0] == qgis_core.QgsVectorFileWriter.WriterError.NoError
+        layer = qgis_core.QgsVectorLayer(path, "tree", "ogr")
+        layer.setRenderer(memory.renderer().clone())
+        expected = _classes(read_layer(memory, FidelityReportBuilder()))
+
+        bare = read_layer(layer, FidelityReportBuilder(), with_popup=False)
+
+        properties = [f["properties"] for f in bare.geojson["features"]]
+        assert all(set(p) == {"rule"} for p in properties)
+        assert [p["rule"] for p in properties] == [
+            value for value in expected.values() if value is not None
+        ]
+
+    def test_the_qgis_symbols_pair_with_the_classes(self, project) -> None:
+        layer = _tree_layer([*NESTED, ("Off", '"v" = 3', RULE_GREEN, False, [])])
+        spec = translate_renderer(layer, FidelityReportBuilder())
+
+        symbols = class_symbols(layer.renderer())
+        assert [s.color().name() for s in symbols] == [RULE_RED, YELLOW, MAGENTA, CYAN]
+        assert len(symbols) == len(spec.categories)
+
+    def test_a_root_symbol_draws_every_feature(self, project) -> None:
+        layer = _tree_layer([])
+        root = layer.renderer().rootRule()
+        root.setSymbol(qgis_core.QgsFillSymbol.createSimple({"color": RULE_GREEN}))
+
+        assert set(_exported_colours(layer).values()) == {RULE_GREEN}
+
+    def test_a_scale_range_is_reported_and_drawn_at_every_zoom(self, project) -> None:
+        layer = _tree_layer(OVERLAPPING)
+        rule = layer.renderer().rootRule().children()[1]
+        rule.setMaximumScale(1.0)
+        rule.setMinimumScale(150000.0)
+        report = FidelityReportBuilder()
+        exported = read_layer(layer, report)
+
+        # Inside the range, as QGIS draws it; outside it QGIS draws the rule
+        # under it instead, which the web map does not.
+        assert _exported_colours(layer) == _drawn_colours(layer)
+        assert "Above 5" in _classes(exported).values()
+        assert any(
+            "The rule 'Above 5' only draws within a scale range" in item.detail
+            for item in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    def test_a_filter_on_the_map_view_is_reported(self, project) -> None:
+        rules = [("Zoomed in", '"v" > 1 AND @map_scale < 5000', RULE_RED, True, [])]
+        report = FidelityReportBuilder()
+        exported = read_layer(_tree_layer(rules), report)
+
+        assert any(
+            "The rule 'Zoomed in' reads @map_scale" in item.detail
+            for item in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+        # Worked out with no map view, where @map_scale has no value.
+        assert set(_classes(exported).values()) == {None}
+
+    def test_symbol_levels_are_reported(self, project) -> None:
+        layer = _tree_layer(OVERLAPPING)
+        layer.renderer().setUsingSymbolLevels(True)
+        report = FidelityReportBuilder()
+        translate_renderer(layer, report)
+
+        assert any(
+            item.detail.startswith("Symbol levels are not kept")
+            for item in report.by_status(FidelityStatus.APPROXIMATED)
+        )
+
+    def test_nesting_is_reported_only_when_there_is_some(self, project) -> None:
+        nested, flat = FidelityReportBuilder(), FidelityReportBuilder()
+        translate_renderer(_tree_layer(NESTED), nested)
+        translate_renderer(_tree_layer(OVERLAPPING), flat)
+
+        def says(report) -> bool:
+            return any(
+                item.detail.startswith("Nested rules are listed")
+                for item in report.by_status(FidelityStatus.APPROXIMATED)
+            )
+
+        assert says(nested) and not says(flat)
 
 
 class TestMarkerShape:

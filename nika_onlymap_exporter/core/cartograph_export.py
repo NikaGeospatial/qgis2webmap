@@ -879,7 +879,8 @@ def _expression_variables(project: QgsProject) -> tuple[tuple[str, object], ...]
 def _qgis_values(tokens: Mapping[str, object]) -> Special:
     """`value_digest`'s encoding of the QGIS value types a `PendingProject`
     carries. A feature source is the layer's data, so it is encoded as that
-    layer's token; any other QGIS object is refused."""
+    layer's token, and a rule matcher by its renderer's saved XML; any other
+    QGIS object is refused."""
 
     def special(part: object, add: Callable[[object], None]) -> bool:
         if isinstance(part, LayerFeatures):
@@ -896,6 +897,19 @@ def _qgis_values(tokens: Mapping[str, object]) -> Special:
                 elif item.name == "formats_layer":
                     # A private clone of the same layer, for its formatters.
                     add(value is not None)
+                elif item.name == "rules" and value is not None:
+                    # A clone of the renderer the frame draws with (a style
+                    # override's, maybe, not the layer's own), by its saved
+                    # XML; the variables its context holds are in the key.
+                    add(
+                        (
+                            "RuleMatcher",
+                            value.field_name,
+                            value.renderer_xml,
+                            tuple(value.classes.items()),
+                            value.used_attributes,
+                        )
+                    )
                 else:
                     add(value)
             return True

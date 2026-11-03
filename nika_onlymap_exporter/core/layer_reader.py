@@ -56,6 +56,7 @@ from .labeling_translator import translate_labeling
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
 from .renderer_translator import (
+    RuleMatcher,
     category_key,
     ground_units,
     reference_render_context,
@@ -314,6 +315,11 @@ class LayerFeatures:
     # source: a wide table's other columns would be fetched and serialised
     # only to be stripped (see `keep_only_fields`). `None` reads every field.
     attribute_indexes: tuple[int, ...] | None = None
+    # A rule-based layer's rules, which write each feature's class (see
+    # `RuleMatcher`), and the indexes of the fields their filters read on top
+    # of those kept - read, not written. `None` when they read every field.
+    rules: RuleMatcher | None = None
+    rule_indexes: tuple[int, ...] | None = ()
 
     def display_values(self, features: list[QgsFeature]) -> list[dict[str, Any]]:
         """Per feature, each formatted field's shown value under its display name."""
@@ -614,22 +620,32 @@ def snapshot_features(
     display_names: Mapping[str, str] | None = None,
     keep: Iterable[str] | None = None,
     scans: LayerScans | None = None,
+    rules: RuleMatcher | None = None,
 ) -> LayerFeatures:
     """Copy out what `export_geojson_from` needs. **GUI thread only.**
 
     `display_names` is `popup_display_names`: the fields to write a shown-value
     copy of, which is none for a caller that has no popup. `keep` is the names
-    of the fields the export keeps, which are then the only ones read; `None`
-    reads them all. `scans` as for `prepare_layer`.
+    of the fields the export keeps, which are then the only ones written, and
+    read with those `rules` read; `None` reads them all. `scans` as for
+    `prepare_layer`.
     """
     from qgis.core import QgsProject
 
     formats = _field_formats(layer, display_names or {}, scans)
+    fields = layer.fields()
     attribute_indexes = None
     if keep is not None:
-        fields = layer.fields()
         attribute_indexes = tuple(
             sorted({i for i in map(fields.indexOf, keep) if i >= 0})
+        )
+    rule_indexes: tuple[int, ...] | None = ()
+    if rules is not None:
+        used = rules.used_attributes
+        rule_indexes = (
+            None
+            if used is None
+            else tuple(sorted({i for i in map(fields.indexOf, used) if i >= 0}))
         )
     return LayerFeatures(
         source=QgsVectorLayerFeatureSource(layer),
@@ -641,6 +657,8 @@ def snapshot_features(
         formats=formats,
         formats_layer=layer.clone() if formats else None,
         attribute_indexes=attribute_indexes,
+        rules=rules,
+        rule_indexes=rule_indexes,
     )
 
 
@@ -700,7 +718,12 @@ def export_geojson_from(
             )
         indexes = features.attribute_indexes
         if indexes is not None:
-            request.setSubsetOfAttributes(list(indexes))
+            # With the fields the rules read, which are not written: unless
+            # they read every field, when the request is left reading them all.
+            if features.rule_indexes is not None:
+                request.setSubsetOfAttributes(
+                    sorted({*indexes, *features.rule_indexes})
+                )
             # And only those written, rather than every other column as a
             # null. With none kept none is written: an empty list here would
             # mean every field.
@@ -714,6 +737,15 @@ def export_geojson_from(
         collection = json.loads(exporter.exportFeatures(collected))
         if features.formats:
             _add_display_values(collection, features.display_values(collected))
+        if features.rules is not None:
+            _add_rule_classes(
+                collection,
+                features.rules,
+                collected,
+                report,
+                features.layer_name,
+                layer_id,
+            )
     except (OSError, ValueError, RuntimeError) as exc:
         report.blocked(
             subject,
@@ -743,6 +775,36 @@ def _add_display_values(
         raise RuntimeError("the exporter returned a different number of features")
     for feature, values in zip(exported, shown, strict=True):
         feature["properties"] = {**(feature.get("properties") or {}), **values}
+
+
+def _add_rule_classes(
+    collection: dict[str, Any],
+    rules: RuleMatcher,
+    collected: list[QgsFeature],
+    report: FidelityReportBuilder,
+    layer_name: str,
+    layer_id: str,
+) -> None:
+    """Write which rule draws each feature into its properties, in place, and
+    say how many features more than one rule draws."""
+    exported = collection.get("features") or []
+    values, stacked = rules.values(collected)
+    if len(exported) != len(values):
+        raise RuntimeError("the exporter returned a different number of features")
+    for feature, value in zip(exported, values, strict=True):
+        feature["properties"] = {
+            **(feature.get("properties") or {}),
+            rules.field_name: value,
+        }
+    if stacked:
+        report.approximated(
+            f"Symbology of '{layer_name}'",
+            f"{stacked:,} feature{' is' if stacked == 1 else 's are'} drawn by "
+            "more than one rule in QGIS, one symbol over another. The web map "
+            "draws each once, with the symbol of the last of those rules - the "
+            "one on top.",
+            layer_id,
+        )
 
 
 def drop_hidden_features(
@@ -2419,7 +2481,14 @@ def prepare_layer(
         keep |= {field.name for field in popup.visible_fields}
     keep |= set(display_names)
     renumber_ids = primary_key_is_excluded(layer, keep)
-    features = snapshot_features(layer, clip_extent, display_names, keep, scans)
+    # The rules are matched as the features are read, from the renderer as it
+    # is now - the one just translated.
+    rules = (
+        RuleMatcher(layer, renderer.field_name)
+        if renderer.field_generated and renderer.field_name
+        else None
+    )
+    features = snapshot_features(layer, clip_extent, display_names, keep, scans, rules)
 
     base = ExportLayer(
         layer_id=layer_id,
