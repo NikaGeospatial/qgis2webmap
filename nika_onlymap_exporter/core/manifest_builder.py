@@ -2372,20 +2372,15 @@ def build_manifest(
     first. The model already reversed QGIS's top-first tree.
     """
     inner = indent + "  "
-    center_lon, center_lat = (0.0, 0.0)
-    zoom = 2.0
-
-    if project.extent is not None:
-        center_lon, center_lat = project.extent.center
-        zoom = _zoom_for_extent(project.extent.width_degrees)
+    center, zoom = opening_camera(project)
 
     # A projected map draws flat, in its own plane: the runtime refuses a
     # MapLibre basemap, terrain, pitch and bearing on it, each one an error.
     projected = project.settings.map_crs is not None
 
     attributes: list[tuple[str, str | None]] = [
-        ("center", f"[{center_lon:.6f}, {center_lat:.6f}]"),
-        ("zoom", _number(round(zoom, 2))),
+        ("center", center),
+        ("zoom", zoom),
         # Falls back to "none" rather than trusting the value: an unknown preset
         # would make the runtime request a style it cannot resolve, and a broken
         # basemap is worse than the absent one the user could have had.
@@ -2497,13 +2492,51 @@ def build_manifest(
     return "\n".join(sections)
 
 
-def _zoom_for_extent(width_degrees: float) -> float:
-    """A starting zoom that fits the data's longitude span.
+def opening_camera(project: ExportProject) -> tuple[str, str]:
+    """The `center` and `zoom` the map is written with, as attribute values.
 
-    Approximate: it fits the longitude span into one 512 px tile width and
-    ignores the latitude span and the viewport, and the runtime opens on this
-    zoom as written - it does not refit once it has measured the viewport. Tall
-    data can therefore open cropped.
+    The page's opening-view script (`map.html`, filled by `opening_view_data`)
+    lowers this zoom when the extent would not fit the window, and only while
+    the attributes are still these, so a hand edit to either one stands.
+    """
+    if project.extent is None:
+        return "[0.000000, 0.000000]", _number(2.0)
+    center_lon, center_lat = project.extent.center
+    zoom = _zoom_for_extent(project.extent.width_degrees)
+    return f"[{center_lon:.6f}, {center_lat:.6f}]", _number(round(zoom, 2))
+
+
+def opening_view_data(project: ExportProject) -> str:
+    """What the page needs to open on the whole extent, as a JavaScript value.
+
+    `null` without an extent. Otherwise the written camera, which the script
+    refits only while the map still carries it, and the extent's longitude
+    span and its south and north edges: the centre is the extent's middle, so
+    the span is what has to fit either side of it.
+    """
+    extent = project.extent
+    if extent is None:
+        return "null"
+    center, zoom = opening_camera(project)
+    return json.dumps(
+        {
+            "center": center,
+            "zoom": zoom,
+            "lonSpan": round(extent.width_degrees, 6),
+            "south": round(extent.south, 6),
+            "north": round(extent.north, 6),
+        }
+    )
+
+
+def _zoom_for_extent(width_degrees: float) -> float:
+    """The written zoom: the data's longitude span in one 512 px tile width.
+
+    A first guess, not the opening view. It ignores the latitude span and the
+    window, so the page refits it before the runtime starts (`map.html`):
+    lowered to whatever shows the whole extent, on both axes, in the window
+    the map is opened in, and left as it is when the extent already fits. A
+    zero-width extent - one point, or one meridian - starts at zoom 12.
     """
     if width_degrees <= 0:
         return 12.0

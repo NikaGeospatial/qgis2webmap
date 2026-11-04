@@ -64,6 +64,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     line_color_expression,
     needs_image_legend,
     numeric_expression,
+    opening_view_data,
     terrain_note,
 )
 
@@ -2227,6 +2228,34 @@ class TestLegendOrder:
         rules = widgets.split("<style>", 1)[1].split("</style>", 1)[0]
         assert "<" not in rules and '"]' not in rules.replace('"] {', "")
         assert "<b>" not in widgets
+
+
+class TestOpeningView:
+    def test_it_carries_the_written_camera_and_the_extent(self) -> None:
+        project = make_project(
+            extent=Extent(west=10.0, south=40.0, east=10.5, north=60.0)
+        )
+        data = json.loads(opening_view_data(project))
+        manifest = build_manifest(project)
+        assert f'center="{data["center"]}"' in manifest
+        assert f'zoom="{data["zoom"]}"' in manifest
+        assert data["lonSpan"] == 0.5
+        assert (data["south"], data["north"]) == (40.0, 60.0)
+
+    def test_an_antimeridian_extent_spans_its_own_width(self) -> None:
+        project = make_project(
+            extent=Extent(
+                west=170.0,
+                south=50.0,
+                east=-170.0,
+                north=60.0,
+                crosses_antimeridian=True,
+            )
+        )
+        assert json.loads(opening_view_data(project))["lonSpan"] == 20.0
+
+    def test_no_extent_gives_the_page_nothing_to_fit(self) -> None:
+        assert opening_view_data(make_project(extent=None)) == "null"
 
 
 class TestPopupsDoNotStack:

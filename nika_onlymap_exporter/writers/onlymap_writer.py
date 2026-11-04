@@ -33,6 +33,7 @@ from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
     build_manifest,
     collect_attributions,
+    opening_view_data,
     switcher_basemaps,
     texture_credit,
 )
@@ -231,6 +232,7 @@ class OnlyMapWriter:
             "@MANIFEST@": manifest,
             "@ATTRIBUTION@": _attribution_block(project),
             "@CAPTION@": _caption_block(project),
+            "@OPENING_VIEW@": opening_view_data(project),
             "@WIDGET_COLORS@": _widget_color_block(project),
             # Never compressed: the fallback's CSS gate must work without JS.
             "@RUNTIME_CSS@": runtime.css.decode("utf-8"),

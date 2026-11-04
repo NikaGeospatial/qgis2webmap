@@ -473,6 +473,70 @@
 @CAPTION@
 
     <!--
+      Opens the map on the whole of its extent, in the window it is opened in.
+      The zoom written on <om-map> fits the extent's width into one 512px tile
+      and knows nothing of the window, so tall data opened cropped, and a
+      phone cut the sides off wide data. This lowers it to the closest zoom at
+      which every corner of the extent is on screen - the tilt of a relief map
+      included - and leaves it as written when the extent already fits. It
+      runs before the runtime starts, so the first frame is the fitted one,
+      and it needs no server, so file:// is the same.
+
+      It stands aside for a camera someone chose: a `center` or `zoom` edited
+      by hand, and the camera the dialog's Preview keeps in the address
+      (`#camera=`). The camera model is deck.gl's: an eye 1.5 map heights from
+      the centre, tilted by `pitch`.
+    -->
+    <script>
+      (function (fit) {
+        var map = document.querySelector("om-map");
+        if (!fit || !map || location.hash.indexOf("#camera=") === 0) return;
+        if (map.getAttribute("center") !== fit.center) return;
+        if (map.getAttribute("zoom") !== fit.zoom) return;
+        var box = map.getBoundingClientRect();
+        // The room the extent has: half the map, less a margin at each edge.
+        var roomX = box.width / 2 - 16;
+        var roomY = box.height / 2 - 16;
+        if (roomX <= 0 || roomY <= 0) return;
+        // Web Mercator, as a fraction of the world's width.
+        var mercator = function (lat) {
+          var sine = Math.sin((Math.max(-85.05113, Math.min(85.05113, lat)) * Math.PI) / 180);
+          return Math.log((1 + sine) / (1 - sine)) / (4 * Math.PI);
+        };
+        var middle = mercator((fit.south + fit.north) / 2);
+        var east = fit.lonSpan / 720;
+        var north = mercator(fit.north) - middle;
+        var south = mercator(fit.south) - middle;
+        var corners = [[-east, north], [east, north], [-east, south], [east, south]];
+        var tilt = ((Number(map.getAttribute("pitch")) || 0) * Math.PI) / 180;
+        var eye = 1.5 * box.height;
+        var fits = function (zoom) {
+          var world = 512 * Math.pow(2, zoom);
+          return corners.every(function (corner) {
+            var x = corner[0] * world;
+            var y = corner[1] * world;
+            var depth = eye + y * Math.sin(tilt);
+            return (
+              depth > 0 &&
+              Math.abs((eye * x) / depth) <= roomX &&
+              Math.abs((eye * y * Math.cos(tilt)) / depth) <= roomY
+            );
+          });
+        };
+        var written = Number(fit.zoom);
+        if (fits(written)) return;
+        var low = 0;
+        var high = written;
+        for (var step = 0; step < 30; step += 1) {
+          var zoom = (low + high) / 2;
+          if (fits(zoom)) low = zoom;
+          else high = zoom;
+        }
+        map.setAttribute("zoom", String(Math.floor(low * 100) / 100));
+      })(@OPENING_VIEW@);
+    </script>
+
+    <!--
       The OnlyMap corner component. Every link is a plain static href to a
       public page: the artifact never posts anywhere, so opening it cannot move
       the map's data off the recipient's machine.

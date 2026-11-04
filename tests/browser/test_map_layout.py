@@ -167,6 +167,94 @@ BOXES = """(selector) => [...document.querySelectorAll(selector)]
   .filter(b => b.right > b.left && b.bottom > b.top)"""
 
 
+class TestTheMapOpensOnTheWholeExtent:
+    @pytest.mark.parametrize("how", HOW)
+    @pytest.mark.parametrize("size", WINDOWS, ids=lambda s: f"{s[0]}x{s[1]}")
+    @pytest.mark.parametrize("extent", (TALL, WIDE), ids=("tall", "wide"))
+    def test_every_corner_is_on_screen(
+        self, opener, runtime, tmp_path, extent, size, how
+    ) -> None:
+        corners = [
+            [extent.west, extent.south],
+            [extent.east, extent.south],
+            [extent.west, extent.north],
+            [extent.east, extent.north],
+        ]
+        entry = _write(
+            runtime,
+            tmp_path,
+            ExportProject(
+                title="Extent",
+                layers=(_layer("data", "Data", corners),),
+                extent=extent,
+            ),
+        )
+        page = opener(entry, how, size)
+
+        box = page.locator("om-map").bounding_box()
+        assert box is not None
+        for corner in corners:
+            x, y = page.evaluate(
+                "(c) => document.querySelector('om-map').project(c)", corner
+            )
+            assert 0 <= x <= box["width"] and 0 <= y <= box["height"], (
+                f"{corner} opens off the {size[0]}x{size[1]} map, at {x:.0f},{y:.0f}"
+            )
+
+    def test_wide_data_that_fits_keeps_its_written_zoom(
+        self, opener, runtime, tmp_path
+    ) -> None:
+        """On a desktop window wide data already fitted; its view is unchanged."""
+        entry = _write(
+            runtime,
+            tmp_path,
+            ExportProject(
+                title="Extent",
+                layers=(_layer("data", "Data", [(-10.0, 50.0), (10.0, 52.0)]),),
+                extent=WIDE,
+            ),
+        )
+        written = re.search(
+            r'<om-map\s[^>]*?\szoom="([^"]+)"', entry.read_text(encoding="utf-8")
+        )
+        assert written is not None
+        page = opener(entry, "file", (1200, 800))
+        assert page.locator("om-map").get_attribute("zoom") == written.group(1)
+
+    def test_the_previews_saved_camera_is_kept(self, page, runtime, tmp_path) -> None:
+        """A camera kept in the address is the one the map opens on, and the
+        fit never moves the map first."""
+        entry = _write(
+            runtime,
+            tmp_path,
+            ExportProject(
+                title="Extent",
+                layers=(_layer("data", "Data", [(10.0, 40.0), (10.5, 60.0)]),),
+                extent=TALL,
+            ),
+            preview_hook=_camera_script(),
+        )
+        # Every zoom the map is given, from before the page's own scripts run.
+        page.add_init_script(
+            """window.zoomsSet = [];
+            new MutationObserver((records) => {
+              for (const r of records) {
+                if (r.target.localName === 'om-map' && r.attributeName === 'zoom') {
+                  window.zoomsSet.push(r.target.getAttribute('zoom'));
+                }
+              }
+            }).observe(document, {attributes: true, subtree: true,
+                                  attributeFilter: ['zoom']});"""
+        )
+        page.set_viewport_size({"width": 1200, "height": 800})
+        page.goto(entry.as_uri() + "#camera=10.250000,50.000000,9.00")
+        page.wait_for_function(
+            "() => window.zoomsSet && window.zoomsSet.includes('9')",
+            timeout=30_000,
+        )
+        assert page.evaluate("() => window.zoomsSet") == ["9"]
+
+
 class TestTheLegendListsTheTopLayerFirst:
     @pytest.mark.parametrize("how", HOW)
     def test_rows_read_top_down_as_in_qgis(self, opener, runtime, tmp_path, how):

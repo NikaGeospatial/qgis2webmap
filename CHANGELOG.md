@@ -149,6 +149,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - OGC API Features and SensorThings layers are described as web services in
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
+- The map opens showing the whole data extent, top to bottom and side to
+  side, in the window it is opened in. The opening zoom only fitted the
+  extent's width into a nominal 512px, so tall data opened cropped top and
+  bottom and a phone cut the sides off wide data. A map whose extent already
+  fits opens as before; a map opened with a saved camera (the Preview keeps
+  one) or with its `center` or `zoom` edited by hand opens on that.
 - The legend lists the top layer first, as QGIS's Layers panel does, with a
   layer's labels right under it. It listed them bottom first, in the order
   the map draws them. The layer switcher's order is still OnlyMap's.
