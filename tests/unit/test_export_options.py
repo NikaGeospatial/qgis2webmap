@@ -557,9 +557,10 @@ class TestBasemapSwitcher:
         assert 'om-widget[type="basemap-switcher"]' in zoomed
         # The top-left corner is only capped, as every top corner is at a
         # Size other than Normal - never scaled as a whole.
-        assert "transform: scale(2.0);" not in block.split(
-            '[data-om-widget-slot="top-start"]'
-        )[1].split("}")[0]
+        assert (
+            "transform: scale(2.0);"
+            not in block.split('[data-om-widget-slot="top-start"]')[1].split("}")[0]
+        )
 
 
 class TestChromeScale:
