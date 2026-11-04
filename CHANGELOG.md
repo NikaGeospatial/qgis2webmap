@@ -155,6 +155,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   bottom and a phone cut the sides off wide data. A map whose extent already
   fits opens as before; a map opened with a saved camera (the Preview keeps
   one) or with its `center` or `zoom` edited by hand opens on that.
+- On a narrow screen the OnlyMap licence badge, bottom left, no longer
+  covers the data credit, bottom right - on a relief map, whose imagery
+  credit is long, from about 540px wide down. The credit moves up clear of
+  the badge and of whatever else is in the bottom row, and back down when
+  there is room.
 - The legend lists the top layer first, as QGIS's Layers panel does, with a
   layer's labels right under it. It listed them bottom first, in the order
   the map draws them. The layer switcher's order is still OnlyMap's.

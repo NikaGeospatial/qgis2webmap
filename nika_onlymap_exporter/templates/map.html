@@ -96,8 +96,17 @@
            chrome carries `order: 2147483647`, so inside the slot it is always
            last, which in a column means always bottom-most. Moving the chip
            into `build_manifest` would put the attribution *under* it, not over.
-           Hence document rules on both. */
-        bottom: 12px;
+           Hence document rules on both.
+
+           Lifted off the corner when the corner is not free: on a narrow map
+           the runtime's licence badge reaches across from the bottom-left
+           and the chip sat on it. The badge is the runtime's to place and
+           ours to leave alone, so the chip moves - up, as the runtime moves
+           its own attribution clear of the badge - to the lowest place
+           where it covers nothing in the bottom row. `--om-credit-bottom`
+           is that place, measured in the page (see the script after the
+           footer). */
+        bottom: var(--om-credit-bottom, 12px);
         z-index: 2;
         max-width: min(22rem, calc(100% - 24px));
         padding: 0.4rem 0.6rem;
@@ -383,16 +392,17 @@
       @media not print {
         :root {
           --om-credit-height: var(--om-credit-measured);
+          --om-credit-bottom: var(--om-credit-lifted);
         }
       }
       [data-om-widget-slot="bottom-end"] {
         bottom: calc(
-          12px + max(var(--om-credit-height, 36px), 36px) + 8px
+          var(--om-credit-bottom, 12px) + max(var(--om-credit-height, 36px), 36px) + 8px
         ) !important;
       }
       body:has(.om-credit-data) [data-om-widget-slot="bottom-end"] {
         bottom: calc(
-          12px + max(var(--om-credit-height, 54px), 54px) + 8px
+          var(--om-credit-bottom, 12px) + max(var(--om-credit-height, 54px), 54px) + 8px
         ) !important;
       }
 
@@ -437,7 +447,7 @@
       body:has([data-om-badge]):has(.om-credit-data)
         [data-om-widget-slot="bottom-end"] {
         bottom: calc(
-          12px + max(var(--om-credit-height, 36px), 36px) + 8px
+          var(--om-credit-bottom, 12px) + max(var(--om-credit-height, 36px), 36px) + 8px
         ) !important;
       }
       body:has([data-om-badge]):not(:has(.om-credit-data))
@@ -583,17 +593,80 @@
       module, so it runs as the parser reaches it and has measured before the
       first paint; it needs no server, so file:// is the same. Without it the
       stylesheet falls back to the heights it would assume anyway.
+
+      It also finds the chip's place, `--om-credit-lifted`: the corner, unless
+      something in the bottom row is under the chip's width there - the
+      licence badge, the controls stacked on it, a folded drawer's button.
+      Then the chip goes up past each of them, by the runtime's 8px gap, until
+      it covers none. Only what shares the chip's width is in the way, so on
+      a wide map, where the badge ends well short of the chip, it stays in the
+      corner. Those controls arrive with the runtime and move as the window
+      changes, so this runs again whenever any of them does.
     -->
     <script>
       (function () {
         var chip = document.querySelector(".om-credit");
         if (!chip || typeof ResizeObserver !== "function") return;
         var root = document.documentElement.style;
-        new ResizeObserver(function () {
+        var BOTTOM_ROW =
+          '[data-om-widget-slot="bottom-start"] > *, ' +
+          '[data-om-widget-slot="bottom-center"] > *';
+        var GAP = 8;
+        var lift = function () {
+          var box = chip.getBoundingClientRect();
+          var floor = document.body.getBoundingClientRect().bottom;
+          var bottom = 12;
+          if (box.width === 0) return bottom;
+          var below = [];
+          document.querySelectorAll(BOTTOM_ROW).forEach(function (control) {
+            var r = control.getBoundingClientRect();
+            if (r.width > 0 && r.height > 0 && r.left < box.right && box.left < r.right) {
+              below.push(r);
+            }
+          });
+          // Each pass only raises the chip, so it settles.
+          for (var moved = true; moved; ) {
+            moved = false;
+            below.forEach(function (r) {
+              var chipBottom = floor - bottom;
+              var chipTop = chipBottom - box.height;
+              if (chipTop < r.bottom + GAP && r.top - GAP < chipBottom) {
+                bottom = Math.ceil(floor - r.top + GAP);
+                moved = true;
+              }
+            });
+          }
+          return bottom;
+        };
+        var pending = false;
+        var place = function () {
+          pending = false;
           // Rounded up: a fractional height must not let the slot touch it.
           var height = Math.ceil(chip.getBoundingClientRect().height);
           root.setProperty("--om-credit-measured", height + "px");
-        }).observe(chip);
+          root.setProperty("--om-credit-lifted", lift() + "px");
+          document
+            .querySelectorAll(
+              '[data-om-widget-slot="bottom-start"], [data-om-widget-slot="bottom-center"]'
+            )
+            .forEach(function (slot) {
+              observer.observe(slot);
+            });
+        };
+        var later = function () {
+          if (pending) return;
+          pending = true;
+          requestAnimationFrame(place);
+        };
+        var observer = new ResizeObserver(function () {
+          place();
+        });
+        observer.observe(chip);
+        window.addEventListener("resize", later);
+        var map = document.querySelector("om-map");
+        if (map && typeof MutationObserver === "function") {
+          new MutationObserver(later).observe(map, { childList: true, subtree: true });
+        }
       })();
     </script>
 

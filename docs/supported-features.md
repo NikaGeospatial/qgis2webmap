@@ -492,8 +492,9 @@ everything else is unaffected.
 
 A credit set on a layer — in **Layer Properties → QGIS Server → Attribution**,
 or as metadata rights — is shown in the map's credit component, in the
-bottom-right corner. Credits from several layers are combined, and duplicates
-appear once.
+bottom-right corner - or just above it, on a screen narrow enough that the
+OnlyMap badge or the controls in the bottom-left corner reach across under
+it. Credits from several layers are combined, and duplicates appear once.
 
 They sit outside the collapsing part of that component, so they stay visible on
 a phone: attribution hidden behind a click does not discharge a licence

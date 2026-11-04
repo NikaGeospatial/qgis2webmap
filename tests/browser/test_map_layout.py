@@ -339,3 +339,50 @@ class TestTheLegendListsTheTopLayerFirst:
         assert heights[0] == heights[1]
 
 
+@pytest.fixture(scope="module")
+def relief_map(runtime, tmp_path_factory) -> Path:
+    """A relief map carries the imagery credit, and a layer adds its own."""
+    return _write(
+        runtime,
+        tmp_path_factory.mktemp("relief"),
+        ExportProject(
+            title="Relief",
+            layers=(
+                _layer(
+                    "sites",
+                    "Sites",
+                    [(0.1, 51.1), (0.5, 51.4)],
+                    attribution="© Fixture Survey",
+                ),
+            ),
+            extent=Extent(west=-1.0, south=50.9, east=1.0, north=51.9),
+            settings=ExportSettings(terrain="terrarium", basemap="osm"),
+        ),
+    )
+
+
+class TestTheBadgeAndTheCreditChip:
+    @pytest.mark.parametrize("how", HOW)
+    @pytest.mark.parametrize("width", (640, 540, 480, 430, 400, 375, 360, 320))
+    def test_they_never_cover_each_other(self, opener, relief_map, width, how):
+        page = opener(relief_map, how, (width, 700))
+        badge = page.evaluate(BOXES, "[data-om-badge]")
+        chip = page.evaluate(BOXES, ".om-credit")
+        assert badge and chip, "the badge and the data credit are both on the map"
+        assert not _overlap(badge[0], chip[0]), (
+            f"at {width}px the credit chip {chip[0]} covers the badge {badge[0]}"
+        )
+        # Nor anything else in the bottom row, nor the attribution above it.
+        others = page.evaluate(
+            BOXES,
+            '[data-om-widget-slot="bottom-start"] > *, '
+            '[data-om-widget-slot="bottom-center"] > *, '
+            '[data-om-widget-slot="bottom-end"] > *',
+        )
+        for other in others:
+            assert not _overlap(chip[0], other), (
+                f"at {width}px the credit chip covers {other['name']}"
+            )
+        assert chip[0]["right"] <= width and chip[0]["bottom"] <= 700
+
+
