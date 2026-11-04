@@ -139,7 +139,12 @@ from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
 from .keyable_expressions import has_unkeyable_expression, is_unkeyable_expression
-from .layer_reader import LayerFeatures, PendingLayer, RelationTable
+from .layer_reader import (
+    LayerFeatures,
+    PendingLayer,
+    PendingRemoteRaster,
+    RelationTable,
+)
 from .layout_reader import (
     ATLAS_SUBJECT,
     AtlasRequirement,
@@ -1222,7 +1227,9 @@ def fit_legends_to_layout(
     qgis_layer_ids: dict[str, dict[str, str]] = {}
     for source, pending in zip(prepared.live_frames, prepared.live_reads, strict=True):
         base_layers = [
-            entry.base if isinstance(entry, PendingLayer) else entry
+            entry.base
+            if isinstance(entry, (PendingLayer, PendingRemoteRaster))
+            else entry
             for _name, entry in pending.entries
             if entry is not None
         ]

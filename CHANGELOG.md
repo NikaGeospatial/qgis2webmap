@@ -68,7 +68,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the file holds it, compressed with DEFLATE, JPEG, WEBP or nothing; the
   server must allow web pages to read the file (CORS) and to ask for parts of
   it (Range requests). LZW, ZSTD and LERC files are refused until the runtime
-  decodes them. Works in a map opened from a file too.
+  decodes them, and so is a file that is not a GeoTIFF (such as a VRT) or
+  whose header cannot be read. The header is read off the QGIS window's
+  thread, from the copy GDAL kept when QGIS opened the layer, or from the
+  server again if GDAL let it go. Works in a map opened from a file too.
 - **Time-enabled WMS (WMS-T) layers that follow QGIS's time** export as a
   fixed snapshot: the map asks the service for the time QGIS draws at export
   (from the temporal controller, or the layer's predefined date) and has no

@@ -137,9 +137,15 @@ your project, your layers or your machine. npm can see that some computer at
 your IP address downloaded a public file, which is what any software download
 looks like.
 
-After that, the plugin never contacts anything again. Exporting is entirely
-local — your data is read from disk and written into the file, and no part of
-it leaves your computer.
+After that, the plugin never contacts anything again, with one exception of
+QGIS's own making. Exporting is entirely local — your data is read from disk and
+written into the file, and no part of it leaves your computer.
+
+The exception: a raster QGIS itself reads over the web (a COG at an `https://`
+address). To check the web map can draw it, the export reads the file's header,
+which GDAL usually still holds from when QGIS opened the layer; if it has let
+it go, the export asks that layer's own server for the header again, as QGIS
+did. It sends nothing of yours, and never downloads the raster itself.
 
 ## If you publish or host a map
 

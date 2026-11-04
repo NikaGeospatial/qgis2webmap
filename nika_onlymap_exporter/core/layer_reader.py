@@ -1977,13 +1977,14 @@ def read_raster(
     group_path: tuple[str, ...] = (),
     visible: bool = True,
     map_time: MapTime | None = None,
-) -> ExportLayer | None:
+) -> ExportLayer | PendingRemoteRaster | None:
     """Read one raster layer into the normalized model.
 
     Returns `None` for a raster there is no file to carry - a WMS or XYZ layer,
     or a source that has gone missing - after recording why. That is the same
     contract `read_layer` has always had; what changed is that a plain GeoTIFF
-    on disk no longer falls into it.
+    on disk no longer falls into it. A raster QGIS reads over the web comes
+    back as a `PendingRemoteRaster`, whose header is checked on the worker.
 
     Everything the model gets is metadata: the pixels stay in the file and
     reach the artifact through packaging, which converts the source to a Cloud
@@ -2264,25 +2265,94 @@ def _report_composite_colours(
 _LIVE_COG_COMPRESSIONS = frozenset({"NONE", "DEFLATE", "JPEG", "WEBP"})
 
 
-def _remote_compression(url: str) -> str | None:
-    """The compression of the remote raster QGIS has open at `url`, upper case
-    and "NONE" for none, or `None` when it cannot be read.
+def _remote_header(url: str) -> tuple[str, str] | str:
+    """The GDAL driver and the compression (upper case, "NONE" for none) of
+    the remote raster QGIS has open at `url`, or why they could not be read.
 
-    Reopening reads the header GDAL already fetched when QGIS opened the layer,
-    from GDAL's own cache: no pixel is read, and with the header still cached
-    nothing is fetched at all (`test_remote_raster` counts the requests).
-    Always through `/vsicurl/`, as QGIS opens a bare address: GDAL given the
-    bare address would download the whole file.
+    Reopening reads the header GDAL fetched when QGIS opened the layer, from
+    GDAL's own cache: no pixel is read, and with the header still cached
+    nothing is fetched at all (`test_remote_raster` counts the requests). Once
+    GDAL has let it go - drawing the layer reads through the same cache - the
+    header is fetched again, which is why this runs on the worker
+    (`PendingRemoteRaster.finish`), never on the GUI thread. Always through
+    `/vsicurl/`, as QGIS opens a bare address: GDAL given the bare address
+    would download the whole file.
     """
     from ..packaging.raster_cog import CogError, probe_raster
 
     try:
         probe = probe_raster("/vsicurl/" + url)
-    except CogError:
-        return None
+    except CogError as exc:
+        return str(exc)
     if probe.open_error is not None:
-        return None
-    return (probe.compression or "NONE").upper()
+        return probe.open_error
+    return probe.driver or "", (probe.compression or "NONE").upper()
+
+
+@dataclasses.dataclass(frozen=True)
+class PendingRemoteRaster:
+    """A raster QGIS reads over the web, admitted by all QGIS knows of it, and
+    waiting for its header to be checked off the GUI thread.
+
+    `base` is the live layer it becomes; `probe_url` the address GDAL opened,
+    which may carry a key `base` has been stripped of. `finish` reaches no
+    layer, so it is safe after the layer has been removed from the project.
+    """
+
+    base: ExportLayer
+    probe_url: str
+    host: str
+
+    def finish(self, report: FidelityReportBuilder) -> ExportLayer | None:
+        """Check the header and complete the layer, or refuse it. **Safe off
+        the GUI thread**, and meant for it: the check may fetch the header."""
+        base = self.base
+        subject = f"Layer '{base.name}'"
+        header = _remote_header(self.probe_url)
+        if isinstance(header, str):
+            report.unsupported(
+                subject,
+                f"This raster is read from {self.host} over the web, and the "
+                "export could not read its header again to check that the web "
+                f"map can draw it ({header}). " + _SAVE_A_LOCAL_COPY,
+                base.layer_id,
+            )
+            return None
+        driver, compression = header
+        if driver != "GTiff":
+            report.unsupported(
+                subject,
+                f"This raster is read from {self.host} over the web, and it is "
+                f"not a GeoTIFF ({driver or 'an unknown format'}), so the web "
+                "map, which reads a Cloud Optimized GeoTIFF from its address, "
+                "cannot draw it and the layer would stay empty. " + _SAVE_A_LOCAL_COPY,
+                base.layer_id,
+            )
+            return None
+        if compression not in _LIVE_COG_COMPRESSIONS:
+            report.unsupported(
+                subject,
+                f"This raster is read from {self.host} over the web and is "
+                f"{compression}-compressed, which the web map cannot decode yet, "
+                "so the layer would stay empty. A file is converted on export, "
+                "but the export never downloads a raster from the web. "
+                + _SAVE_A_LOCAL_COPY,
+                base.layer_id,
+            )
+            return None
+        report.approximated(
+            subject,
+            f"Exported as a live Cloud Optimized GeoTIFF: the web map reads the "
+            f"parts of the file it draws from {self.host}, and nothing is "
+            "carried inside the map. The server must allow web pages to read "
+            "the file (CORS) and to ask for parts of it (Range requests), or "
+            "this layer stays empty while the rest of the map draws; a refused "
+            "request shows in the browser's developer tools.",
+            base.layer_id,
+        )
+        if base.raster is not None:
+            _report_composite_colours(report, base.raster, base.name, base.layer_id)
+        return base
 
 
 def _read_remote_raster(
@@ -2291,15 +2361,17 @@ def _read_remote_raster(
     report: FidelityReportBuilder,
     group_path: tuple[str, ...],
     visible: bool,
-) -> ExportLayer | None:
-    """A raster QGIS reads over the web, as a live `COGLayer` or refused.
+) -> PendingRemoteRaster | None:
+    """A raster QGIS reads over the web, on its way to a live `COGLayer`, or
+    refused.
 
-    Never downloads the file: what is checked is what QGIS already knows
-    about the open layer, and the compression in the header GDAL fetched when
-    it was opened. The runtime draws the file's own pixels and does not
-    reproject, so only an RGB composite in Web Mercator that QGIS draws as the
-    file holds it is exported; a style QGIS draws from the values is baked
-    for a file, and baking would mean downloading the whole raster.
+    Never downloads the file: what is checked here is what QGIS already knows
+    about the open layer, and then, on the worker, the format and compression
+    in the file's header (`PendingRemoteRaster.finish`). The runtime draws the
+    file's own pixels and does not reproject, so only an RGB composite in Web
+    Mercator that QGIS draws as the file holds it is exported; a style QGIS
+    draws from the values is baked for a file, and baking would mean
+    downloading the whole raster.
     """
     from urllib.parse import urlsplit
 
@@ -2341,19 +2413,8 @@ def _read_remote_raster(
         )
         return None
 
-    compression = _remote_compression(url)
-    if compression is not None and compression not in _LIVE_COG_COMPRESSIONS:
-        report.unsupported(
-            subject,
-            f"This raster is read from {host} over the web and is "
-            f"{compression}-compressed, which the web map cannot decode yet, so "
-            "the layer would stay empty. A file is converted on export, but the "
-            "export never downloads a raster from the web. " + _SAVE_A_LOCAL_COPY,
-            layer_id,
-        )
-        return None
-
     # A keyed address blocks the export, as a live tile layer's does.
+    probe_url = url
     url, dependency = _live_dependency(url, name, "file address")
     raster = RasterSpec(
         path=url,
@@ -2369,18 +2430,7 @@ def _read_remote_raster(
         nodata=raster_nodata(layer),
         bands=bands,
     )
-    report.approximated(
-        subject,
-        f"Exported as a live Cloud Optimized GeoTIFF: the web map reads the "
-        f"parts of the file it draws from {host}, and nothing is carried inside "
-        "the map. The server must allow web pages to read the file (CORS) and "
-        "to ask for parts of it (Range requests), or this layer stays empty "
-        "while the rest of the map draws; a refused request shows in the "
-        "browser's developer tools.",
-        layer_id,
-    )
-    _report_composite_colours(report, raster, name, layer_id)
-    return ExportLayer(
+    base = ExportLayer(
         layer_id=layer_id,
         name=name,
         geometry_kind=GeometryKind.RASTER,
@@ -2398,6 +2448,7 @@ def _read_remote_raster(
         group_path=group_path,
         dependencies=(dependency,),
     )
+    return PendingRemoteRaster(base, probe_url, host)
 
 
 def _file_exists(path: str) -> bool:
@@ -2693,7 +2744,7 @@ def read_layer(
         map_time=map_time,
         filter_field=filter_field,
     )
-    if isinstance(prepared, PendingLayer):
+    if isinstance(prepared, (PendingLayer, PendingRemoteRaster)):
         return prepared.finish(report)
     return prepared
 
@@ -2716,12 +2767,13 @@ def prepare_layer(
     scans: LayerScans | None = None,
     map_time: MapTime | None = None,
     filter_field: str | None = None,
-) -> ExportLayer | PendingLayer | None:
+) -> ExportLayer | PendingLayer | PendingRemoteRaster | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
 
-    Raster layers are handed straight to `read_raster` and come back complete;
-    everything below is the vector path, which comes back as a `PendingLayer`
+    Raster layers are handed straight to `read_raster` and come back complete,
+    but for one read over the web (a `PendingRemoteRaster`); everything below
+    is the vector path, which comes back as a `PendingLayer`
     whose `finish` reads the features. Returns `None` for layers with no web
     equivalent at all - a mesh or point cloud, a vector layer with no geometry,
     a raster that is a live service rather than a file - after recording why.

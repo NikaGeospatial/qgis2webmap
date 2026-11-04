@@ -58,6 +58,7 @@ from .layer_reader import (
     WGS84,
     MapTime,
     PendingLayer,
+    PendingRemoteRaster,
     follows_map_time,
     prepare_layer,
 )
@@ -468,7 +469,9 @@ def prepare_project(
             tree_layers.sort(key=lambda node: -rank.get(node.layerId(), len(rank)))
         effective_selected_ids = selected_layer_ids
 
-    entries: list[tuple[str, ExportLayer | PendingLayer | None]] = []
+    entries: list[
+        tuple[str, ExportLayer | PendingLayer | PendingRemoteRaster | None]
+    ] = []
     # Named, not counted: "1 layer(s) could not be loaded" left the user to
     # find which one, and the Fidelity tab groups a named row under its layer.
     skipped_invalid: list[tuple[str, str]] = []
@@ -586,7 +589,9 @@ class PendingProject:
     project, and nothing `finish_project` reaches does.
     """
 
-    entries: tuple[tuple[str, ExportLayer | PendingLayer | None], ...]
+    entries: tuple[
+        tuple[str, ExportLayer | PendingLayer | PendingRemoteRaster | None], ...
+    ]
     skipped_invalid: tuple[tuple[str, str], ...]
     settings: ExportSettings
     canvas_extent: Extent | None
@@ -622,7 +627,7 @@ def finish_project(
     for done, (name, prepared) in enumerate(pending.entries):
         if progress is not None:
             progress(done, total, name)
-        if isinstance(prepared, PendingLayer):
+        if isinstance(prepared, (PendingLayer, PendingRemoteRaster)):
             prepared = prepared.finish(report)
         if prepared is not None:
             layers.append(prepared)
