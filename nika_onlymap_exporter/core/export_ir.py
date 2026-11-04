@@ -1016,6 +1016,54 @@ class TileSpec:
         return snapshot
 
 
+@dataclass(frozen=True)
+class VectorTileSpec:
+    """Vector tiles the web map reads itself: a PMTiles archive or a service.
+
+    Kept as tiles, never as features: an archive holds every zoom of its data,
+    and a service millions of tiles. `url` is what the layer's `data` names -
+    a `{z}/{x}/{y}` template, a remote archive's address, or, once packaging
+    has carried a local archive (`packaging.tile_archives`), the file's name
+    beside the page. `path` is that local archive on this computer, and `""`
+    for anything read over the web.
+
+    `source_layer` is the one layer of the archive QGIS draws (it opens each
+    as a vector layer of its own), and `""` for a service drawn whole.
+    `style_url` is the publisher's MapLibre style the tiles are drawn with
+    (`vector-style`), and `style_source` which of its sources they are when it
+    is not the first; with no style the layer draws by its QGIS renderer.
+    """
+
+    url: str
+    path: str = ""
+    source_layer: str = ""
+    style_url: str = ""
+    style_source: str = ""
+    min_zoom: int | None = None
+    max_zoom: int | None = None
+    # The archive's size, for what a single file can carry; 0 when remote.
+    size_bytes: int = 0
+
+    @property
+    def is_archive(self) -> bool:
+        """Whether the tiles are a local archive packaging has to carry."""
+        return bool(self.path)
+
+    def snapshot(self) -> dict[str, Any]:
+        snapshot: dict[str, Any] = {"url": self.url, "archive": self.is_archive}
+        if self.source_layer:
+            snapshot["sourceLayer"] = self.source_layer
+        if self.style_url:
+            snapshot["styleUrl"] = self.style_url
+        if self.style_source:
+            snapshot["styleSource"] = self.style_source
+        if self.min_zoom is not None:
+            snapshot["minZoom"] = self.min_zoom
+        if self.max_zoom is not None:
+            snapshot["maxZoom"] = self.max_zoom
+        return snapshot
+
+
 # --------------------------------------------------------------------------
 # Popups
 # --------------------------------------------------------------------------
@@ -1245,6 +1293,9 @@ class ExportLayer:
     raster: RasterSpec | None = None
     # A live tile service in place of pixels or features; see `TileSpec`.
     tiles: TileSpec | None = None
+    # Vector tiles in place of features: a PMTiles archive or a vector tile
+    # service, drawn by the runtime tile by tile; see `VectorTileSpec`.
+    vector_tiles: VectorTileSpec | None = None
     attribution: str | None = None
     feature_count: int = 0
     geojson: dict[str, Any] | None = None
@@ -1330,6 +1381,8 @@ class ExportLayer:
         }
         if self.filter is not None:
             data["filter"] = self.filter.snapshot()
+        if self.vector_tiles is not None:
+            data["vectorTiles"] = self.vector_tiles.snapshot()
         if self.popup_pictures:
             data["popupPictures"] = [
                 {"name": p.name, "sizeBytes": len(p.data)} for p in self.popup_pictures
@@ -1495,9 +1548,10 @@ class ExportProject:
     def exportable_layers(self) -> tuple[ExportLayer, ...]:
         """Every layer that will produce an `<om-layer>`, in draw order.
 
-        Three ways a layer qualifies, because there are three kinds of payload:
-        a vector layer carries `geojson`, a raster carries a `RasterSpec`, and a
-        live tile service a `TileSpec`. It has
+        Four ways a layer qualifies, because there are four kinds of payload:
+        a vector layer carries `geojson`, a raster carries a `RasterSpec`, a
+        live tile service a `TileSpec`, and vector tiles a `VectorTileSpec`.
+        It has
         to stay one list rather than two, because **document order is draw
         order** - splitting rasters into their own pass would silently move
         every one of them above or below the vectors regardless of where the
@@ -1512,6 +1566,7 @@ class ExportProject:
             if layer.geojson is not None
             or layer.raster is not None
             or layer.tiles is not None
+            or layer.vector_tiles is not None
         )
 
     @property

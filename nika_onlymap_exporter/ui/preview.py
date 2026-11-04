@@ -47,7 +47,10 @@ from pathlib import Path
 
 from ..core.export_ir import ExportProject, OutputMode
 from ..packaging.artifact_builder import terrain_zoom_clamp
-from ..packaging.dependency_scanner import standalone_raster_reason
+from ..packaging.dependency_scanner import (
+    standalone_archive_reason,
+    standalone_raster_reason,
+)
 from ..packaging.raster_cog import CancelCheck, ProgressCallback
 from ..writers.onlymap_writer import ArtifactResult, OnlyMapWriter
 from .links import FEATURE_REQUEST_URL
@@ -393,13 +396,17 @@ def compose_preview_hook(
 
 
 def preview_mode(project: ExportProject) -> OutputMode:
-    """One HTML file, unless a raster layer cannot travel inside one.
+    """One HTML file, unless a raster layer or tile archive cannot travel
+    inside one.
 
     A raster is read from its own file in pieces, so its preview is written as
     a folder and has to be served over HTTP - a browser will not fetch those
     pieces from a page opened straight off the disk.
     """
-    if standalone_raster_reason(project) is not None:
+    if (
+        standalone_raster_reason(project) is not None
+        or standalone_archive_reason(project) is not None
+    ):
         return OutputMode.FOLDER
     return OutputMode.STANDALONE_HTML
 

@@ -145,10 +145,16 @@ def data_bytes_by_layer(project: ExportProject) -> dict[str, int]:
     layer the megabytes are in without a second serialisation of its own.
     """
     sizes: dict[str, int] = {}
+    archives: set[str] = set()
     for layer in project.exportable_layers:
         size = _raster_layer_bytes(layer)
         if layer.geojson is not None:
             size += ascii_json_bytes(layer.geojson_text)
+        tiles = layer.vector_tiles
+        if tiles is not None and tiles.is_archive and tiles.path not in archives:
+            # A tile archive is carried once, under the first layer drawn from it.
+            archives.add(tiles.path)
+            size += tiles.size_bytes
         sizes[layer.layer_id] = size
     return sizes
 
@@ -231,6 +237,30 @@ def standalone_raster_reason(project: ExportProject) -> str | None:
     )
 
 
+def standalone_archive_reason(project: ExportProject) -> str | None:
+    """Why the tile archives stop this project shipping as one HTML file,
+    or `None`.
+
+    A local PMTiles archive travels inside the page as a raster does, and the
+    two share the page's limit (`STANDALONE_RASTER_MAX_BYTES`); an archive is
+    carried as it is, so its size is the one that counts.
+    """
+    archives = {
+        layer.vector_tiles.path: layer.vector_tiles.size_bytes
+        for layer in project.exportable_layers
+        if layer.vector_tiles is not None and layer.vector_tiles.is_archive
+    }
+    total = sum(archives.values()) + raster_bytes(project)
+    if not archives or total <= STANDALONE_RASTER_MAX_BYTES:
+        return None
+    return (
+        f"The tile archives and raster imagery come to about "
+        f"{format_megabytes(total)}, which is too large to pack into a single "
+        f"HTML file (the limit is {format_megabytes(STANDALONE_RASTER_MAX_BYTES)}). "
+        "Folder or Share ZIP as the export format carry them without that limit."
+    )
+
+
 def standalone_ineligible_reason(project: ExportProject) -> str | None:
     """Why this project cannot ship as one HTML file, or `None` if it can.
 
@@ -248,6 +278,9 @@ def standalone_ineligible_reason(project: ExportProject) -> str | None:
     raster = standalone_raster_reason(project)
     if raster is not None:
         return raster
+    archives = standalone_archive_reason(project)
+    if archives is not None:
+        return archives
 
     data_bytes = measure_data_bytes(project)
     if data_bytes > SINGLE_FILE_WARN_BYTES:

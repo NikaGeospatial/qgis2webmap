@@ -104,6 +104,7 @@ from ..packaging.dependency_scanner import (
 from ..packaging.popup_pictures import picture_fields
 from ..packaging.raster_staging import stage_rasters
 from ..packaging.runtime_manager import RuntimeBundle
+from ..packaging.tile_archives import stage_tile_archives
 from ..translation import tr
 from ..writers.cartograph_writer import CartographRuntimeBundle, write_cartograph_html
 from ..writers.onlymap_writer import OnlyMapWriter
@@ -1651,6 +1652,30 @@ def finish_cartograph_full(
                     report_remote_dependency(layer, dependency, report)
         export_project, frame_rasters = _embed_rasters(export_project, report)
         for name, data in frame_rasters:
+            embedded_rasters.setdefault(name, data)
+        # Local tile archives travel inside the page as the rasters do.
+        archives = stage_tile_archives(
+            export_project,
+            Path(),
+            OutputMode.STANDALONE_HTML,
+            report,
+            embedded_bytes=sum(len(data) for data in embedded_rasters.values()),
+        )
+        # One that cannot be carried is left out of the frame, as a raster
+        # is; the rows the staging wrote say why.
+        export_project = (
+            archives.project
+            if archives.can_export
+            else replace(
+                export_project,
+                layers=tuple(
+                    layer
+                    for layer in export_project.layers
+                    if layer.vector_tiles is None or not layer.vector_tiles.is_archive
+                ),
+            )
+        )
+        for name, data in archives.embedded:
             embedded_rasters.setdefault(name, data)
         # A frame lives in the cartograph's own page, so its popup pictures
         # travel inside it, as a single-file web map's do.

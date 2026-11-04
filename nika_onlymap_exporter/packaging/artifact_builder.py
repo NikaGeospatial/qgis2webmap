@@ -111,11 +111,12 @@ def zip_open_instruction(project: ExportProject) -> str:
     """How the recipient of a zip opens it -- which depends on what is in it.
 
     A vector-only zip is extract-and-double-click, and has been since the tier
-    existed. A zip with a raster in it is not: the page fetches the COG as a
-    sibling file, and a browser refuses to read a sibling from a `file://`
-    page (measured -- the request fails outright, and with the browser flag
-    that permits it the response is a full file where a byte range was asked
-    for, which the reader mis-slices). So the map has to be served.
+    existed. A zip with a raster or a tile archive in it is not: the page
+    fetches the COG or the archive as a sibling file, and a browser refuses to
+    read a sibling from a `file://` page (measured -- the request fails
+    outright, and with the browser flag that permits it the response is a full
+    file where a byte range was asked for, which the reader mis-slices). So
+    the map has to be served.
 
     Printing the old instruction anyway would send someone to a map whose
     imagery is missing, with a README telling them they did it right. Pure and
@@ -123,17 +124,19 @@ def zip_open_instruction(project: ExportProject) -> str:
     artifact.
     """
     if not any(
-        layer.raster is not None and not layer.raster.remote for layer in project.layers
+        (layer.raster is not None and not layer.raster.remote)
+        or (layer.vector_tiles is not None and layer.vector_tiles.is_archive)
+        for layer in project.layers
     ):
         return "Extract this zip, then open index.html."
     return (
         "Extract this zip, then serve the folder over HTTP -- upload it to a "
         "web server, or run `npx http-server` inside it and open the address "
-        "it prints. The map's raster imagery is a separate file next to "
-        "index.html, and browsers will not read it from a folder opened by "
-        "double-click. (Python's `http.server` will not do: it ignores the "
-        "byte-range requests the imagery is read with, and the raster comes "
-        "out blank.)"
+        "it prints. The map's raster imagery or tile archive is a separate "
+        "file next to index.html, and browsers will not read it from a folder "
+        "opened by double-click. (Python's `http.server` will not do: it "
+        "ignores the byte-range requests the file is read with, and the layer "
+        "comes out blank.)"
     )
 
 
