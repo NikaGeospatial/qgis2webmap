@@ -2539,9 +2539,10 @@ class PendingLayer:
             report.unsupported(
                 f"Layer '{base.name}'",
                 f"The layer has {read_count} feature(s), but every one belongs to "
-                "a category or range that is switched off, or that no category "
-                "or range claims, so none is drawn. It is exported but will show "
-                "nothing - check the layer's symbology.",
+                "a category, range or rule that is switched off, or that no "
+                "category, range or rule claims, so none is drawn, as in QGIS. "
+                "It is exported but will show nothing - check the layer's "
+                "symbology.",
                 base.layer_id,
             )
         elif feature_count == 0:
