@@ -208,7 +208,7 @@ layout's page size, and keeps each map interactive or pixel-exact. See
 
 | Mode | What the recipient does | When to use it |
 |---|---|---|
-| **Standalone HTML** | Double-clicks one file | The default. Everything is embedded, nothing is fetched |
+| **Standalone HTML** | Double-clicks one file | The default. Everything the map carries is embedded; a basemap, relief, live web layers and web popup pictures load as it is used |
 | **Share ZIP** | Extracts it, opens `index.html` | The data is too large for one practical file, or a mail filter quarantines `.html` |
 | **Folder** | Serves it, or opens `index.html` | You are publishing the map on your own web server |
 
@@ -222,7 +222,7 @@ QGIS 3.44 or newer, on Windows or macOS. QGIS 4 is supported.
 
 The first export downloads the OnlyMap runtime — about 5.7 MB, once per computer,
 after showing you its licence. Everything works offline after that, and exporting
-itself never touches the network. See [installation](installation.md) for the
+reaches the network only to read a layer QGIS itself reads from the web. See [installation](installation.md) for the
 offline and proxy paths.
 
 ## Getting help

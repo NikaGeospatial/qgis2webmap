@@ -83,7 +83,8 @@ It is a separate NIKA product with its own licence, so the plugin shows you that
 licence and asks before it fetches anything, rather than downloading quietly.
 
 After that one download, **everything works offline**, on every project, for
-good. Exporting itself never touches the network.
+good. Exporting itself reaches the network only to read a layer QGIS itself
+reads from the web - see [privacy](privacy.md#what-the-plugin-downloads).
 
 > **Start with the dialog, not with Processing.** The *Export to OnlyMap web map*
 > Processing algorithm cannot show you a licence — there is nobody to show it to

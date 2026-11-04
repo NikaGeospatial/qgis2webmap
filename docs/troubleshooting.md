@@ -124,8 +124,10 @@ with its own licence, which is why it is fetched rather than bundled into this
 GPL plugin, and why you are shown the licence first.
 
 About 5.7 MB. After that, everything works offline, and exporting itself never
-touches the network. See [privacy](privacy.md) for what that request does and
-does not send.
+touches the network - except to read a layer QGIS itself reads from the web:
+a web service layer's features, or the header of a raster at a web address
+when GDAL no longer holds it. See [privacy](privacy.md) for what those requests
+do and do not send.
 
 ### The download fails
 
