@@ -117,3 +117,82 @@ def test_the_per_part_setting_changes_the_export_where_qgis_draws_more(
     once = _qgis_label_centres(_labelled_layer("MultiPolygon", False))
     every = _qgis_label_centres(_labelled_layer("MultiPolygon", True))
     assert (len(once), len(every)) == (1, 2)
+
+
+@pytest.mark.parametrize(
+    ("project_crs", "map_crs"),
+    [
+        ("EPSG:32633", None),
+        ("EPSG:3035", None),
+        ("EPSG:4326", "EPSG:3857"),
+        ("EPSG:3857", "EPSG:4326"),
+    ],
+    ids=["utm", "laea-europe", "frame-in-mercator", "frame-in-degrees"],
+)
+def test_a_line_label_sits_where_qgis_draws_it_in_its_map_crs(
+    project, project_crs, map_crs
+) -> None:
+    """QGIS places a line's label at half its length as measured in the CRS
+    it draws the line in: the project's, or a cartograph frame's own. On a
+    line from 40 to 70 degrees north the planes disagree by degrees."""
+    from nika_onlymap_exporter.core.manifest_builder import build_label_element
+    from nika_onlymap_exporter.core.project_reader import (
+        finish_project,
+        prepare_project,
+    )
+
+    project.setCrs(qgis_core.QgsCoordinateReferenceSystem(project_crs))
+    drawn_in = qgis_core.QgsCoordinateReferenceSystem(map_crs or project_crs)
+    layer = qgis_core.QgsVectorLayer(
+        "LineString?crs=EPSG:4326&field=name:string", "meridian", "memory"
+    )
+    feature = qgis_core.QgsFeature(layer.fields())
+    # Along 15 E, the middle of UTM zone 33.
+    feature.setGeometry(qgis_core.QgsGeometry.fromWkt("LineString(15 40, 15 70)"))
+    feature["name"] = "X"
+    layer.dataProvider().addFeatures([feature])
+    layer.updateExtents()
+    settings = qgis_core.QgsPalLayerSettings()
+    settings.fieldName = "name"
+    settings.placement = qgis_core.Qgis.LabelPlacement.Horizontal
+    layer.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+    layer.setLabelsEnabled(True)
+    project.addMapLayer(layer)
+
+    map_settings = qgis_core.QgsMapSettings()
+    map_settings.setLayers([layer])
+    map_settings.setDestinationCrs(drawn_in)
+    to_map = qgis_core.QgsCoordinateTransform(
+        layer.crs(), drawn_in, project.transformContext()
+    )
+    extent = to_map.transformBoundingBox(qgis_core.QgsRectangle(10, 38, 20, 72))
+    map_settings.setExtent(extent)
+    map_settings.setOutputSize(QtCore.QSize(1000, 1000))
+    job = qgis_core.QgsMapRendererSequentialJob(map_settings)
+    job.start()
+    job.waitForFinished()
+    (label,) = [
+        label for label in job.takeLabelingResults().allLabels() if not label.isUnplaced
+    ]
+    qgis_point = to_map.transform(
+        qgis_core.QgsPointXY(label.labelRect.center()),
+        qgis_core.QgsCoordinateTransform.TransformDirection.ReverseTransform,
+    )
+
+    report = FidelityReportBuilder()
+    pending = prepare_project(
+        project, report, map_crs=None if map_crs is None else drawn_in
+    )
+    (read,) = finish_project(pending, report).layers
+    markup = build_label_element(read)
+    payload = json.loads(
+        markup.split('<script type="application/json">')[1].split("</script>")[0]
+    )
+    ((lon, lat),) = [tuple(f["geometry"]["coordinates"]) for f in payload["features"]]
+    # A label's height off its anchor is under 0.15 degrees here (QGIS 3.44
+    # sets the text box a little lower than 4.2); the planes put it 0.4
+    # (degrees and LAEA) to 3.3 degrees (Mercator) apart.
+    # Off 15 E in LAEA, whose straight line between the ends is not the
+    # meridian: QGIS draws that line, and labels it.
+    assert abs(lat - qgis_point.y()) < 0.2, (lat, qgis_point.y())
+    assert abs(lon - qgis_point.x()) < 0.2, (lon, qgis_point.x())

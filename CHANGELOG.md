@@ -10,8 +10,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - **Rule-based styling exports.** Any rule-based layer is drawn with one
   class per rule that draws a symbol, and the legend lists the rules by their
   label. QGIS itself works out which rule draws each feature when you export
-  - nested rules, ELSE rules and switched-off rules behave as in QGIS - and
-  the answer travels in the data as a `Style` property that popups do not
+  - nested rules, ELSE rules and switched-off rules behave as in QGIS, and a
+  layer whose rules are all switched off draws nothing - and the answer
+  travels in the data as a `Style` property that popups do not
   show. Reported in the Fidelity tab where the web map differs: a feature two
   rules draw shows only the symbol on top, scale ranges on rules are not
   kept, filters that read the map view (such as `@map_scale`) are worked out
@@ -28,7 +29,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the Layers tab: the web map gets a panel, top left, that filters the layer
   by that field - a slider for a number or a date, a tick box per value for
   text of up to 50 values (a field with more is refused and the Fidelity tab
-  says so). Headed by the field's alias. The Fidelity tab also says what it
+  says so); clearing every tick box hides every feature, as no category
+  ticked does in QGIS. Headed by the field's alias. The Fidelity tab also says what it
   cannot do: features with no value in the field are hidden while the filter
   is there, a filtered layer's points are not merged into count bubbles, and
   its labels are not filtered.
@@ -72,7 +74,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the file holds it, compressed with DEFLATE, JPEG, WEBP or nothing; the
   server must allow web pages to read the file (CORS) and to ask for parts of
   it (Range requests). LZW, ZSTD and LERC files are refused until the runtime
-  decodes them. Works in a map opened from a file too.
+  decodes them, and so is a file that is not a GeoTIFF (such as a VRT) or
+  whose header cannot be read. The header is read off the QGIS window's
+  thread, from the copy GDAL kept when QGIS opened the layer, or from the
+  server again if GDAL let it go. Works in a map opened from a file too.
 - **Time-enabled WMS (WMS-T) layers that follow QGIS's time** export as a
   fixed snapshot: the map asks the service for the time QGIS draws at export
   (from the temporal controller, or the layer's predefined date) and has no
@@ -94,7 +99,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   layer, one for each sublayer of a layer made of several. The browser loads
   it from the service when the map opens, so it needs an internet
   connection; offline the legend lists the layer by name. An address that
-  carries an access key is left out. A cartograph's legend still lists the
+  carries an access key, or that is not a web (`http` or `https`) address, is
+  left out. A cartograph's legend still lists the
   layer by name; the Checks tab says so.
 
 ### Changed
@@ -104,7 +110,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   clustering and point names, the map name, the basemap and the rest of the
   Appearance tab - where it used to export every layer with the defaults. A
   title or map control passed to the algorithm still replaces the saved one,
-  and a project never opened in the dialog exports as before. *Export print
+  and a project never opened in the dialog exports as before. A project
+  saved with **Export only the features in this view** is refused, with a
+  message, since a Processing run has no QGIS view to clip to: it used to
+  export every feature. *Export print
   layout to cartograph (Beta)* likewise uses the layout's saved Map frames
   choices and resolutions, the Layers section's popup and label choices,
   Print settings and Browser appearance fields; *Frames* and *Image frame
@@ -135,7 +144,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - At Appearance > Size **Largest**, a long legend or layer list no longer
   makes the page scroll: on Auto each panel stops at half the map's height at
   every Size, where the larger Sizes grew it past the half and, at Largest,
-  past the map's foot.
+  past the map's foot. A legend with a picture swatch or a raster or web
+  layer in it, which Size does not grow, reaches half the map at every Size
+  too, where it stopped at a quarter of it at Largest.
 - The Fidelity tab and the export's list of network dependencies name
   cartocdn.com, the domain the Dark Matter and Voyager basemaps really load
   from. They named carto.com, which the map never contacts.
@@ -148,6 +159,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - A line's label sits at half its length along it, as QGIS places it. It was
   on the line's middle vertex, which on a line of two vertices is one of its
   ends.
+- A line's label is placed along it as measured in the CRS QGIS draws it in:
+  the project's, or a cartograph map frame's own. A frame in Web Mercator in a
+  project in degrees measured the line in degrees, and a project in any
+  projected CRS but Web Mercator in Web Mercator, which put the label of a
+  long north-south line degrees away from where QGIS draws it.
 - A point layer's **Names** showing a different field from its labels draws
   every accented or other non-ASCII letter of the names. Letters only the
   names field used drew blank.
@@ -190,6 +206,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - The legend lists the top layer first, as QGIS's Layers panel does, with a
   layer's labels right under it. It listed them bottom first, in the order
   the map draws them. The layer switcher's order is still OnlyMap's.
+- An export after a preview carries the labels and rule classes of now when
+  their expressions read a project or layer variable that has changed since,
+  and reads again whenever one reads the clock, chance or another layer
+  (`now()`, `rand()`, `aggregate()` and the like). The preview's read was
+  reused, with the variable's old value and the preview's time.
 
 ## [0.3.1] - 2026-11-03
 

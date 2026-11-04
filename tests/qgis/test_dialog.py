@@ -639,6 +639,7 @@ class TestBasemapSwitcherCheckbox:
             signature = dialog.state.data_snapshot()
             dialog._cached_export, dialog._cached_report = export, report
             dialog._cached_signature = signature
+            dialog._cached_expressions = dialog._expression_key()
             dialog._show_fidelity(report, signature)
 
             def basemap_rows() -> list[str]:
@@ -2733,6 +2734,7 @@ class TestChromeChangesSkipTheRead:
             signature = dialog.state.data_snapshot()
             dialog._cached_export, dialog._cached_report = export, report
             dialog._cached_signature = signature
+            dialog._cached_expressions = dialog._expression_key()
             dialog._show_fidelity(report, signature)
 
             def details() -> list[str]:
