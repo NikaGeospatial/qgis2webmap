@@ -4613,17 +4613,17 @@ El error completo está en el registro de mensajes de QGIS. No se sabe nada de l
     <message>
       <location filename="../ui/dialog_labels.py" line="80" />
       <source>Metric</source>
-      <translation type="unfinished" />
+      <translation>Métrico</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="81" />
       <source>Imperial</source>
-      <translation type="unfinished" />
+      <translation>Imperial</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="82" />
       <source>Nautical</source>
-      <translation type="unfinished" />
+      <translation>Náutico</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="86" />
@@ -6112,7 +6112,7 @@ Rellena Guardar en en la pestaña Mapa y vuelve a intentarlo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2791" />
       <source>The units the measure tool reads distances and areas in, and the scale bar its length.</source>
-      <translation type="unfinished" />
+      <translation>Las unidades en que la herramienta de medición lee distancias y áreas, y la barra de escala su longitud.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3349" />
@@ -6340,7 +6340,7 @@ Rellena Guardar en en la pestaña Mapa y vuelve a intentarlo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2797" />
       <source>Measure tool and scale bar units: {units}</source>
-      <translation type="unfinished" />
+      <translation>Unidades de la herramienta de medición y la barra de escala: {units}</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3620" />

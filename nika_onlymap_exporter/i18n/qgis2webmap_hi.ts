@@ -4613,17 +4613,17 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     <message>
       <location filename="../ui/dialog_labels.py" line="80" />
       <source>Metric</source>
-      <translation type="unfinished" />
+      <translation>मीट्रिक</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="81" />
       <source>Imperial</source>
-      <translation type="unfinished" />
+      <translation>इंपीरियल</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="82" />
       <source>Nautical</source>
-      <translation type="unfinished" />
+      <translation>नॉटिकल</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="86" />
@@ -6112,7 +6112,7 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2791" />
       <source>The units the measure tool reads distances and areas in, and the scale bar its length.</source>
-      <translation type="unfinished" />
+      <translation>वे इकाइयाँ जिनमें माप उपकरण दूरी और क्षेत्रफल पढ़ता है, और स्केल बार अपनी लंबाई।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3349" />
@@ -6340,7 +6340,7 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2797" />
       <source>Measure tool and scale bar units: {units}</source>
-      <translation type="unfinished" />
+      <translation>माप उपकरण और स्केल बार की इकाइयाँ: {units}</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3620" />

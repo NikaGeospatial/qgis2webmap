@@ -4613,17 +4613,17 @@ L'erreur complète figure dans le journal des messages de QGIS. On ne sait rien 
     <message>
       <location filename="../ui/dialog_labels.py" line="80" />
       <source>Metric</source>
-      <translation type="unfinished" />
+      <translation>Métrique</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="81" />
       <source>Imperial</source>
-      <translation type="unfinished" />
+      <translation>Impérial</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="82" />
       <source>Nautical</source>
-      <translation type="unfinished" />
+      <translation>Nautique</translation>
     </message>
     <message>
       <location filename="../ui/dialog_labels.py" line="86" />
@@ -6112,7 +6112,7 @@ Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2791" />
       <source>The units the measure tool reads distances and areas in, and the scale bar its length.</source>
-      <translation type="unfinished" />
+      <translation>Les unités dans lesquelles l'outil de mesure lit les distances et les surfaces, et la barre d'échelle sa longueur.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3349" />
@@ -6340,7 +6340,7 @@ Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2797" />
       <source>Measure tool and scale bar units: {units}</source>
-      <translation type="unfinished" />
+      <translation>Unités de l'outil de mesure et de la barre d'échelle : {units}</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3620" />
