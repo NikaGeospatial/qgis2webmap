@@ -52,7 +52,8 @@ someone says your map "never arrived", try this.
 ## Folder
 
 For uploading to a web server yourself. You get a small `index.html`, the
-OnlyMap runtime as a separate `onlymap.js`, and a README. Splitting them is the
+OnlyMap runtime as a separate `onlymap.js`, and a README, with any raster or
+popup picture the map carries beside them. Splitting them is the
 point: a browser caches `onlymap.js` once and reuses it for every map on your
 site, instead of downloading the same few megabytes inside every page.
 

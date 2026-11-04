@@ -313,8 +313,9 @@ not allow images from the service ([hosting](hosting.md#if-your-site-sets-a-cont
 It needs no CORS, so it can show while the layer's tiles stay empty. A
 service that gives QGIS neither a LegendURL for the layer's style nor a
 GetLegendGraphic request has no picture in QGIS either, and none is exported;
-nor is a picture whose address carries an access key (the Checks tab says
-so). The legend in a cartograph lists the layer by name in any case.
+nor is a picture whose address carries an access key or is not a web
+(`http` or `https`) address (the Fidelity tab says so). The legend in a
+cartograph lists the layer by name in any case, and its Checks tab says so.
 
 ### A raster read over the web (a COG) is empty in the map
 
