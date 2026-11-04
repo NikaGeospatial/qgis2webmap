@@ -217,14 +217,23 @@ class TestReadFromTheWidget:
 
         attachments = _web_map(project).attachments
 
+        # Carried from the project's folder (its home folder too, the same
+        # one here) and the default path where one is set.
+        project_folder = (str(saved),)
         assert attachments["photo"] == PopupAttachment(
-            picture=True, base_dir=str(saved)
+            picture=True, base_dir=str(saved), roots=project_folder
         )
         assert attachments["rooted"] == PopupAttachment(
-            picture=True, base_dir=str(tmp_path / "root")
+            picture=True,
+            base_dir=str(tmp_path / "root"),
+            roots=(str(saved), str(tmp_path / "root")),
         )
-        assert attachments["absolute"] == PopupAttachment(picture=True)
-        assert attachments["doc"] == PopupAttachment(file_name_label=True)
+        assert attachments["absolute"] == PopupAttachment(
+            picture=True, roots=project_folder
+        )
+        assert attachments["doc"] == PopupAttachment(
+            file_name_label=True, roots=project_folder
+        )
         assert attachments["note"] is None
 
 
@@ -342,6 +351,46 @@ class TestNothingElseIsRead:
         out = export()
         assert out.pictures == {}
         assert "photo_html" not in out.properties[0]
+
+
+class TestOnlyFromTheProjectsFolder:
+    def test_a_picture_elsewhere_is_named_and_not_carried(
+        self, project, saved, tmp_path, export
+    ) -> None:
+        """Through `..`, an absolute path or a link out of the folder."""
+        elsewhere = _picture(tmp_path / "another-client" / "private.jpg", 40, 40)
+        (saved / "photos").mkdir()
+        (saved / "photos" / "linked.jpg").symlink_to(elsewhere)
+        kept = _picture(saved / "photos" / "kept.png", 20, 10, "PNG")
+        layer = _layer(
+            project,
+            [
+                ("../another-client/private.jpg",),
+                (str(elsewhere),),
+                ("photos/linked.jpg",),
+                (str(kept),),
+            ],
+            "field=photo:string",
+        )
+        _attachment(
+            layer,
+            "photo",
+            DocumentViewer=IMAGE_VIEWER,
+            RelativeStorage=RELATIVE_TO_PROJECT,
+        )
+        out = export()
+        assert list(out.pictures.values()) == [kept.read_bytes()]
+        shown = [p["photo_html"] for p in out.properties]
+        assert shown[:3] == [
+            "../another-client/private.jpg",
+            str(elsewhere),
+            "photos/linked.jpg",
+        ]
+        assert shown[3].startswith('<img class="om-popup-picture"')
+        [outside] = out.rows(FidelityStatus.UNSUPPORTED)
+        assert outside.startswith("3 pictures are outside the project's folder")
+        assert "'../another-client/private.jpg'" in outside
+        assert "move it into the project's folder" in outside
 
 
 class TestLinks:

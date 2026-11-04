@@ -140,7 +140,9 @@ def _project() -> ExportProject:
                 PopupFieldSpec(
                     "photo",
                     mode=PopupFieldMode.HEADER_WITH_DATA,
-                    attachment=PopupAttachment(picture=True, base_dir="/project"),
+                    attachment=PopupAttachment(
+                        picture=True, base_dir="/project", roots=("/project",)
+                    ),
                 ),
                 PopupFieldSpec("note"),
             ),

@@ -1031,11 +1031,18 @@ class PopupAttachment:
     the folder it happened to be started from, which no export can rely on),
     and `file_name_label` a link shown by its file name, as the widget shows it
     with "Display resource path as link" on and "Display full path" off.
+
+    `roots` are the folders a picture on this computer may be carried from:
+    the project's folder and home folder, and the widget's default path. A
+    value that leads anywhere else - an absolute path, `..`, or a link to a
+    file elsewhere - is not carried, so no attribute value can publish a file
+    from another part of the computer.
     """
 
     picture: bool = False
     base_dir: str | None = None
     file_name_label: bool = False
+    roots: tuple[str, ...] = ()
 
     def snapshot(self) -> dict[str, Any]:
         # The folder is the author's own path, so only whether there is one.

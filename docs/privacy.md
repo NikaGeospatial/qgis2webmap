@@ -83,7 +83,11 @@ an Image, holding an `https://` address - see
 file. The reader's browser fetches it from that address when the popup opens,
 so its server sees the request. No page address is sent with it. Pictures
 stored on your computer are carried inside the map and fetch nothing, and a
-link in a popup fetches nothing until someone follows it.
+link in a popup fetches nothing until someone follows it. Only pictures in
+the project's folder, or under the Attachment widget's default path, are
+carried: a value pointing anywhere else on your computer - an absolute path,
+`..` or a link out of the folder - shows as its path, and the file is not
+read.
 
 ## Cartographs
 

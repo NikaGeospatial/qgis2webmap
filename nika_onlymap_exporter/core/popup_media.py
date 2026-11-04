@@ -18,8 +18,10 @@ What becomes what follows QGIS's own configuration:
   the widget does.
 * An Attachment field whose document viewer is Image shows pictures. A file on
   this computer, resolved the way QGIS resolves it (`PopupAttachment`), is
-  carried with the map, made smaller when it is large; a web address is loaded
-  live, so it needs an internet connection.
+  carried with the map, made smaller when it is large - when it is in the
+  project's folder or the widget's default path, even after following `..`
+  and links; anywhere else it is not read, and the popup shows its path. A
+  web address is loaded live, so it needs an internet connection.
 
 Only the values of features the map carries, in fields its popups show, are
 looked at, so no other file is ever read or carried.
@@ -32,11 +34,13 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import enum
 import functools
 import hashlib
 import html
+import os
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence, Sized
 from pathlib import Path
@@ -89,6 +93,7 @@ class PictureProblem(enum.Enum):
     MISSING = "missing"
     UNREADABLE = "unreadable"
     TOO_LARGE = "too_large"
+    OUTSIDE = "outside"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -152,6 +157,29 @@ def local_path(value: str, field: PopupFieldSpec) -> Path | None:
         return path
     base = field.attachment.base_dir if field.attachment is not None else None
     return Path(base) / path if base else None
+
+
+def is_inside(path: Path, roots: Iterable[str]) -> bool:
+    """Whether `path`, followed through `..` and links to where it really
+    leads, is in one of the folders `roots` (themselves followed the same
+    way)."""
+    real = _followed(str(path))
+    for root in roots:
+        folder = _followed(root)
+        # ValueError: on another drive.
+        with contextlib.suppress(ValueError):
+            if os.path.commonpath([real, folder]) == folder:
+                return True
+    return False
+
+
+def _followed(path: str) -> str:
+    """`path` through its links and `..`; by its name alone when it holds a
+    NUL, which no file name can, so the picture is reported as not found."""
+    try:
+        return os.path.realpath(path)
+    except (OSError, ValueError):
+        return os.path.normpath(os.path.abspath(path))
 
 
 def value_markup(
@@ -353,7 +381,10 @@ def _with_media(
             tally.unplaced.append(value)
             return None
         if path not in loaded:
-            loaded[path] = load(path)
+            roots = field.attachment.roots if field.attachment is not None else ()
+            loaded[path] = (
+                load(path) if is_inside(path, roots) else PictureProblem.OUTSIDE
+            )
         result = loaded[path]
         if isinstance(result, PictureProblem):
             tally.problems.setdefault(result, []).append(value)
@@ -485,6 +516,18 @@ def _report(layer: ExportLayer, tally: _Tally, report: FidelityReportBuilder) ->
                 f"popup shows the path instead - for example '{values[0]}'.",
                 layer_id,
             )
+    outside = tally.problems.get(PictureProblem.OUTSIDE)
+    if outside:
+        report.unsupported(
+            subject,
+            f"{_count(set(outside), 'picture is', 'pictures are')} outside the "
+            "project's folder, so the map does not carry "
+            f"{'it' if len(set(outside)) == 1 else 'them'} and the popup shows "
+            f"the path instead - for example '{outside[0]}'. To carry a "
+            "picture, move it into the project's folder, or under the "
+            "Attachment widget's default path.",
+            layer_id,
+        )
     if tally.unplaced:
         report.unsupported(
             subject,

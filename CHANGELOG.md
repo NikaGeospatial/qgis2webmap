@@ -54,7 +54,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   popup: a picture on this computer is carried with the map (inside a
   Standalone HTML file, beside `index.html` in Folder and Share ZIP), scaled
   down to 1280 pixels across when larger, up to 1 MB each and 20 MB per map;
-  a picture that is a web address loads live. Links and web pictures need an
+  a picture that is a web address loads live. Only pictures in the project's
+  folder or under the widget's default path are carried, wherever the path
+  leads (`..`, an absolute path, a link): a picture anywhere else shows its
+  path, and the Fidelity tab names it. Links and web pictures need an
   internet connection when the map is viewed; carried pictures work offline.
   The Fidelity tab says what was carried, made smaller or left out, and no
   attribute value can add markup to the page. qgis2web users report broken

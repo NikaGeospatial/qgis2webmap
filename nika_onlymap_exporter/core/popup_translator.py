@@ -49,11 +49,17 @@ def _config_int(config: Mapping[str, object], key: str) -> int:
         return 0
 
 
-def attachment_of(field: QgsField, project_file: str) -> PopupAttachment | None:
+def attachment_of(
+    field: QgsField, project_file: str, home_path: str = ""
+) -> PopupAttachment | None:
     """How QGIS shows `field`, when its editor widget is an Attachment.
 
     `project_file` is the project's absolute file path, empty for a project
-    never saved. A relative path is resolved where QGIS resolves it -
+    never saved, and `home_path` its home folder (QGIS's `homePath`: the
+    project file's folder unless one is set), empty when it has none.
+    Pictures are carried only from those two folders and the widget's default
+    path (`PopupAttachment.roots`). A relative path is resolved where QGIS
+    resolves it -
     measured on QGIS 4.2 with its own image viewer: beside the project file
     for "relative to project path", under the default path for "relative to
     default path", and against the folder QGIS was started from otherwise
@@ -72,10 +78,12 @@ def attachment_of(field: QgsField, project_file: str) -> PopupAttachment | None:
         base_dir = os.path.dirname(project_file)
     elif storage == _RELATIVE_TO_ROOT and root:
         base_dir = root
+    project_folder = os.path.dirname(project_file) if project_file else ""
     return PopupAttachment(
         picture=_config_int(config, "DocumentViewer") == _DOCUMENT_VIEWER_IMAGE,
         base_dir=base_dir,
         file_name_label=bool(config.get("UseLink")) and not config.get("FullUrl"),
+        roots=tuple(dict.fromkeys(f for f in (project_folder, home_path, root) if f)),
     )
 
 
@@ -160,15 +168,18 @@ def translate_popup(
     user will actually see, not what QGIS alone implied.
 
     `project` is the project being exported, whose folder an Attachment
-    field's relative paths are resolved against: Processing can export a
-    project that is not the one open in QGIS. `None` is the open one.
+    field's relative paths are resolved against and its pictures are carried
+    from: Processing can export a project that is not the one open in QGIS.
+    `None` is the open one.
     """
     from qgis.core import QgsProject
 
     layer_id = layer.id()
     subject = f"Popup fields of '{layer.name()}'"
     hidden = hidden_field_names(layer)
-    project_file = (project or QgsProject.instance()).absoluteFilePath()
+    exported = project or QgsProject.instance()
+    project_file = exported.absoluteFilePath()
+    home_path = exported.homePath()
 
     fields: list[PopupFieldSpec] = []
     skipped: list[str] = []
@@ -190,7 +201,7 @@ def translate_popup(
                 name=name,
                 alias=alias,
                 mode=mode,
-                attachment=attachment_of(field, project_file),
+                attachment=attachment_of(field, project_file, home_path),
             )
         )
 

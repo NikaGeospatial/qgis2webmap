@@ -430,16 +430,21 @@ popup's width:
 - **A picture on this computer is carried with the map** - inside the file
   for Standalone HTML, beside `index.html` for Folder and Share ZIP - so it
   shows without an internet connection. A relative path is found where QGIS
-  finds it: beside the project file, or under the widget's default path. A
-  picture over 1280 pixels across is scaled down to that, and one over 1 MB
-  is saved again as JPEG (PNG when transparent); your files are not changed.
+  finds it: beside the project file, or under the widget's default path.
+  Only a picture in the project's folder (or its home folder) or under the
+  widget's default path is carried, wherever its path leads - through `..`,
+  an absolute path or a link; one anywhere else is not read, its popup shows
+  its path, and the Fidelity tab names it: move it into the project's folder
+  to carry it. A picture over 1280 pixels across is scaled down to that, and
+  one over 1 MB is saved again as JPEG (PNG when transparent); your files are
+  not changed.
   One picture can be up to 1 MB after that, and one map carries up to 20 MB
   of pictures.
 - **A picture that is a web address is not carried.** It loads each time
   the popup opens, so it shows only with an internet connection.
 
-A picture that cannot be carried - not found, not a picture, or over a
-limit - shows its path instead, and the Fidelity tab lists what was carried,
+A picture that cannot be carried - not found, not a picture, outside the
+project's folder, or over a limit - shows its path instead, and the Fidelity tab lists what was carried,
 made smaller or left out. An Attachment field that shows its path as a link
 without the full path shows the link by its file name, as QGIS does. A path in
 a field without the Attachment widget stays text.

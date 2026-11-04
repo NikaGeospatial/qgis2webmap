@@ -49,7 +49,7 @@ from nika_onlymap_exporter.packaging.popup_pictures import (
     place_popup_pictures,
 )
 
-PICTURE = PopupAttachment(picture=True, base_dir="/project")
+PICTURE = PopupAttachment(picture=True, base_dir="/project", roots=("/project",))
 HOSTILE = (
     "<script>alert(1)</script>",
     '"><img src=x onerror=alert(1)>',
@@ -459,6 +459,84 @@ class TestAttachPopupMedia:
         markup = build_popup_elements(result)
         assert "{{{url_html}}}" in markup
         assert "{{note}}" in markup and "{{{note}}}" not in markup
+
+
+class TestOnlyFromTheProjectsFolder:
+    """A picture is carried only from the project's folder or the widget's
+    default path; a value leading anywhere else is shown as its path, the file
+    is never read, and the Fidelity tab names it and says how to carry it."""
+
+    def _attach(self, values, loader, attachment=PICTURE):
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=attachment)],
+            [{"photo": value} for value in values],
+        )
+        report = FidelityReportBuilder()
+        [result] = attach_popup_media([layer], report, loader)
+        return result, report
+
+    @pytest.mark.parametrize(
+        "value", ["../other-client/private.jpg", "/elsewhere/private.jpg"]
+    )
+    def test_a_path_out_of_it_is_not_read(self, value) -> None:
+        loader = FakeLoader({})
+        result, report = self._attach([value], loader)
+        assert loader.asked == []
+        assert result.popup_pictures == ()
+        assert _properties(result)[0]["photo_html"] == value
+        [row] = report.items
+        assert row.status is FidelityStatus.UNSUPPORTED
+        assert "outside the project's folder" in row.detail
+        assert f"'{value}'" in row.detail
+        assert "move it into the project's folder" in row.detail
+
+    def test_an_absolute_path_in_it_or_the_default_path_is_carried(self) -> None:
+        picture = LoadedPicture(b"jpeg-bytes", "image/jpeg", "jpg")
+        loader = FakeLoader(
+            {Path("/project/sub/a.jpg"): picture, Path("/pictures/b.jpg"): picture}
+        )
+        attachment = dataclasses.replace(PICTURE, roots=("/project", "/pictures"))
+        result, _report = self._attach(
+            ["/project/sub/a.jpg", "/pictures/b.jpg"], loader, attachment
+        )
+        assert len(result.popup_pictures) == 1
+        assert all(p["photo_html"].startswith("<img") for p in _properties(result))
+
+    def test_a_folder_beside_it_sharing_its_name_is_outside(self) -> None:
+        loader = FakeLoader({})
+        result, _report = self._attach(["/project-old/a.jpg"], loader)
+        assert loader.asked == [] and result.popup_pictures == ()
+
+    def test_a_link_is_followed_to_where_it_leads(self, tmp_path) -> None:
+        project = tmp_path / "project"
+        (project / "photos").mkdir(parents=True)
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "secret.jpg").write_bytes(b"secret")
+        (project / "photos" / "inside.jpg").write_bytes(b"inside")
+        (project / "photos" / "out.jpg").symlink_to(elsewhere / "secret.jpg")
+        (project / "photos" / "in.jpg").symlink_to(project / "photos" / "inside.jpg")
+        (project / "away").symlink_to(elsewhere)
+        picture = LoadedPicture(b"jpeg-bytes", "image/jpeg", "jpg")
+        loader = FakeLoader({project / "photos" / "in.jpg": picture})
+        attachment = PopupAttachment(
+            picture=True, base_dir=str(project), roots=(str(project),)
+        )
+        result, report = self._attach(
+            ["photos/out.jpg", "away/secret.jpg", "photos/in.jpg"], loader, attachment
+        )
+        assert loader.asked == [project / "photos" / "in.jpg"]
+        out, away, inside = (p["photo_html"] for p in _properties(result))
+        assert (out, away) == ("photos/out.jpg", "away/secret.jpg")
+        assert inside.startswith("<img")
+        [row] = [r for r in report.items if r.status is FidelityStatus.UNSUPPORTED]
+        assert row.detail.startswith("2 pictures are outside the project's folder")
+
+    def test_with_no_folder_to_carry_from_nothing_is_read(self) -> None:
+        loader = FakeLoader({})
+        attachment = PopupAttachment(picture=True)
+        result, _report = self._attach(["/photos/a.jpg"], loader, attachment)
+        assert loader.asked == [] and result.popup_pictures == ()
 
 
 class TestCarryingPictures:
