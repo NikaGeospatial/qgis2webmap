@@ -25,7 +25,7 @@ from .fidelity_report import FidelityReportBuilder
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Mapping
 
-    from qgis.core import QgsField, QgsVectorLayer
+    from qgis.core import QgsField, QgsProject, QgsVectorLayer
 
 # Field types QGIS can hold that carry no useful popup text.
 _UNPRINTABLE_TYPE_NAMES = frozenset({"binary", "geometry"})
@@ -151,19 +151,24 @@ def translate_popup(
     enabled: bool = True,
     field_modes: Mapping[str, str] | None = None,
     on_hover: bool = False,
+    project: QgsProject | None = None,
 ) -> PopupSpec:
     """Build a popup spec from the layer's fields, aliases and hidden columns.
 
     `field_modes` carries the dialog's per-field overrides. They are applied
     before the all-fields-hidden check below so the warning describes what the
     user will actually see, not what QGIS alone implied.
+
+    `project` is the project being exported, whose folder an Attachment
+    field's relative paths are resolved against: Processing can export a
+    project that is not the one open in QGIS. `None` is the open one.
     """
     from qgis.core import QgsProject
 
     layer_id = layer.id()
     subject = f"Popup fields of '{layer.name()}'"
     hidden = hidden_field_names(layer)
-    project_file = QgsProject.instance().absoluteFilePath()
+    project_file = (project or QgsProject.instance()).absoluteFilePath()
 
     fields: list[PopupFieldSpec] = []
     skipped: list[str] = []

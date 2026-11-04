@@ -416,3 +416,71 @@ class TestCarriedByTier:
         assert [f.path.name for f in result.files] == ["index.html"]
         encoded = base64.b64encode(picture_project.read_bytes()).decode("ascii")
         assert f"data:image/png;base64,{encoded}" in outcome.path.read_text()
+
+
+class TestTheExportedProjectsOwnFolder:
+    """A relative path is found beside the project being exported, which need
+    not be the one open in QGIS: Processing exports the project it is given,
+    and a cartograph the project its layout belongs to."""
+
+    @staticmethod
+    def _other(project, tmp_path):
+        """A second project, saved in a folder of its own, beside the open one
+        in another; each has a different `photos/site.png`.
+
+        Made in the test, never held by a fixture: a second project that
+        outlives the test into the fixtures' teardown crashes QGIS."""
+        opened = tmp_path / "opened"
+        opened.mkdir()
+        project.setFileName(str(opened / "opened.qgz"))
+        _picture(opened / "photos" / "site.png", 30, 20, "PNG")
+        folder = tmp_path / "other"
+        folder.mkdir()
+        other = qgis_core.QgsProject()
+        other.setFileName(str(folder / "other.qgz"))
+        mine = _picture(folder / "photos" / "site.png", 50, 10, "PNG")
+        layer = _layer(other, [("photos/site.png",)], "field=photo:string")
+        _attachment(
+            layer,
+            "photo",
+            DocumentViewer=IMAGE_VIEWER,
+            RelativeStorage=RELATIVE_TO_PROJECT,
+        )
+        return other, mine
+
+    @pytest.mark.parametrize("route", ["web map", "cartograph frame"])
+    def test_its_picture_is_carried(
+        self, project, tmp_path, route, fake_runtime
+    ) -> None:
+        from nika_onlymap_exporter.core import cartograph_export
+
+        other, mine = self._other(project, tmp_path)
+        try:
+            out = _web_map(other) if route == "web map" else _frame(other, fake_runtime)
+        finally:
+            # The shared live-frame cache follows the project it read: let go
+            # of it, or it outlives QGIS and crashes the process on exit.
+            cartograph_export._DEFAULT_LIVE_CACHE.clear()
+        assert list(out.pictures.values()) == [mine.read_bytes()]
+
+    def test_processing_carries_its_picture(
+        self, project, tmp_path, runtime_required
+    ) -> None:
+        from nika_onlymap_exporter.processing.export_project import (
+            ExportProjectAlgorithm,
+        )
+
+        other, mine = self._other(project, tmp_path)
+        context = qgis_core.QgsProcessingContext()
+        context.setProject(other)
+        algorithm = ExportProjectAlgorithm()
+        algorithm.initAlgorithm()
+        results = algorithm.processAlgorithm(
+            {"OUTPUT": str(tmp_path / "map.html"), "MODE": 0},
+            context,
+            qgis_core.QgsProcessingFeedback(),
+        )
+        page = Path(results["OUTPUT"]).read_text(encoding="utf-8")
+        opened = tmp_path / "opened" / "photos" / "site.png"
+        assert base64.b64encode(mine.read_bytes()).decode("ascii") in page
+        assert base64.b64encode(opened.read_bytes()).decode("ascii") not in page

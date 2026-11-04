@@ -2713,9 +2713,11 @@ def prepare_layer(
     a raster that is a live service rather than a file - after recording why.
 
     `project` is needed only to read a 2.5D renderer's height, which QGIS keeps
-    as a project variable rather than on the layer. Passed in rather than taken
-    from `QgsProject.instance()` so a caller reading a project it opened itself
-    gets that project's height and not the running QGIS session's.
+    as a project variable rather than on the layer, and the folder a popup
+    picture's relative path is found in. Passed in rather than taken from
+    `QgsProject.instance()` so a caller reading a project it opened itself
+    gets that project's height and pictures and not the running QGIS
+    session's.
 
     `with_popup` and `with_labels` carry the dialog's per-layer checkboxes. They
     suppress the feature *here*, at the point of translation, rather than in the
@@ -2821,7 +2823,13 @@ def prepare_layer(
     elevation = translate_elevation(layer, report, kind, project)
     # Explicitly disabled, not a default `PopupSpec()`: that one is enabled.
     popup = (
-        translate_popup(layer, report, field_modes=field_modes, on_hover=popup_on_hover)
+        translate_popup(
+            layer,
+            report,
+            field_modes=field_modes,
+            on_hover=popup_on_hover,
+            project=project,
+        )
         if with_popup
         else PopupSpec(enabled=False)
     )
