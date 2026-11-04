@@ -46,7 +46,8 @@ from nika_onlymap_exporter.core.popup_media import (
     value_markup,
 )
 from nika_onlymap_exporter.packaging.popup_pictures import (
-    embed_popup_pictures,
+    build_picture_embed,
+    picture_fields,
     place_popup_pictures,
 )
 
@@ -649,31 +650,53 @@ class TestCarryingPictures:
         )
         layer = _layer(
             [PopupFieldSpec("photo", attachment=PICTURE), PopupFieldSpec("note")],
-            [{"photo": "a.jpg", "note": 'src="popup-picture-0000000000000000.jpg"'}],
+            [{"photo": "a.jpg", "note": 'src="popup-picture-0000000000000000.jpg"'}]
+            * 3,
         )
         [layer] = attach_popup_media([layer], FidelityReportBuilder(), loader)
         return ExportProject(title="t", layers=(layer,))
 
-    def test_a_single_file_carries_the_picture_inside(self) -> None:
-        project = embed_popup_pictures(self._project())
-        [properties] = _properties(project.layers[0])
-        assert 'src="data:image/jpeg;base64,/9hqcGVn"' in properties["photo_html"]
+    def test_a_single_file_carries_each_picture_inside_once(self, tmp_path) -> None:
+        project = self._project()
+        inside, files = place_popup_pictures(
+            project, tmp_path, OutputMode.STANDALONE_HTML
+        )
+        assert files == () and list(tmp_path.iterdir()) == []
+        [picture] = inside
+        embed = build_picture_embed(inside, picture_fields(project.layers))
+        # Once, however many features show it; the data keeps naming it.
+        assert embed.count("/9hqcGVn") == 1
+        assert f'data-src="{picture.name}" data-type="image/jpeg"' in embed
+        assert all(
+            picture.name in p["photo_html"] for p in _properties(project.layers[0])
+        )
 
-    def test_only_markup_is_rewritten_never_a_value(self) -> None:
-        project = embed_popup_pictures(self._project())
-        [properties] = _properties(project.layers[0])
+    def test_no_picture_adds_nothing_to_the_page(self) -> None:
+        assert build_picture_embed((), ()) == ""
+
+    def test_values_are_never_rewritten(self, tmp_path) -> None:
+        project = self._project()
+        place_popup_pictures(project, tmp_path, OutputMode.STANDALONE_HTML)
+        [properties, *_] = _properties(project.layers[0])
         assert properties["note"] == 'src="popup-picture-0000000000000000.jpg"'
 
     @pytest.mark.parametrize("mode", [OutputMode.FOLDER, OutputMode.SHARE_ZIP])
     def test_a_folder_carries_it_beside_the_page(self, mode, tmp_path) -> None:
         project = self._project()
-        placed, files = place_popup_pictures(project, tmp_path, mode)
+        inside, files = place_popup_pictures(project, tmp_path, mode)
         [path] = files
+        assert inside == ()
         assert path.parent == tmp_path and path.read_bytes() == b"\xff\xd8jpeg"
-        assert path.name in _properties(placed.layers[0])[0]["photo_html"]
+        assert path.name in _properties(project.layers[0])[0]["photo_html"]
 
-    def test_a_single_file_writes_no_file(self, tmp_path) -> None:
-        _placed, files = place_popup_pictures(
-            self._project(), tmp_path, OutputMode.STANDALONE_HTML
+    def test_the_maps_size_counts_each_picture_once(self) -> None:
+        """What the size warnings and the gzip choice read: three features
+        sharing one picture carry its bytes once, as the page does."""
+        from nika_onlymap_exporter.packaging.dependency_scanner import (
+            data_bytes_by_layer,
+            measure_data_bytes,
         )
-        assert files == () and list(tmp_path.iterdir()) == []
+
+        project = self._project()
+        data = sum(data_bytes_by_layer(project).values())
+        assert measure_data_bytes(project) == data + len(b"\xff\xd8jpeg")

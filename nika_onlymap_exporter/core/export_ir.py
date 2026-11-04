@@ -1091,8 +1091,8 @@ class PopupPicture:
     `name` is the file name the popup's markup refers to: the hash of the
     bytes, so the same picture referenced twice is carried once, and a name
     can never collide with another file of the export. The writer either
-    writes the bytes beside the page under it or replaces it with a `data:`
-    URI (`packaging.popup_pictures`).
+    writes the bytes beside the page under it or carries them inside the
+    page, once (`packaging.popup_pictures`).
     """
 
     name: str

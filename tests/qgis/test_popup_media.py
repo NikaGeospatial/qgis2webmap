@@ -148,7 +148,7 @@ def _web_map(project) -> Exported:
 
 def _frame(project, fake_runtime) -> Exported:
     """The same layer as a cartograph's live frame carries it: pictures
-    inside the page, as `data:` URIs."""
+    inside the page, once each."""
     from atlas_fixtures import add_map
 
     layer = project.mapLayersByName("sites")[0]
@@ -163,13 +163,11 @@ def _frame(project, fake_runtime) -> Exported:
     frame = next(c for c in finished.projects[0].exportable_layers if c.name == "sites")
     properties = [dict(f["properties"]) for f in frame.geojson["features"]]
     pictures = {}
-    for row in properties:
-        for value in row.values():
-            for encoded in re.findall(
-                r'src="data:image/(?:jpeg|png);base64,([A-Za-z0-9+/=]+)"', str(value)
-            ):
-                assert encoded in finished.html
-                pictures[encoded] = base64.b64decode(encoded)
+    for picture in frame.popup_pictures:
+        encoded = base64.b64encode(picture.data).decode("ascii")
+        assert finished.html.count(encoded) == 1
+        assert f'data-src="{picture.name}"' in finished.html
+        pictures[picture.name] = picture.data
     return Exported(
         properties,
         pictures,
@@ -464,7 +462,10 @@ class TestCarriedByTier:
         )
         assert [f.path.name for f in result.files] == ["index.html"]
         encoded = base64.b64encode(picture_project.read_bytes()).decode("ascii")
-        assert f"data:image/png;base64,{encoded}" in outcome.path.read_text()
+        page = outcome.path.read_text()
+        assert page.count(encoded) == 1
+        [name] = re.findall(r'src=\\"(popup-picture-[0-9a-f]{16}\.png)\\"', page)
+        assert f'data-src="{name}" data-type="image/png">{encoded}<' in page
 
 
 class TestTheExportedProjectsOwnFolder:

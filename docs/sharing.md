@@ -34,8 +34,9 @@ data runs to 20 MB produces a file of at least that size.
 
 Nothing in a browser objects to a large HTML file. What objects is email: most
 providers reject attachments over about 20-25 MB, and corporate filters are often
-stricter. The Map tab shows your map's data size under the Save to field, and
-warns if it is over the limit - the file is still written if you want it. To make it smaller, untick **Popups** on layers that do not need
+stricter. The Map tab shows your map's data size under the Save to field -
+the popup pictures it carries included, each once however many features show
+it - and warns if it is over the limit - the file is still written if you want it. To make it smaller, untick **Popups** on layers that do not need
 them, or reduce **Coordinate precision** on the Map tab.
 
 ## Share ZIP

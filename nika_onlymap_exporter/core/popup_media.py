@@ -656,28 +656,3 @@ def picture_sources(layers: Iterable[ExportLayer]) -> dict[str, PopupPicture]:
     return {
         picture.name: picture for layer in layers for picture in layer.popup_pictures
     }
-
-
-def replace_picture_names(
-    layer: ExportLayer, sources: Mapping[str, str]
-) -> ExportLayer:
-    """`layer` with each picture's name in its popup markup replaced by
-    `sources[name]` - a `data:` URI for a page that carries its pictures
-    inside. Only the markup properties are touched, never a data value."""
-    if not layer.popup_pictures or layer.geojson is None:
-        return layer
-    targets = {f.name for f in layer.popup.fields if f.markup}
-    pattern = re.compile(r'src="(popup-picture-[0-9a-f]{16}\.[a-z]+)"')
-
-    def swap(match: re.Match[str]) -> str:
-        return f'src="{sources.get(match.group(1), match.group(1))}"'
-
-    features = []
-    for feature in layer.geojson.get("features") or ():
-        properties = dict(feature.get("properties") or {})
-        for name in targets:
-            value = properties.get(name)
-            if isinstance(value, str) and "popup-picture-" in value:
-                properties[name] = pattern.sub(swap, value)
-        features.append({**feature, "properties": properties})
-    return dataclasses.replace(layer, geojson={**layer.geojson, "features": features})

@@ -100,7 +100,7 @@ from ..packaging.dependency_scanner import (
     data_bytes_by_layer,
     report_remote_dependency,
 )
-from ..packaging.popup_pictures import embed_popup_pictures
+from ..packaging.popup_pictures import picture_fields
 from ..packaging.raster_staging import stage_rasters
 from ..packaging.runtime_manager import RuntimeBundle
 from ..translation import tr
@@ -132,6 +132,7 @@ from .export_ir import (
     Extent,
     FidelityItem,
     OutputMode,
+    PopupPicture,
     RasterSpec,
 )
 from .export_resolution import frame_pixel_size, frame_resolution
@@ -157,7 +158,7 @@ from .license_policy import CapVerdict
 from .live_count import refresh_live_counts
 from .map_services import is_image_tile_template
 from .page_settings import apply_page_choice
-from .popup_media import popup_files_unchanged
+from .popup_media import picture_sources, popup_files_unchanged
 from .print_settings import PrintSettings, apply_to_spec
 from .project_reader import (
     PendingProject,
@@ -1552,6 +1553,9 @@ def finish_cartograph_full(
     # By file name, which carries the layer id: a raster drawn in two frames
     # is converted to the same bytes and carried once.
     embedded_rasters: dict[str, bytes] = {}
+    # By name, which is the picture's hash: carried once for every frame.
+    embedded_pictures: dict[str, PopupPicture] = {}
+    shown_in: set[str] = set()
     reported_remote: set[str] = set()
     measured: list[Mapping[str, int]] = []
     for index, source in enumerate(prepared.live_frames):
@@ -1584,7 +1588,9 @@ def finish_cartograph_full(
             embedded_rasters.setdefault(name, data)
         # A frame lives in the cartograph's own page, so its popup pictures
         # travel inside it, as a single-file web map's do.
-        export_project = embed_popup_pictures(export_project)
+        for name, picture in picture_sources(export_project.layers).items():
+            embedded_pictures.setdefault(name, picture)
+        shown_in.update(picture_fields(export_project.layers))
         requirement = prepared.atlas_requirement
         if requirement is not None and requirement.frame_id == source.frame_id:
             export_project = _with_atlas_order(export_project, requirement)
@@ -1634,6 +1640,8 @@ def finish_cartograph_full(
             prepared.bundle,
             live_markup,
             embedded_rasters=tuple(embedded_rasters.items()),
+            embedded_pictures=tuple(embedded_pictures.values()),
+            picture_fields=tuple(sorted(shown_in)),
         ),
         projects=tuple(projects),
     )

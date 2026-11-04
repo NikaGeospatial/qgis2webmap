@@ -439,7 +439,8 @@ popup's width:
   one over 1 MB is saved again as JPEG (PNG when transparent); your files are
   not changed.
   One picture can be up to 1 MB after that, and one map carries up to 20 MB
-  of pictures.
+  of pictures. A picture several features show is carried once, and counts
+  once toward the map's size.
 - **A picture that is a web address is not carried.** It loads each time
   the popup opens, so it shows only with an internet connection.
 

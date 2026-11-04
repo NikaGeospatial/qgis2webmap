@@ -52,7 +52,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   other schemes stay text. A field whose QGIS widget is **Attachment** with
   its document viewer set to **Image** shows its pictures, fitted to the
   popup: a picture on this computer is carried with the map (inside a
-  Standalone HTML file, beside `index.html` in Folder and Share ZIP), scaled
+  Standalone HTML file, beside `index.html` in Folder and Share ZIP, once
+  however many features show it, and counted in the map's size), scaled
   down to 1280 pixels across when larger, up to 1 MB each and 20 MB per map;
   a picture that is a web address loads live. Only pictures in the project's
   folder or under the widget's default path are carried, wherever the path
