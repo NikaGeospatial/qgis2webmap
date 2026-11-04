@@ -623,13 +623,13 @@ class TestBasemapSwitcherCheckbox:
                 ]
 
             (row,) = basemap_rows()
-            assert "openstreetmap.org" in row and "carto.com" in row
+            assert "openstreetmap.org" in row and "cartocdn.com" in row
             reads: list[str] = []
             dialog._start_job = lambda *a, **k: reads.append("read")
             dialog.mode_buttons[OutputMode.STANDALONE_HTML].click()
             assert not dialog._fidelity_is_stale
             (row,) = basemap_rows()
-            assert "openstreetmap.org" not in row and "carto.com" in row
+            assert "openstreetmap.org" not in row and "cartocdn.com" in row
             assert reads == []
         finally:
             dialog.close()

@@ -279,8 +279,8 @@ paints the mountains, but column height does not show while relief is on, and
 the Fidelity tab says so. Two caveats: Liberty and Bright are
 vector-only styles with no raster imagery to drape, so with those the relief
 stays grey (the Fidelity tab says so); and Positron's draped imagery comes from
-carto.com even though its flat tiles come from openfreemap.org — relief adds
-that third party, and the Fidelity tab names every host involved.
+NASA's earthdata.nasa.gov even though its flat tiles come from openfreemap.org —
+relief adds that third party, and the Fidelity tab names every host involved.
 
 **Labels are unreadable over relief.** The map library stops honouring their
 text size once relief is on, so the words shrink to a few pixels and squash

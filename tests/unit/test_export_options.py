@@ -486,11 +486,36 @@ class TestBasemapSwitcher:
         assert hosts(basemap="positron") == {"openfreemap.org"}
         assert hosts(basemap="positron", basemap_switcher=True) == {
             "openfreemap.org",
-            "carto.com",
+            "cartocdn.com",
         }
         assert hosts(
             basemap="positron", basemap_switcher=True, output_mode=OutputMode.FOLDER
-        ) == {"openfreemap.org", "carto.com", "openstreetmap.org"}
+        ) == {"openfreemap.org", "cartocdn.com", "openstreetmap.org"}
+
+    def test_each_host_named_is_the_one_the_runtime_contacts(self) -> None:
+        """The privacy and Fidelity notes name these hosts, so each is checked
+        against the address the pinned runtime registers for the preset."""
+        import os
+        import re
+        from pathlib import Path
+        from urllib.parse import urlsplit
+
+        from nika_onlymap_exporter.core.manifest_builder import BASEMAP_HOSTS
+
+        runtime_dir = os.environ.get("ONLYMAP_RUNTIME_DIR")
+        bundle = Path(runtime_dir or "") / "onlymap.standalone.js"
+        if not runtime_dir or not bundle.is_file():
+            pytest.skip("set ONLYMAP_RUNTIME_DIR to the pinned runtime")
+        source = bundle.read_text(encoding="utf-8")
+        for preset, host in BASEMAP_HOSTS.items():
+            # `register("dark-matter", { style: "https://..."`; OpenStreetMap's
+            # style is inline, its raster `tiles` the first address in it.
+            registered = re.search(
+                rf'\("{re.escape(preset)}",\s*\{{.*?"(https://[^"]+)"', source, re.S
+            )
+            assert registered is not None, preset
+            contacted = urlsplit(registered.group(1)).hostname or ""
+            assert contacted == host or contacted.endswith(f".{host}"), preset
 
     def test_the_note_names_every_host_a_reader_can_reach(self) -> None:
         from nika_onlymap_exporter.core.manifest_builder import basemap_notes
@@ -500,7 +525,7 @@ class TestBasemapSwitcher:
                 basemap="voyager", basemap_switcher=True, output_mode=OutputMode.FOLDER
             )
         )
-        assert "from carto.com every time" in note
+        assert "from cartocdn.com every time" in note
         assert "openstreetmap.org or openfreemap.org" in note
         (from_file,) = basemap_notes(
             ExportSettings(basemap="voyager", basemap_switcher=True)
@@ -519,7 +544,7 @@ class TestBasemapSwitcher:
             ExportSettings(basemap="osm", basemap_switcher=True)
         )
         assert warning == OSM_FILE_NOTE
-        assert "openfreemap.org or carto.com" in note
+        assert "openfreemap.org or cartocdn.com" in note
 
     def test_scaled_it_grows_with_the_corner_not_over_the_switcher(self) -> None:
         """Each panel scaled alone would grow down over the one under it."""

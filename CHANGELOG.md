@@ -127,6 +127,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   thousands in French). The text is worked out at export.
 
 ### Fixed
+- The Fidelity tab and the export's list of network dependencies name
+  cartocdn.com, the domain the Dark Matter and Voyager basemaps really load
+  from. They named carto.com, which the map never contacts.
 - A long popup value with nowhere to wrap - a file path, a web address, an
   ID - breaks onto the next line inside the popup instead of running past its
   edge. Text with spaces still wraps between its words.

@@ -174,8 +174,12 @@ BASEMAP_HOSTS = {
     # naming the wrong third party here makes the fidelity report's privacy
     # statement false.
     "positron": "openfreemap.org",
-    "dark-matter": "carto.com",
-    "voyager": "carto.com",
+    # Dark Matter and Voyager stay CARTO's, served from its CDN: the pinned
+    # runtime loads their styles from basemaps.cartocdn.com, and those load
+    # their tiles, sprites and fonts from tiles.basemaps.cartocdn.com.
+    # Verified against 0.13.3.
+    "dark-matter": "cartocdn.com",
+    "voyager": "cartocdn.com",
     "liberty": "openfreemap.org",
     "bright": "openfreemap.org",
 }
