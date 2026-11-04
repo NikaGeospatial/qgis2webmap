@@ -6,8 +6,50 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Added
+- **WMS layers in any coordinate system.** A WMS that offers no Web
+  Mercator (EPSG:3857) - many national services offer only their own grid,
+  such as EPSG:25832 - is now exported: the map asks it for each tile in the
+  coordinate system QGIS asks it in, and warps the picture into place, on
+  ordinary and projected maps alike. So is a WMS whose capabilities QGIS
+  has no stored copy of, in the coordinate system the layer was added in. A
+  service that offers Web Mercator is asked in it, exactly as before. A
+  coordinate system the map does not carry (most outside the UTM zones and
+  the common national grids) is looked up at epsg.io by the reader's
+  browser, once; the Fidelity tab says when. Coordinate systems that are not
+  EPSG codes or CRS:84 are still refused, with a row.
+- **WMTS layers on national tile grids** (swisstopo, PDOK, MML, AdV and
+  any other WMTS grid): exported on the service's own grid, taken from the
+  capabilities QGIS stored when it loaded the layer - the export still
+  contacts no service - and warped into place. Web Mercator grids whose
+  levels are not named by their zoom (PDOK's `00`, `01`, ...), which used to
+  be refused, export the same way.
+- **A time slider for time-enabled WMS (WMS-T) layers.** A WMS-T that
+  follows QGIS's time opens at the time QGIS draws, and a slider (play,
+  pause and scrub) steps it through the times the service lists, which QGIS
+  read from its capabilities. It sits top left, under the layer switcher.
+  When the time QGIS draws is not one of the service's times, QGIS asks for
+  no time, or QGIS knows no list of times, the layer is a fixed snapshot as
+  before, and the Fidelity tab says why. A service listing more than 2,000
+  times gets a slider over the 2,000 around the time QGIS draws.
+
 ### Changed
 - The map runtime is OnlyMap 0.13.4.
+- **Tile and WMS services that refuse web pages (CORS) now show.** Their
+  tiles are drawn as plain pictures, under every other layer, hidden while
+  the map is tilted or rotated, and left out of pictures the map saves of
+  itself; they used to stay empty. Services that allow only `https://` pages,
+  such as Sachsen-Anhalt's (issue #2), now show in a map opened from a file
+  and in **Preview in browser** too. A service on `http://` still does not
+  draw in a map served over `https://` unless it also answers on `https://`.
+
+### Fixed
+- Tile layers whose addresses carry no file extension (ArcGIS tile caches'
+  `.../MapServer/tile/{z}/{y}/{x}`, Google-style addresses) and TMS `{-y}`
+  addresses now draw; they exported but showed nothing. A WMTS layer with
+  such a tile address, which was refused, now exports, and these layers no
+  longer keep a cartograph's interactive frame out of its projected
+  coordinate system.
 
 ## [0.3.2] - Unreleased
 

@@ -333,7 +333,8 @@ worse than a missing one.
 - **Project description** draws the abstract from
   **Project Properties → Metadata**. Nothing appears if the project has none.
 - **Position** places the caption. All four corners already hold controls —
-  switcher top left, legend top right, zoom, scale, measure tool and basemap
+  switcher (and any filter panels and WMS-T time sliders) top left, legend
+  top right, zoom, scale, measure tool and basemap
   panel bottom left, credit bottom right — so the two centre positions are the only
   genuinely clear space, and they are listed first.
 

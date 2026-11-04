@@ -289,19 +289,30 @@ expressions the runtime evaluates at draw time, so a policy without
 ### A WMS or WMTS layer is empty in the map
 
 The rest of the map draws, but the service's layer stays blank. The map asks
-the service for its images itself, from the reader's browser, and a browser
-only draws images a service allows web pages to load: the service must send an
-`Access-Control-Allow-Origin` header (`*` for a map opened from a file). QGIS is
-not a web page, so a service can work there and not here. The browser's
-developer tools (Console) show the refused request, and the map page reports
-the cause on its `om-validation-error` event; only the service's provider can
-allow access. A service on
-`http://` is also blocked inside a map served over `https://`.
+the service for its images itself, from the reader's browser. The browser's
+developer tools (Console) show a refused or failed request, and the map page
+reports the cause on its `om-validation-error` event. Common causes:
 
-Some services allow only maps published on an `https://` site. Their layers
-stay empty in a map opened from a file and in **Preview in browser**, which
-serves the map from your own computer over `http://`, but draw once the map is
-published over `https://`, such as on NIKA hosting or GitHub Pages.
+- **The service is on `http://` and the map is served over `https://`.**
+  Browsers block it, unless the service also answers on `https://`. Only the
+  service's provider can change that; a map opened from a file or in
+  **Preview in browser** is not affected.
+- **The service answers with an error** - a WMS error message instead of a
+  picture, or an HTTP error such as 404 - often because the layer name, style
+  or time it is asked for no longer exists. The event quotes it.
+- **The coordinate system could not be looked up.** A WMS asked in a
+  coordinate system other than Web Mercator, or a WMTS on a national grid,
+  needs that system's definition; for one the map does not carry, the
+  reader's browser fetches it from epsg.io (the Fidelity tab says which), so
+  the layer stays empty offline or when epsg.io cannot be reached.
+
+A service that does not allow web pages to read its images (no
+`Access-Control-Allow-Origin` header, or one that allows only `https://`
+sites, as Sachsen-Anhalt's does) is no longer a cause: QGIS is not a web
+page, so such a service works there, and the map now shows it too, as plain
+pictures. Those sit under every other layer of the map, whatever the layer
+order, are hidden while the map is tilted or rotated, and are left out of
+pictures the map saves of itself.
 
 ### A WMS or WMTS layer's legend shows no picture
 
