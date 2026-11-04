@@ -983,8 +983,10 @@ class TileSpec:
     there are millions of them. `url` is the `{z}/{x}/{y}` template exactly as
     the runtime's `TileLayer` takes it, already free of any access key -
     `layer_reader` refuses a keyed URL rather than shipping it. A WMS or WMTS
-    layer is one too, its template filled by `{bbox-epsg-3857}`, `{width}`
-    and `{height}` or by `{z}`/`{x}`/`{y}` (`core.map_services`).
+    layer is one too, its template filled by `{bbox-epsg-3857}` (or the
+    extent in the service's own CRS), `{width}` and `{height}`, by
+    `{z}`/`{x}`/`{y}`, or by a WMTS grid's `{TileMatrix}`/`{TileRow}`/
+    `{TileCol}` (`core.map_services`).
     """
 
     url: str
@@ -1000,6 +1002,15 @@ class TileSpec:
     # Whether QGIS's legend for the layer shows only what is in view (a WMS
     # "contextual legend"), which a picture loaded once cannot follow.
     contextual_legend: bool = False
+    # A WMTS on a grid other than Web Mercator's: the grid as its capabilities
+    # state it (JSON), which the `{TileMatrix}`/`{TileRow}`/`{TileCol}`
+    # template addresses.
+    tile_matrix_set: str | None = None
+    # A WMS-T with a time slider: the `{time}` the map opens at, the time QGIS
+    # draws, and the times the slider steps through, as the service lists
+    # them (a comma list or `start/end/period`).
+    time: str | None = None
+    times: str | None = None
 
     def snapshot(self) -> dict[str, Any]:
         snapshot: dict[str, Any] = {
@@ -1013,6 +1024,11 @@ class TileSpec:
             snapshot["legend"] = [image.snapshot() for image in self.legend]
         if self.contextual_legend:
             snapshot["contextualLegend"] = True
+        if self.tile_matrix_set is not None:
+            snapshot["tileMatrixSet"] = self.tile_matrix_set
+        if self.times is not None:
+            snapshot["time"] = self.time
+            snapshot["times"] = self.times
         return snapshot
 
 

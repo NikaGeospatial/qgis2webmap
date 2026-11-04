@@ -1114,7 +1114,8 @@ def build_tile_layer_element(
     The runtime draws image tiles from a `{z}/{x}/{y}` `data` template itself
     (or a WMS's `{bbox-epsg-3857}` one),
     so the element is all attributes: where to ask, between which zooms, and
-    the universal opacity, visibility and zoom range.
+    the universal opacity, visibility and zoom range - and for a national
+    WMTS grid or a WMS-T, `_tile_service_attributes`.
     """
     inner = indent + "  "
     attributes: list[tuple[str, str | None]] = [
@@ -1127,6 +1128,7 @@ def build_tile_layer_element(
     ]
     if tiles.tile_size is not None:
         attributes.append(("tile-size", str(tiles.tile_size)))
+    attributes.extend(_tile_service_attributes(tiles))
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))
     if not layer.visible:
@@ -1141,6 +1143,18 @@ def build_tile_layer_element(
             f"{indent}></om-layer>",
         ]
     )
+
+
+def _tile_service_attributes(tiles: TileSpec) -> list[tuple[str, str | None]]:
+    """What a national WMTS grid or a WMS-T adds to its tile layer: the grid
+    its `{TileMatrix}` template addresses, and the `{time}` the map opens
+    at. Nothing for any other tile layer, whose element stays as it was."""
+    attributes: list[tuple[str, str | None]] = []
+    if tiles.tile_matrix_set is not None:
+        attributes.append(("tile-matrix-set", tiles.tile_matrix_set))
+    if tiles.times is not None and tiles.time is not None:
+        attributes.append(("time", tiles.time))
+    return attributes
 
 
 def build_layer_element(
@@ -1866,6 +1880,9 @@ WIDGET_POSITIONS = {
     "layer-switcher": "top-left",
     # Under the layer switcher: each narrows one layer the switcher lists.
     "filter": "top-left",
+    # Under the filters, as each steps one layer the switcher lists: a WMS-T
+    # through the times its service draws.
+    "time-slider": "top-left",
     # With the other controls that work the map rather than list its layers.
     "basemap-switcher": "bottom-left",
     "zoom-controls": "bottom-left",
@@ -2174,6 +2191,21 @@ def build_filter_widget(layer: ExportLayer, indent: str) -> str:
     )
 
 
+def build_time_slider_widget(layer: ExportLayer, indent: str) -> str:
+    """The runtime's time slider for a WMS-T `layer`: play and scrub through
+    the times its service lists, headed by the layer's name. It opens where
+    the layer's `time` is, the time QGIS draws."""
+    tiles = layer.tiles
+    if tiles is None or tiles.times is None:
+        return ""
+    return (
+        f'{indent}<om-widget type="time-slider" '
+        f'layer="{escape_attr(layer.layer_id)}" '
+        f'times="{escape_attr(tiles.times)}" '
+        f'position="{WIDGET_POSITIONS["time-slider"]}"></om-widget>'
+    )
+
+
 def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     """A static legend whose swatches are the map's own markers.
 
@@ -2344,6 +2376,12 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
         build_filter_widget(layer, indent)
         for layer in project.exportable_layers
         if layer.filter is not None
+    )
+    # And one time slider per WMS-T, under them.
+    widgets.extend(
+        build_time_slider_widget(layer, indent)
+        for layer in project.exportable_layers
+        if layer.tiles is not None and layer.tiles.times is not None
     )
     # The units are the author's, the measure tool's and the scale bar's
     # alike: the page's `templates/measure-tool.html` takes the measure

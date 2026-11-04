@@ -2594,6 +2594,61 @@ class TestTileLayer:
         markup = build_manifest(make_project(layers=(self.tile_layer(),)))
         assert "validate" not in markup
 
+    GRID = '{"supportedCRS":"EPSG:2056","tileMatrix":[]}'
+
+    def test_a_national_grid_travels_as_its_tile_matrix_set(self) -> None:
+        """OnlyMap 0.13.4: a WMTS off the Web Mercator grid names it."""
+        import html
+
+        from nika_onlymap_exporter.core.export_ir import TileSpec
+
+        layer = self.tile_layer(
+            tiles=TileSpec(
+                "https://w.example/{TileMatrix}/{TileRow}/{TileCol}.png",
+                0,
+                27,
+                tile_matrix_set=self.GRID,
+            )
+        )
+        markup = build_layer_element(layer)
+        (grid,) = re.findall(r'tile-matrix-set="([^"]*)"', markup)
+        assert html.unescape(grid) == self.GRID
+        assert "tile-size" not in markup
+
+    def test_grid_and_time_attributes_are_in_the_runtime_schema(
+        self, known_attributes
+    ) -> None:
+        assert {"tile-matrix-set", "time"} <= known_attributes["om-layer"]
+        assert "times" in known_attributes["om-widget"]
+
+    def wmst_layer(self):
+        layer = self.wms_layer()
+        assert layer.tiles is not None
+        return replace(
+            layer,
+            tiles=replace(
+                layer.tiles,
+                url=self.WMS.replace("&WIDTH", "&TIME={time}&WIDTH"),
+                time="2020-01-05",
+                times="2020-01-01/2020-12-31/P1D",
+            ),
+        )
+
+    def test_a_wms_t_opens_at_its_time_and_gets_a_time_slider(self) -> None:
+        layer = self.wmst_layer()
+        assert 'time="2020-01-05"' in build_layer_element(layer)
+        widgets = build_widget_elements(make_project(layers=(layer,)))
+        (slider,) = re.findall(r'<om-widget type="time-slider"[^>]*>', widgets)
+        assert 'layer="osm"' in slider
+        assert 'times="2020-01-01/2020-12-31/P1D"' in slider
+        assert 'position="top-left"' in slider
+
+    def test_without_times_there_is_no_slider_and_no_time(self) -> None:
+        markup = build_manifest(make_project(layers=(self.wms_layer(),)))
+        assert "time-slider" not in markup
+        assert re.search(r"\stime=\"", markup) is None
+        assert "tile-matrix-set" not in markup
+
     LEGEND = (
         "https://example.org/wms?SERVICE=WMS&VERSION=1.3.0&SLD_VERSION=1.1.0"
         "&REQUEST=GetLegendGraphic&FORMAT=image/png&LAYER=a&STYLE=&TRANSPARENT=true"
