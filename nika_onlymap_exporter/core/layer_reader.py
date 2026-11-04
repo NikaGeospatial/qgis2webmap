@@ -1492,12 +1492,25 @@ def _service_legend(
     """The legend pictures of a WMS or WMTS layer, from `(title, address)`
     pairs; a title is kept only when there are several pictures to tell
     apart. An address carrying an access key is left out, with a row: the
-    browser would load it, key and all, from the page anyone can read.
+    browser would load it, key and all, from the page anyone can read. So is
+    one not on the web - a `file:`, `data:` or other address the capabilities
+    give - which the page would otherwise load from wherever it is opened.
     """
     from urllib.parse import urlsplit
 
     images: list[LegendImage] = []
     for title, address in found:
+        scheme = urlsplit(address).scheme.lower()
+        if scheme not in ("http", "https"):
+            where = f"a {scheme}: address" if scheme else "a relative address"
+            report.unsupported(
+                f"Legend picture of '{name}'",
+                f"The service gives this layer's legend picture at {where}, "
+                "not a web address, which the map does not load. The picture "
+                "is left out of the legend, which lists the layer by its name.",
+                layer_id,
+            )
+            continue
         if _carries_key(address):
             host = urlsplit(address).netloc.rpartition("@")[2]
             report.unsupported(

@@ -89,7 +89,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   layer, one for each sublayer of a layer made of several. The browser loads
   it from the service when the map opens, so it needs an internet
   connection; offline the legend lists the layer by name. An address that
-  carries an access key is left out. A cartograph's legend still lists the
+  carries an access key, or that is not a web (`http` or `https`) address, is
+  left out. A cartograph's legend still lists the
   layer by name; the Checks tab says so.
 
 ### Changed
