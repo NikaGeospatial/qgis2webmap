@@ -13,7 +13,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
-from urllib.parse import parse_qsl, quote, urlsplit
+from urllib.parse import parse_qsl, quote, unquote, urlsplit
 
 import pytest
 
@@ -357,6 +357,27 @@ def _same_request(url: str):
     return parts.netloc, parts.path, parse_qsl(parts.query, keep_blank_values=True)
 
 
+def _as_qgis_asks(url: str, layer):
+    """`_same_request` of the legend address QGIS asked for `layer`, its
+    FORMAT as QGIS 4 asks it. QGIS 3.44 writes the format its source string
+    holds into the request as it stands, still percent-encoded where the
+    source is ("image%2Fpng"), so the service gets the code, not the format;
+    the map asks the format it names, as QGIS 4 does."""
+    netloc, path, query = _same_request(url)
+    if qgis_core.Qgis.QGIS_VERSION_INT >= 40000:
+        return netloc, path, query
+    stored = dict(
+        part.split("=", 1) for part in layer.source().split("&") if "=" in part
+    )["format"]
+    asked = []
+    for key, value in query:
+        if key == "FORMAT":
+            assert value == stored
+            value = unquote(value)
+        asked.append((key, value))
+    return netloc, path, asked
+
+
 class TestLegend:
     """The legend picture the map shows is the one QGIS's legend shows."""
 
@@ -384,7 +405,7 @@ class TestLegend:
         assert image.label == ""
 
         qgis_url, picture = _qgis_legend_request(layer)
-        assert _same_request(image.url) == _same_request(qgis_url)
+        assert _same_request(image.url) == _as_qgis_asks(qgis_url, layer)
         outlined = styles == ("outlined",)
         expected = OUTLINED_LEGEND_SIZE if outlined else LEGEND_SIZES["target"]
         assert (picture.width(), picture.height()) == expected
@@ -402,8 +423,9 @@ class TestLegend:
         assert len(services.requests) == before
 
     def test_each_sublayer_has_its_own_picture(self, qgis_app, services) -> None:
-        """QGIS's legend shows the first sublayer's picture; the map's shows
-        the first one exactly so, and the next one's beside it."""
+        """QGIS's legend shows one sublayer's picture - the top one's on
+        QGIS 4, the bottom one's on 3.44; the map's lists the top one first
+        and shows that one exactly so, and the other one's beside it."""
         layer = _wms(
             services.url("cors/wms"),
             layers=("target", "boundary"),
@@ -415,7 +437,8 @@ class TestLegend:
         assert exported.tiles is not None
         first, second = exported.tiles.legend
         qgis_url, _ = _qgis_legend_request(layer)
-        assert _same_request(first.url) == _same_request(qgis_url)
+        shown = first if qgis_core.Qgis.QGIS_VERSION_INT >= 40000 else second
+        assert _same_request(shown.url) == _as_qgis_asks(qgis_url, layer)
         # In the source string's order, which QGIS's own sublayer list
         # follows; each under the title the capabilities give it.
         names = {"target": "Target area", "boundary": "Boundary"}
@@ -433,7 +456,7 @@ class TestLegend:
         (image,) = exported.tiles.legend
         assert image.url.startswith(services.url("cors/legends/outlined.png"))
         qgis_url, picture = _qgis_legend_request(layer)
-        assert _same_request(image.url) == _same_request(qgis_url)
+        assert _same_request(image.url) == _as_qgis_asks(qgis_url, layer)
         assert not picture.isNull()
 
     def test_a_key_never_reaches_the_legend(self, qgis_app, services) -> None:
@@ -497,6 +520,7 @@ class TestCartographLegend:
             export_layout_to_cartograph,
         )
         from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
+        from nika_onlymap_exporter.qt_compat import set_legend_manual
 
         project.setCrs(QgsCoordinateReferenceSystem("EPSG:3857"))
         parcels = build_parcels()
@@ -510,7 +534,7 @@ class TestCartographLegend:
         legend.setLinkedMap(map_item)
         legend.attemptResize(QgsLayoutSize(80, 60, QgsUnitTypes.LayoutMillimeters))
         if legend_hides_it:
-            legend.setSyncMode(qgis_core.Qgis.LegendSyncMode.Manual)
+            set_legend_manual(legend)
             legend.model().rootGroup().removeLayer(wms)
         runtime = RuntimeBundle(
             javascript=b"// core js placeholder",

@@ -521,9 +521,10 @@ def wms_legend_urls(
     """`(title, address)` of the legend picture of each of `layers` that has
     one, in order; see `wms_legend_url`.
 
-    QGIS's own legend shows the first sublayer's picture only; the web map
-    draws them all, so it shows each one's, under the title the capabilities
-    give it (its name when they give none).
+    QGIS's own legend shows one sublayer's picture only (the top one's on
+    QGIS 4, the bottom one's on 3.44); the web map draws them all, so it shows
+    each one's, under the title the capabilities give it (its name when they
+    give none).
     """
     found: list[tuple[str, str]] = []
     for index, layer in enumerate(layers):

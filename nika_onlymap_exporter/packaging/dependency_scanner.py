@@ -303,7 +303,7 @@ def report_service_legend(layer: ExportLayer, report: FidelityReportBuilder) -> 
     )
     if several:
         detail += (
-            " QGIS's legend shows the first sublayer's picture only; the map's "
+            " QGIS's legend shows one sublayer's picture only; the map's "
             f"shows one for each of the {len(images)} sublayers, under its name."
         )
     if tiles.contextual_legend:
