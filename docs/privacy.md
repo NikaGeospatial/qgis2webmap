@@ -162,15 +162,20 @@ about your project, your layers or your machine. npm, or jsDelivr, can see
 that some computer at your IP address downloaded a public file, which is what
 any software download looks like.
 
-Beyond those, the plugin never contacts anything, with one exception of
+Beyond those, the plugin never contacts anything, with two exceptions of
 QGIS's own making. Exporting is entirely local — your data is read from disk and
 written into the file, and no part of it leaves your computer.
 
-The exception: a raster QGIS itself reads over the web (a COG at an `https://`
+The first: a raster QGIS itself reads over the web (a COG at an `https://`
 address). To check the web map can draw it, the export reads the file's header,
 which GDAL usually still holds from when QGIS opened the layer; if it has let
 it go, the export asks that layer's own server for the header again, as QGIS
 did. It sends nothing of yours, and never downloads the raster itself.
+
+The second: a vector layer QGIS reads from a web service (WFS, OGC API
+Features, SensorThings, an ArcGIS feature service): the export reads its
+features through QGIS, as QGIS reads them to draw the layer, so that service
+may be asked for them again. Nothing of yours is sent to it.
 
 ## If you publish or host a map
 
