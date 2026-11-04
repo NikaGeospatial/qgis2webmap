@@ -25,6 +25,7 @@ from ..core.export_ir import (
     ExportProject,
     ExportSettings,
     FidelityItem,
+    FilterKind,
     OutputMode,
     OverlayCorner,
 )
@@ -200,6 +201,11 @@ class OnlyMapWriter:
         """Fill the artifact template. No string-built HTML beyond the manifest."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
         manifest = build_manifest(project, verdict, compress_data=compress_data)
+        if any(
+            layer.filter is not None and layer.filter.kind is FilterKind.TEXT
+            for layer in project.exportable_layers
+        ):
+            manifest += "\n" + _NO_TICKS_HOOK
 
         if runtime_file:
             # An import rather than a `src=` attribute, so the template's single
@@ -605,6 +611,29 @@ def _panel_size_block(settings: ExportSettings, legend_scaled: bool = True) -> s
     if not rules:
         return ""
     return "\n".join(["      @media not print {", *rules, "      }"])
+
+
+# A filter panel's tick boxes all cleared ask the runtime for no value at all,
+# and OnlyMap 0.13.3 reads an empty list as no filter: every feature came back,
+# and the panel lost the ticks it had. A value no feature has asks for none, as
+# no category ticked does in QGIS, and the panel shows every box cleared. After
+# the layers, so it finds them; a plain script, so file:// is the same.
+_NO_TICKS_HOOK = """    <script>
+      (function () {
+        var none = JSON.stringify(["\\u0000"]);
+        var layers = document.querySelectorAll("om-layer[filter-category]");
+        layers.forEach(function (layer) {
+          new MutationObserver(function () {
+            if (layer.getAttribute("filter-categories") === "[]") {
+              layer.setAttribute("filter-categories", none);
+            }
+          }).observe(layer, {
+            attributes: true,
+            attributeFilter: ["filter-categories"],
+          });
+        });
+      })();
+    </script>"""
 
 
 # Which corner each widget is pinned to, so a scale transform grows it *into*

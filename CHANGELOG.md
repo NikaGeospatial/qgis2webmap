@@ -29,7 +29,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the Layers tab: the web map gets a panel, top left, that filters the layer
   by that field - a slider for a number or a date, a tick box per value for
   text of up to 50 values (a field with more is refused and the Fidelity tab
-  says so). Headed by the field's alias. The Fidelity tab also says what it
+  says so); clearing every tick box hides every feature, as no category
+  ticked does in QGIS. Headed by the field's alias. The Fidelity tab also says what it
   cannot do: features with no value in the field are hidden while the filter
   is there, a filtered layer's points are not merged into count bubbles, and
   its labels are not filtered.

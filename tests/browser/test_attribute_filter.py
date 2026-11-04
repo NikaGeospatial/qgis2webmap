@@ -213,3 +213,17 @@ class TestTickBoxes:
         assert _drawn(page) == ["Barnet"]
         page.locator(PANEL).locator("label", has_text="town").click()
         assert _drawn(page) == ["Ashford", "Barnet", "Crawley"]
+
+    def test_unticking_every_value_hides_every_place(
+        self, page, runtime, tmp_path
+    ) -> None:
+        """No value ticked keeps no place, as no category ticked does in QGIS."""
+        _open(page, _write(runtime, tmp_path, "kind", FilterKind.TEXT, "Kind"))
+        for value in ("town", "village"):
+            page.locator(PANEL).locator("label", has_text=value).click()
+        assert _drawn(page) == []
+        # Still the tick boxes, all cleared: not a slider, nor ticked again.
+        boxes = page.locator(PANEL).locator(".omni-filter-check-row input")
+        assert [box.is_checked() for box in boxes.all()] == [False, False]
+        page.locator(PANEL).locator("label", has_text="village").click()
+        assert _drawn(page) == ["Barnet"]
