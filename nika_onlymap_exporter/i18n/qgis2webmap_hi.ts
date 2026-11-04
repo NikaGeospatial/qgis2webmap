@@ -136,22 +136,22 @@
       <translation>मानचित्र {names} का इंटरैक्टिव होना ज़रूरी है।</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1864" />
+      <location filename="../core/cartograph_export.py" line="1889" />
       <source>Map data size</source>
       <translation>मानचित्र डेटा का आकार</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2211" />
+      <location filename="../core/cartograph_export.py" line="2239" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi the picture this frame is drawn through (its frame line included) would be larger than memory can hold. Make the map smaller or ask for a lower resolution.</source>
       <translation>अनुरोधित {wanted} dpi, {dpi} dpi पर बनाया गया ({width} x {height} पिक्सेल): {wanted} dpi पर इस फ़्रेम की मध्यवर्ती तस्वीर (फ़्रेम रेखा सहित) मेमोरी की क्षमता से बड़ी होगी। मानचित्र को छोटा करें या कम रिज़ॉल्यूशन माँगें।</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2219" />
+      <location filename="../core/cartograph_export.py" line="2247" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi this frame's picture would be larger than a browser can draw. Make the map smaller or ask for a lower resolution.</source>
       <translation>अनुरोधित {wanted} dpi, {dpi} dpi पर बनाया गया ({width} x {height} पिक्सेल): {wanted} dpi पर इस फ़्रेम की तस्वीर ब्राउज़र के बना पाने से बड़ी होगी। मानचित्र को छोटा करें या कम रिज़ॉल्यूशन माँगें।</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1865" />
+      <location filename="../core/cartograph_export.py" line="1890" />
       <source>The page carries {size} of vector data, which can leave the map blank for a long time while it opens, especially on a computer without a graphics card. Heaviest: {layers}. Simplify the geometry of those layers, or set the frame to Image in Map frames.</source>
       <translation>पेज में {size} वेक्टर डेटा है, जिससे खुलते समय मानचित्र काफ़ी देर तक खाली रह सकता है, खासकर ग्राफ़िक्स कार्ड के बिना कंप्यूटर पर। सबसे भारी: {layers}। इन परतों की ज्यामिति सरल करें, या मानचित्र फ़्रेम में फ़्रेम को छवि पर सेट करें।</translation>
     </message>

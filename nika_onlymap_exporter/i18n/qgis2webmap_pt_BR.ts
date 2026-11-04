@@ -136,22 +136,22 @@
       <translation>Requer que o mapa {names} seja Interativo.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1864" />
+      <location filename="../core/cartograph_export.py" line="1889" />
       <source>Map data size</source>
       <translation>Tamanho dos dados do mapa</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2211" />
+      <location filename="../core/cartograph_export.py" line="2239" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi the picture this frame is drawn through (its frame line included) would be larger than memory can hold. Make the map smaller or ask for a lower resolution.</source>
       <translation>Solicitado {wanted} dpi, desenhado a {dpi} dpi ({width} x {height} pixels): a {wanted} dpi a imagem intermediária deste quadro (incluindo sua linha) seria maior do que cabe na memória. Diminua o mapa ou peça uma resolução menor.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2219" />
+      <location filename="../core/cartograph_export.py" line="2247" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi this frame's picture would be larger than a browser can draw. Make the map smaller or ask for a lower resolution.</source>
       <translation>Solicitado {wanted} dpi, desenhado a {dpi} dpi ({width} x {height} pixels): a {wanted} dpi a imagem deste quadro seria maior do que um navegador consegue desenhar. Diminua o mapa ou peça uma resolução menor.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1865" />
+      <location filename="../core/cartograph_export.py" line="1890" />
       <source>The page carries {size} of vector data, which can leave the map blank for a long time while it opens, especially on a computer without a graphics card. Heaviest: {layers}. Simplify the geometry of those layers, or set the frame to Image in Map frames.</source>
       <translation>A página contém {size} de dados vetoriais, o que pode deixar o mapa em branco por bastante tempo ao abrir, principalmente em um computador sem placa de vídeo. Mais pesadas: {layers}. Simplifique a geometria dessas camadas ou defina o quadro como Imagem em Quadros do mapa.</translation>
     </message>
