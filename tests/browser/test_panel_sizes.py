@@ -12,7 +12,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import pytest
-from test_exported_map import open_map
+from test_exported_map import next_frames, open_map
 
 from nika_onlymap_exporter.core.export_ir import (
     Color,
@@ -128,6 +128,8 @@ def _panels(
             arg=selector,
             timeout=30_000,
         )
+    # After the short-window fold, which runs on the frame after they arrive.
+    next_frames(page)
     return page.evaluate(PANELS)
 
 
@@ -224,22 +226,32 @@ class TestNeverBiggerThanTheMap:
         """The Size setting's transform grows the panel after layout, so the
         cap allows for it - the set legend's, and the switcher's on Auto."""
         entry = _export(runtime, tmp_path, 30, legend_height=1000, chrome_scale=2.0)
-        state = _panels(page, entry, 1280, 700)
+        # The big screen Largest is for: a laptop window folds both panels
+        # into the drawer, where there is no corner to fit.
+        state = _panels(page, entry, 1920, 1200)
+        assert page.locator("[data-om-fold-toggle]").count() == 0
+        assert state["legend"]["height"] > 0 and state["switcher"]["height"] > 0
         assert state["page"][1] <= state["page"][3]
         assert state["legend"]["bottom"] <= state["map"]["bottom"] - 11
         assert state["switcher"]["bottom"] <= state["map"]["bottom"] - 11
 
 
 class TestAStaticLegend:
-    @pytest.mark.parametrize("scale", [1.0, 2.0])
+    # Largest on the big screen it is for, with rows enough to fill half of
+    # it: on a laptop window it folds the controls into their drawers
+    # (`test_folded_at_largest_it_is_in_the_drawer`).
+    @pytest.mark.parametrize(
+        ("scale", "width", "height", "layers"),
+        [(1.0, 1280, 700, 30), (2.0, 1920, 1200, 60)],
+    )
     def test_at_any_size_it_takes_up_to_half_the_map(
-        self, page, runtime, tmp_path, scale
+        self, page, runtime, tmp_path, scale, width, height, layers
     ) -> None:
         """Our own legend, for a tile layer, is not grown by the Size's
         transform, so its corner keeps the half-the-map cap: divided by the
         Size, a long legend stopped at a quarter of the map at 2x."""
-        entry = _export(runtime, tmp_path, 30, tiles=True, chrome_scale=scale)
-        page.set_viewport_size({"width": 1280, "height": 700})
+        entry = _export(runtime, tmp_path, layers, tiles=True, chrome_scale=scale)
+        page.set_viewport_size({"width": width, "height": height})
         open_map(page, entry)
         page.wait_for_function(
             """(selector) => document.querySelector(selector)
@@ -247,6 +259,8 @@ class TestAStaticLegend:
             arg=STATIC_LEGEND,
             timeout=30_000,
         )
+        next_frames(page)
+        assert page.locator("[data-om-fold-toggle]").count() == 0
         legend = page.locator(STATIC_LEGEND).bounding_box()
         map_box = page.locator("om-map").bounding_box()
         assert legend is not None and map_box is not None
@@ -257,3 +271,27 @@ class TestAStaticLegend:
             "el => el.scrollHeight - el.clientHeight"
         )
         assert overflow > 100
+
+    def test_folded_at_largest_it_is_in_the_drawer(
+        self, page, runtime, tmp_path
+    ) -> None:
+        """At Largest a 1280x700 window folds the controls; the drawer opens
+        on the legend, inside the map, and the page does not scroll."""
+        entry = _export(runtime, tmp_path, 30, tiles=True, chrome_scale=2.0)
+        page.set_viewport_size({"width": 1280, "height": 700})
+        open_map(page, entry)
+        page.locator('[data-om-fold-toggle="top"]').click(timeout=30_000)
+        drawer = page.locator('[data-om-fold-panel="top"]')
+        drawer.wait_for(state="visible", timeout=10_000)
+        legend = drawer.locator(STATIC_LEGEND)
+        legend.scroll_into_view_if_needed(timeout=10_000)
+        box = legend.bounding_box()
+        drawer_box = drawer.bounding_box()
+        assert box is not None and drawer_box is not None
+        assert box["height"] > 100
+        assert box["y"] < drawer_box["y"] + drawer_box["height"]
+        assert drawer_box["y"] + drawer_box["height"] <= 700
+        page_size = page.evaluate(
+            "() => [document.documentElement.scrollHeight, innerHeight]"
+        )
+        assert page_size[0] <= page_size[1]
