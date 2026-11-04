@@ -16,6 +16,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import dataclasses
+import weakref
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -459,6 +460,77 @@ class TestAttachPopupMedia:
         markup = build_popup_elements(result)
         assert "{{{url_html}}}" in markup
         assert "{{note}}" in markup and "{{{note}}}" not in markup
+
+
+class TestPictureMemory:
+    """The pictures a map reads hold no more memory than the ones it carries."""
+
+    def test_a_picture_turned_down_is_let_go_at_once(self) -> None:
+        big = MAX_EXPORT_PICTURE_BYTES // 2 + 1
+        returned: list[weakref.ref] = []
+        alive_at_each_read: list[int] = []
+
+        def load(path: Path):
+            # Every picture handed out before is gone by the time the next is
+            # read: the one the map carries lives on only as its bytes, in the
+            # layer's pictures.
+            alive_at_each_read.append(sum(ref() is not None for ref in returned))
+            picture = LoadedPicture(
+                path.name.encode() * (big // 5), "image/jpeg", "jpg"
+            )
+            returned.append(weakref.ref(picture))
+            return picture
+
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=PICTURE)],
+            [{"photo": f"p{index}.jpg"} for index in range(5)],
+        )
+        report = FidelityReportBuilder()
+        [result] = attach_popup_media([layer], report, load)
+        assert len(result.popup_pictures) == 1
+        assert alive_at_each_read == [0, 0, 0, 0, 0]
+
+    def test_only_carried_pictures_are_kept_for_the_next_read(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """A cartograph reads its frames again on every save; it is spared
+        decoding what the map carried, and nothing else is held for it."""
+        reads: list[str] = []
+
+        def read(path: str, _size: int) -> LoadedPicture:
+            reads.append(Path(path).name)
+            return LoadedPicture(Path(path).name.encode() * 2, "image/jpeg", "jpg")
+
+        monkeypatch.setattr(popup_media, "_read_picture", read)
+        monkeypatch.setattr(popup_media, "MAX_EXPORT_PICTURE_BYTES", 30)
+        for name in ("kept.jpg", "dropped.jpg"):
+            (tmp_path / name).write_bytes(b"file")
+        attachment = PopupAttachment(
+            picture=True, base_dir=str(tmp_path), roots=(str(tmp_path),)
+        )
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=attachment)],
+            [{"photo": "kept.jpg"}, {"photo": "dropped.jpg"}],
+        )
+        for _ in range(2):
+            [result] = attach_popup_media([layer], FidelityReportBuilder())
+            assert len(result.popup_pictures) == 1
+        assert reads == ["kept.jpg", "dropped.jpg", "dropped.jpg"]
+
+    def test_what_is_kept_for_the_next_read_stays_within_one_maps_budget(
+        self,
+    ) -> None:
+        kept = popup_media._CarriedPictures(max_bytes=10)
+        pictures = [
+            LoadedPicture(b"1234", "image/jpeg", "jpg", version=(name, 1, 4))
+            for name in ("a", "b", "c")
+        ]
+        for picture in pictures:
+            kept.put(picture)
+        # The least recently used goes first, and an edited file is not found.
+        assert kept.get(("a", 1, 4)) is None
+        assert kept.get(("b", 1, 4)) is pictures[1]
+        assert kept.get(("c", 2, 4)) is None
 
 
 class TestOnlyFromTheProjectsFolder:
