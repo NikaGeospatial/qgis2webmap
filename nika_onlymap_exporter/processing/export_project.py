@@ -190,6 +190,14 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         "access, install the runtime pack and set ONLYMAP_RUNTIME_DIR."
     )
 
+    CLIP_REFUSAL = N_(
+        "This project's web map is set to export only the features in the "
+        "QGIS view, and a Processing run has no QGIS view to clip to, so "
+        "nothing was exported rather than every feature. To export the whole "
+        "layers, untick 'Export only the features in this view' in the "
+        "QGIS2WebMap dialog and save the project."
+    )
+
     @classmethod
     def _check_runtime_first(cls) -> None:
         """Refuse before reading the project, not after translating it.
@@ -244,12 +252,16 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         self, parameters, context
     ) -> tuple[PendingProject, FidelityReportBuilder]:
         """Read the live project. Must run on the thread that owns it."""
+        state = self._state(parameters, context)
+        if state.clip_to_extent:
+            # No canvas here, and a clip is a promise about what leaves the
+            # computer: exporting every feature instead would publish the ones
+            # the clip was chosen to keep out. So the run refuses.
+            raise QgsProcessingException(tr(self.CLIP_REFUSAL))
         report = FidelityReportBuilder()
-        # No canvas here: an extent or clip set to the QGIS view is reported as
+        # No canvas here: an extent set to the QGIS view is reported as
         # unreadable and the map opens on its data, as for a dialog without one.
-        pending = prepare_from_state(
-            context.project(), report, self._state(parameters, context)
-        )
+        pending = prepare_from_state(context.project(), report, state)
         return pending, report
 
     def prepareAlgorithm(self, parameters, context, feedback):  # noqa: N802
