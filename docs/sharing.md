@@ -20,9 +20,10 @@ One file. Everything is inside it: the map, its styling and all of its data.
 
 Send it, copy it to a USB stick, put it on a shared drive. The recipient
 double-clicks it. They need a web browser and nothing else - no QGIS, no account,
-no internet connection. The exceptions are a basemap or a live layer (XYZ, WMS or
-WMTS), which draw only while the recipient is online, and in popups, links and
-pictures that are web addresses (see [Popups](supported-features.md#links-and-pictures)).
+no internet connection. The exceptions are a basemap or a live layer (XYZ, WMS,
+WMTS, or a Cloud Optimized GeoTIFF read from a web address), which draw only
+while the recipient is online, and in popups, links and pictures that are web
+addresses (see [Popups](supported-features.md#links-and-pictures)).
 The rest of the map, including the pictures it carries, works without a
 connection.
 
@@ -33,8 +34,9 @@ data runs to 20 MB produces a file of at least that size.
 
 Nothing in a browser objects to a large HTML file. What objects is email: most
 providers reject attachments over about 20-25 MB, and corporate filters are often
-stricter. The Map tab shows your map's data size under the Save to field, and
-warns if it is over the limit - the file is still written if you want it. To make it smaller, untick **Popups** on layers that do not need
+stricter. The Map tab shows your map's data size under the Save to field -
+the popup pictures it carries included, each once however many features show
+it - and warns if it is over the limit - the file is still written if you want it. To make it smaller, untick **Popups** on layers that do not need
 them, or reduce **Coordinate precision** on the Map tab.
 
 ## Share ZIP

@@ -10,7 +10,9 @@ as its text and runs nothing.
 Each check runs on the three ways a map is opened: a single file and an
 extracted Share ZIP by double-click (`file://`), and a Folder export served
 over http - the pictures travel inside the first and beside the page in the
-other two.
+other two. The single file runs twice, with its data as plain JSON and
+gzipped, as a large map's is: the page puts its pictures' addresses into the
+data in both. A cartograph's live frame carries its pictures the same way.
 
 The project is built through the normalized model, like the rest of this
 tier; the picture's bytes come from a stand-in loader, because reading and
@@ -23,6 +25,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import functools
+import hashlib
 import struct
 import threading
 import zlib
@@ -52,6 +55,10 @@ from nika_onlymap_exporter.core.popup_media import (
     LoadedPicture,
     PictureProblem,
     attach_popup_media,
+)
+from nika_onlymap_exporter.packaging.popup_pictures import (
+    picture_fields,
+    place_popup_pictures,
 )
 from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
 
@@ -93,8 +100,17 @@ def _png(width: int, height: int) -> bytes:
     )
 
 
+PICTURE = _png(*PICTURE_SIZE)
+# A value that spells the carried picture's own markup: it is text, and the
+# page leaves it as it is.
+LOOKALIKE = (
+    '<img class="om-popup-picture" '
+    f'src="popup-picture-{hashlib.sha256(PICTURE).hexdigest()[:16]}.png">'
+)
+
+
 def _project() -> ExportProject:
-    picture = LoadedPicture(_png(*PICTURE_SIZE), "image/png", "png")
+    picture = LoadedPicture(PICTURE, "image/png", "png")
 
     def load(path: Path):
         return (
@@ -109,7 +125,7 @@ def _project() -> ExportProject:
             "photo": "photos/site.png",
             "note": "first",
         },
-        {"site": HOSTILE_LINK, "photo": "photos/missing.png", "note": "second"},
+        {"site": HOSTILE_LINK, "photo": "photos/missing.png", "note": LOOKALIKE},
         {"site": HOSTILE_SITE, "photo": HOSTILE_PHOTO, "note": HOSTILE_NOTE},
     ]
     layer = ExportLayer(
@@ -140,7 +156,9 @@ def _project() -> ExportProject:
                 PopupFieldSpec(
                     "photo",
                     mode=PopupFieldMode.HEADER_WITH_DATA,
-                    attachment=PopupAttachment(picture=True, base_dir="/project"),
+                    attachment=PopupAttachment(
+                        picture=True, base_dir="/project", roots=("/project",)
+                    ),
                 ),
                 PopupFieldSpec("note"),
             ),
@@ -182,10 +200,34 @@ def opened_from_disk(runtime, tmp_path_factory):
             _project(), destination, mode=mode
         )
         urls[name] = result.entry_path.as_uri()
+    # As a map whose data is large enough to gzip writes it.
+    writer = OnlyMapWriter(runtime_provider=runtime)
+    project = _project()
+    embedded, _files = place_popup_pictures(project, Path(), OutputMode.STANDALONE_HTML)
+    page = tmp_path_factory.mktemp("popup-media-gzipped") / "index.html"
+    page.write_text(
+        writer.render_html(
+            project,
+            runtime.load(),
+            writer.license_policy.evaluate(project),
+            compress_data=True,
+            embedded_pictures=embedded,
+        ),
+        encoding="utf-8",
+    )
+    assert 'type="application/x-om-gzip"' in page.read_text(encoding="utf-8")
+    urls["single file, gzipped"] = page.as_uri()
     return urls
 
 
-@pytest.fixture(params=["single file", "extracted zip", "folder over http"])
+@pytest.fixture(
+    params=[
+        "single file",
+        "single file, gzipped",
+        "extracted zip",
+        "folder over http",
+    ]
+)
 def map_url(request, opened_from_disk, served_folder) -> str:
     if request.param == "folder over http":
         return served_folder
@@ -229,7 +271,7 @@ def open_popup(page, url: str, feature: int) -> None:
                 && getComputedStyle(root.querySelector('.om-popup')).display !== 'none'
                 && document.querySelector('om-overlay').style.visibility !== 'hidden';
         }""",
-        arg=["first", "second", HOSTILE_NOTE][feature],
+        arg=["first", LOOKALIKE, HOSTILE_NOTE][feature],
         timeout=15_000,
     )
 
@@ -317,7 +359,7 @@ class TestPictures:
         open_popup(page, map_url, MISSING)
         state = popup_state(page)
         assert state["images"] == []
-        assert state["values"] == [HOSTILE_LINK, "photos/missing.png", "second"]
+        assert state["values"] == [HOSTILE_LINK, "photos/missing.png", LOOKALIKE]
 
 
 class TestHostileValues:
@@ -328,3 +370,73 @@ class TestHostileValues:
         assert state["links"] == [] and state["images"] == []
         assert not {"script", "img", "a", "b"} & set(state["tags"])
         assert state["pwned"] is None
+
+
+@pytest.fixture(scope="module")
+def cartograph_url(runtime, tmp_path_factory) -> str:
+    """The same layer in a cartograph's live frame, opened from a file."""
+    from nika_onlymap_exporter.core.cartograph_ir import Box, CartographSpec, FrameSpec
+    from nika_onlymap_exporter.core.manifest_builder import build_manifest
+    from nika_onlymap_exporter.packaging.runtime_manager import (
+        RUNTIME_CARTOGRAPH_JS,
+        discover_runtime_dir,
+        stored_path,
+    )
+    from nika_onlymap_exporter.writers.cartograph_writer import (
+        CartographRuntimeBundle,
+        write_cartograph_html,
+    )
+
+    directory = discover_runtime_dir()
+    if directory is None or stored_path(directory, RUNTIME_CARTOGRAPH_JS) is None:
+        pytest.skip("the cartograph runtime is not available")
+    loaded = runtime.load()
+    project = _project()
+    frame = FrameSpec(
+        id="main", box=Box(10, 10, 190, 120), mode="live", center=(0.1, 51.0), zoom=9
+    )
+    spec = CartographSpec(cartograph_id="cg-pictures", size="A4", items=(frame,))
+    bundle = CartographRuntimeBundle(
+        cartograph_js=loaded.cartograph_javascript,
+        cartograph_css=loaded.cartograph_css.decode("utf-8"),
+        core_js=loaded.javascript,
+        core_css=loaded.css.decode("utf-8"),
+    )
+    html = write_cartograph_html(
+        spec,
+        bundle,
+        {"main": build_manifest(project)},
+        embedded_pictures=project.layers[0].popup_pictures,
+        picture_fields=picture_fields(project.layers),
+    )
+    page = tmp_path_factory.mktemp("popup-media-cartograph") / "sheet.html"
+    page.write_text(html, encoding="utf-8")
+    return page.as_uri()
+
+
+class TestCartographFrame:
+    def test_its_carried_picture_loads(self, page, cartograph_url) -> None:
+        """The frame's data names the picture by the address the page made
+        for it, and that address is the picture."""
+        page.goto(cartograph_url)
+        markup = page.wait_for_function(
+            """() => {
+                const map = document.querySelector('om-map');
+                const layer = map?.getLayers?.().find(
+                    (c) => 'note' in (c?.data?.[0]?.properties ?? {}));
+                return layer ? layer.data[0].properties.photo_html : null;
+            }""",
+            timeout=60_000,
+        ).json_value()
+        assert 'src="blob:' in markup
+        width = page.evaluate(
+            """async (markup) => {
+                const holder = document.createElement('div');
+                holder.innerHTML = markup;
+                const image = holder.querySelector('img');
+                await image.decode();
+                return image.naturalWidth;
+            }""",
+            markup,
+        )
+        assert width == PICTURE_SIZE[0]

@@ -148,7 +148,7 @@ def _web_map(project) -> Exported:
 
 def _frame(project, fake_runtime) -> Exported:
     """The same layer as a cartograph's live frame carries it: pictures
-    inside the page, as `data:` URIs."""
+    inside the page, once each."""
     from atlas_fixtures import add_map
 
     layer = project.mapLayersByName("sites")[0]
@@ -163,13 +163,11 @@ def _frame(project, fake_runtime) -> Exported:
     frame = next(c for c in finished.projects[0].exportable_layers if c.name == "sites")
     properties = [dict(f["properties"]) for f in frame.geojson["features"]]
     pictures = {}
-    for row in properties:
-        for value in row.values():
-            for encoded in re.findall(
-                r'src="data:image/(?:jpeg|png);base64,([A-Za-z0-9+/=]+)"', str(value)
-            ):
-                assert encoded in finished.html
-                pictures[encoded] = base64.b64decode(encoded)
+    for picture in frame.popup_pictures:
+        encoded = base64.b64encode(picture.data).decode("ascii")
+        assert finished.html.count(encoded) == 1
+        assert f'data-src="{picture.name}"' in finished.html
+        pictures[picture.name] = picture.data
     return Exported(
         properties,
         pictures,
@@ -217,14 +215,23 @@ class TestReadFromTheWidget:
 
         attachments = _web_map(project).attachments
 
+        # Carried from the project's folder (its home folder too, the same
+        # one here) and the default path where one is set.
+        project_folder = (str(saved),)
         assert attachments["photo"] == PopupAttachment(
-            picture=True, base_dir=str(saved)
+            picture=True, base_dir=str(saved), roots=project_folder
         )
         assert attachments["rooted"] == PopupAttachment(
-            picture=True, base_dir=str(tmp_path / "root")
+            picture=True,
+            base_dir=str(tmp_path / "root"),
+            roots=(str(saved), str(tmp_path / "root")),
         )
-        assert attachments["absolute"] == PopupAttachment(picture=True)
-        assert attachments["doc"] == PopupAttachment(file_name_label=True)
+        assert attachments["absolute"] == PopupAttachment(
+            picture=True, roots=project_folder
+        )
+        assert attachments["doc"] == PopupAttachment(
+            file_name_label=True, roots=project_folder
+        )
         assert attachments["note"] is None
 
 
@@ -344,6 +351,46 @@ class TestNothingElseIsRead:
         assert "photo_html" not in out.properties[0]
 
 
+class TestOnlyFromTheProjectsFolder:
+    def test_a_picture_elsewhere_is_named_and_not_carried(
+        self, project, saved, tmp_path, export
+    ) -> None:
+        """Through `..`, an absolute path or a link out of the folder."""
+        elsewhere = _picture(tmp_path / "another-client" / "private.jpg", 40, 40)
+        (saved / "photos").mkdir()
+        (saved / "photos" / "linked.jpg").symlink_to(elsewhere)
+        kept = _picture(saved / "photos" / "kept.png", 20, 10, "PNG")
+        layer = _layer(
+            project,
+            [
+                ("../another-client/private.jpg",),
+                (str(elsewhere),),
+                ("photos/linked.jpg",),
+                (str(kept),),
+            ],
+            "field=photo:string",
+        )
+        _attachment(
+            layer,
+            "photo",
+            DocumentViewer=IMAGE_VIEWER,
+            RelativeStorage=RELATIVE_TO_PROJECT,
+        )
+        out = export()
+        assert list(out.pictures.values()) == [kept.read_bytes()]
+        shown = [p["photo_html"] for p in out.properties]
+        assert shown[:3] == [
+            "../another-client/private.jpg",
+            str(elsewhere),
+            "photos/linked.jpg",
+        ]
+        assert shown[3].startswith('<img class="om-popup-picture"')
+        [outside] = out.rows(FidelityStatus.UNSUPPORTED)
+        assert outside.startswith("3 pictures are outside the project's folder")
+        assert "'../another-client/private.jpg'" in outside
+        assert "move it into the project's folder" in outside
+
+
 class TestLinks:
     def test_an_address_is_a_link_and_an_attachment_link_shows_its_file_name(
         self, project, saved, export
@@ -415,4 +462,190 @@ class TestCarriedByTier:
         )
         assert [f.path.name for f in result.files] == ["index.html"]
         encoded = base64.b64encode(picture_project.read_bytes()).decode("ascii")
-        assert f"data:image/png;base64,{encoded}" in outcome.path.read_text()
+        page = outcome.path.read_text()
+        assert page.count(encoded) == 1
+        [name] = re.findall(r'src=\\"(popup-picture-[0-9a-f]{16}\.png)\\"', page)
+        assert f'data-src="{name}" data-type="image/png">{encoded}<' in page
+
+
+class TestTheExportedProjectsOwnFolder:
+    """A relative path is found beside the project being exported, which need
+    not be the one open in QGIS: Processing exports the project it is given,
+    and a cartograph the project its layout belongs to."""
+
+    @staticmethod
+    def _other(project, tmp_path):
+        """A second project, saved in a folder of its own, beside the open one
+        in another; each has a different `photos/site.png`.
+
+        Made in the test, never held by a fixture: a second project that
+        outlives the test into the fixtures' teardown crashes QGIS."""
+        opened = tmp_path / "opened"
+        opened.mkdir()
+        project.setFileName(str(opened / "opened.qgz"))
+        _picture(opened / "photos" / "site.png", 30, 20, "PNG")
+        folder = tmp_path / "other"
+        folder.mkdir()
+        other = qgis_core.QgsProject()
+        other.setFileName(str(folder / "other.qgz"))
+        mine = _picture(folder / "photos" / "site.png", 50, 10, "PNG")
+        layer = _layer(other, [("photos/site.png",)], "field=photo:string")
+        _attachment(
+            layer,
+            "photo",
+            DocumentViewer=IMAGE_VIEWER,
+            RelativeStorage=RELATIVE_TO_PROJECT,
+        )
+        return other, mine
+
+    @pytest.mark.parametrize("route", ["web map", "cartograph frame"])
+    def test_its_picture_is_carried(
+        self, project, tmp_path, route, fake_runtime
+    ) -> None:
+        from nika_onlymap_exporter.core import cartograph_export
+
+        other, mine = self._other(project, tmp_path)
+        try:
+            out = _web_map(other) if route == "web map" else _frame(other, fake_runtime)
+        finally:
+            # The shared live-frame cache follows the project it read: let go
+            # of it, or it outlives QGIS and crashes the process on exit.
+            cartograph_export._DEFAULT_LIVE_CACHE.clear()
+        assert list(out.pictures.values()) == [mine.read_bytes()]
+
+    def test_processing_carries_its_picture(
+        self, project, tmp_path, runtime_required
+    ) -> None:
+        from nika_onlymap_exporter.processing.export_project import (
+            ExportProjectAlgorithm,
+        )
+
+        other, mine = self._other(project, tmp_path)
+        context = qgis_core.QgsProcessingContext()
+        context.setProject(other)
+        algorithm = ExportProjectAlgorithm()
+        algorithm.initAlgorithm()
+        results = algorithm.processAlgorithm(
+            {"OUTPUT": str(tmp_path / "map.html"), "MODE": 0},
+            context,
+            qgis_core.QgsProcessingFeedback(),
+        )
+        page = Path(results["OUTPUT"]).read_text(encoding="utf-8")
+        opened = tmp_path / "opened" / "photos" / "site.png"
+        assert base64.b64encode(mine.read_bytes()).decode("ascii") in page
+        assert base64.b64encode(opened.read_bytes()).decode("ascii") not in page
+
+
+class TestAReplacedPictureIsReadAgain:
+    """A read kept for reuse - the dialog's, between a preview and an export,
+    and a cartograph frame's, between autosaves - is not reused once a
+    picture it carries is replaced or deleted: it would carry the old one."""
+
+    @staticmethod
+    def _photos_layer(project, saved):
+        """A GeoPackage layer, whose reads the cartograph's cache keeps (it
+        reads a memory layer afresh every time), showing `photos/p.png`."""
+        from qgis.core import QgsCoordinateTransformContext, QgsVectorFileWriter
+
+        memory = qgis_core.QgsVectorLayer(
+            "Point?crs=EPSG:3857&field=photo:string", "sites", "memory"
+        )
+        feature = qgis_core.QgsFeature(memory.fields())
+        feature.setAttributes(["photos/p.png"])
+        feature.setGeometry(
+            qgis_core.QgsGeometry.fromPointXY(qgis_core.QgsPointXY(0, 0))
+        )
+        memory.dataProvider().addFeatures([feature])
+        project.setCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"))
+        path = str(saved / "sites.gpkg")
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName = "GPKG"
+        options.layerName = "sites"
+        error = QgsVectorFileWriter.writeAsVectorFormatV3(
+            memory, path, QgsCoordinateTransformContext(), options
+        )
+        assert error[0] == QgsVectorFileWriter.WriterError.NoError, error
+        layer = qgis_core.QgsVectorLayer(path, "sites", "ogr")
+        assert layer.isValid()
+        project.addMapLayer(layer)
+        _attachment(
+            layer,
+            "photo",
+            DocumentViewer=IMAGE_VIEWER,
+            RelativeStorage=RELATIVE_TO_PROJECT,
+        )
+        return _picture(saved / "photos" / "p.png", 40, 30, "PNG")
+
+    def test_a_cartograph_frame_reads_it_again(
+        self, project, saved, fake_runtime
+    ) -> None:
+        from atlas_fixtures import add_map
+
+        from nika_onlymap_exporter.core.cartograph_export import LiveFrameCache
+
+        picture = self._photos_layer(project, saved)
+        layout = qgis_core.QgsPrintLayout(project)
+        layout.initializeDefaults()
+        layout.setName("replaced-picture")
+        add_map(layout, [project.mapLayersByName("sites")[0]])
+        cache = LiveFrameCache()
+
+        def build() -> str:
+            report = FidelityReportBuilder()
+            prepared = prepare_cartograph(layout, project, fake_runtime, report)
+            prepared = prepare_live_reads(prepared, project, report, live_cache=cache)
+            return finish_cartograph_full(prepared, None, report).html
+
+        def carried(path: Path) -> bool:
+            return base64.b64encode(path.read_bytes()).decode("ascii") in page
+
+        try:
+            page = build()
+            assert carried(picture)
+            page = build()
+            assert cache.read_count == 1, "an unchanged picture reuses the read"
+            old = saved / "old.png"
+            old.write_bytes(picture.read_bytes())
+            _picture(picture, 60, 20, "PNG")
+            page = build()
+            assert cache.read_count == 2
+            assert carried(picture) and not carried(old)
+            picture.unlink()
+            page = build()
+            assert cache.read_count == 3
+            assert not carried(old)
+        finally:
+            cache.clear()
+
+    def test_the_dialog_reads_it_again(self, project, saved, qgis_app) -> None:
+        import time
+
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        picture = self._photos_layer(project, saved)
+        dialog = MainDialog(FakeIface(), None)
+        dialog._cached_export, dialog._cached_report = dialog._read_current_project()
+        dialog._cached_signature = dialog.state.data_snapshot()
+
+        def export() -> tuple[bytes, ...]:
+            seen = []
+            assert dialog._ensure_export(lambda e, _r: seen.append(e), "x")
+            deadline = time.monotonic() + 60
+            while (not seen or dialog._job is not None) and (
+                time.monotonic() < deadline
+            ):
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            return tuple(
+                p.data for layer in seen[0].layers for p in layer.popup_pictures
+            )
+
+        assert export() == (picture.read_bytes(),)
+        old = picture.read_bytes()
+        _picture(picture, 60, 20, "PNG")
+        assert export() == (picture.read_bytes(),) != (old,)
+        dialog.close()

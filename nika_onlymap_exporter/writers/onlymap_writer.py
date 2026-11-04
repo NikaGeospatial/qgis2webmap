@@ -27,6 +27,7 @@ from ..core.export_ir import (
     FidelityItem,
     OutputMode,
     OverlayCorner,
+    PopupPicture,
 )
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
@@ -44,7 +45,11 @@ from ..packaging.asset_embedder import (
     should_compress_data,
 )
 from ..packaging.dependency_scanner import ScanResult, scan
-from ..packaging.popup_pictures import place_popup_pictures
+from ..packaging.popup_pictures import (
+    build_picture_embed,
+    picture_fields,
+    place_popup_pictures,
+)
 from ..packaging.raster_cog import CancelCheck, ProgressCallback
 from ..packaging.raster_embed import build_raster_embed, has_cog_layer
 from ..packaging.raster_staging import RasterStagingResult, stage_rasters
@@ -195,8 +200,12 @@ class OnlyMapWriter:
         preview_hook: str = "",
         runtime_file: str | None = None,
         embedded_rasters: tuple[tuple[str, bytes], ...] = (),
+        embedded_pictures: tuple[PopupPicture, ...] = (),
     ) -> str:
-        """Fill the artifact template. No string-built HTML beyond the manifest."""
+        """Fill the artifact template. No string-built HTML beyond the manifest.
+
+        `embedded_pictures` are the popup pictures a page with no folder
+        carries inside it (`packaging.popup_pictures`)."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
         manifest = build_manifest(project, verdict, compress_data=compress_data)
 
@@ -219,7 +228,9 @@ class OnlyMapWriter:
         elif compress:
             # Gzipped base64 plus a bootstrap that inflates it. Roughly a third
             # of the raw size, and nobody edits minified runtime code anyway.
-            script_body = build_bootstrap(gzip_base64(runtime.javascript))
+            script_body = build_bootstrap(
+                gzip_base64(runtime.javascript), pictures=bool(embedded_pictures)
+            )
         else:
             script_body = runtime.javascript.decode("utf-8")
 
@@ -239,6 +250,9 @@ class OnlyMapWriter:
             "@PREVIEW_HOOK@": preview_hook,
             "@RASTER_EMBED@": build_raster_embed(
                 embedded_rasters, cog_layer=has_cog_layer(manifest)
+            ),
+            "@PICTURE_EMBED@": build_picture_embed(
+                embedded_pictures, picture_fields(project.layers)
             ),
         }
 
@@ -362,7 +376,9 @@ class OnlyMapWriter:
         )
         # Popup pictures beside the page or inside it, as the tier carries
         # everything else; the reader already chose them and said so.
-        project, picture_files = place_popup_pictures(project, destination, mode)
+        embedded_pictures, picture_files = place_popup_pictures(
+            project, destination, mode
+        )
         written.extend(
             ArtifactFile(path, path.stat().st_size) for path in picture_files
         )
@@ -386,6 +402,7 @@ class OnlyMapWriter:
                 preview_hook,
                 runtime_file,
                 staging.embedded,
+                embedded_pictures,
             ),
             encoding="utf-8",
         )

@@ -1031,11 +1031,18 @@ class PopupAttachment:
     the folder it happened to be started from, which no export can rely on),
     and `file_name_label` a link shown by its file name, as the widget shows it
     with "Display resource path as link" on and "Display full path" off.
+
+    `roots` are the folders a picture on this computer may be carried from:
+    the project's folder and home folder, and the widget's default path. A
+    value that leads anywhere else - an absolute path, `..`, or a link to a
+    file elsewhere - is not carried, so no attribute value can publish a file
+    from another part of the computer.
     """
 
     picture: bool = False
     base_dir: str | None = None
     file_name_label: bool = False
+    roots: tuple[str, ...] = ()
 
     def snapshot(self) -> dict[str, Any]:
         # The folder is the author's own path, so only whether there is one.
@@ -1084,8 +1091,8 @@ class PopupPicture:
     `name` is the file name the popup's markup refers to: the hash of the
     bytes, so the same picture referenced twice is carried once, and a name
     can never collide with another file of the export. The writer either
-    writes the bytes beside the page under it or replaces it with a `data:`
-    URI (`packaging.popup_pictures`).
+    writes the bytes beside the page under it or carries them inside the
+    page, once (`packaging.popup_pictures`).
     """
 
     name: str
@@ -1254,6 +1261,13 @@ class ExportLayer:
     # The pictures this layer's popups show from files on this computer, ready
     # to carry; see `PopupPicture`. Empty - almost always - carries nothing.
     popup_pictures: tuple[PopupPicture, ...] = ()
+    # Every file the popups looked for, by path, as it was then (see
+    # `popup_media.file_version`), so a read kept for reuse is known to be
+    # stale once one of them changes.
+    popup_files: tuple[tuple[str, tuple[str, int, int] | None], ...] = ()
+    # The web addresses this layer's popups show pictures from, which the
+    # recipient's browser fetches when a popup opens: network dependencies.
+    popup_remote_pictures: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         # Read-only all the way down (`core.read_only_json`), so the text kept

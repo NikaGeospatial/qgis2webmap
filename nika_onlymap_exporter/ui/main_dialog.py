@@ -125,6 +125,7 @@ from ..core.manifest_builder import (
     osm_from_file,
     terrain_note,
 )
+from ..core.popup_media import popup_files_unchanged
 from ..core.popup_translator import hidden_field_names, popup_field_names
 from ..core.project_reader import (
     PendingProject,
@@ -4260,6 +4261,8 @@ class MainDialog(QDialog):
             and self._cached_signature == signature
             and self._cached_canvas_extent == canvas_extent
             and self._cached_map_time == map_time
+            # A popup picture replaced or deleted since is not in the read.
+            and popup_files_unchanged(self._cached_export.layers)
         ):
             # The read is reused, but the settings it carries are the ones it
             # was taken with: a colour or control changed since would never
