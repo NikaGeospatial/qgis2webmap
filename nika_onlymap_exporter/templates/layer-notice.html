@@ -11,10 +11,10 @@
         runtime reads in place of `data`: the reader sees the features, and
         nothing is said.
       - Any other layer that fails with an error (a warning still draws)
-        is named in a small notice, one line for every such layer, in a
-        free slot of the map's own widget layout, so it moves nothing and
-        covers nothing. It is never folded into a drawer, where it would
-        not be seen.
+        is named in a small notice, one line for every such layer, in the
+        bottom-left corner's stack just above the licence notice, which the
+        runtime lays out with the controls, so it covers none of them. It
+        is never folded into a drawer, where it would not be seen.
       - The notice is withdrawn for a layer once the runtime no longer
         reports it - a feature layer whose next request succeeded, or a
         tile layer whose failure it retracted. The map's own diagnostics are
@@ -61,6 +61,7 @@
           if (!names.length) return;
           notice = document.createElement("om-widget");
           notice.setAttribute("position", place.position);
+          notice.setAttribute("order", String(place.order));
           notice.setAttribute("fold", "never");
           notice.setAttribute("data-q2w-layer-notice", "");
           // The Appearance tab's Size, laid out by the slot as the

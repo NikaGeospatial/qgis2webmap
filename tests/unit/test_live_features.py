@@ -337,15 +337,9 @@ class TestMarkup:
             assert loads_layers_from_the_web(project) is expected
             assert bool(_layer_notice_block(project)) is expected
 
-    @pytest.mark.parametrize(
-        ("corner", "position"),
-        [
-            (OverlayCorner.TOP_CENTER, "bottom-center"),
-            (OverlayCorner.BOTTOM_CENTER, "top-center"),
-        ],
-    )
-    def test_the_notice_takes_the_centre_the_title_leaves(
-        self, corner: OverlayCorner, position: str
+    @pytest.mark.parametrize("corner", list(OverlayCorner))
+    def test_the_notice_joins_the_bottom_left_stack_at_any_size(
+        self, corner: OverlayCorner
     ) -> None:
         project = ExportProject(
             title="Rivers",
@@ -354,8 +348,8 @@ class TestMarkup:
             settings=ExportSettings(title_corner=corner, chrome_scale=1.5),
         )
         block = _layer_notice_block(project)
-        assert f'"position": "{position}"' in block
-        assert '"scale": 1.5' in block
+        # Last in the corner's order: right above the licence badge.
+        assert '"position": "bottom-left", "order": 5, "scale": 1.5' in block
         assert "@" not in block.replace("@media", "")
 
 

@@ -34,7 +34,9 @@ from ..core.export_ir import (
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
+    BOTTOM_LEFT_ORDER,
     FALLBACK_SCRIPT_TYPE,
+    WIDGET_POSITIONS,
     build_manifest,
     collect_attributions,
     needs_static_legend,
@@ -856,18 +858,18 @@ def _layer_notice_block(project: ExportProject) -> str:
     (`templates/layer-notice.html`). Empty for a map with no layer read from
     the web, which has nothing that can fail that way.
 
-    The notice takes the bottom centre, the one slot the map's controls leave
-    free, or the top centre when the map's title is in the bottom one.
+    The notice joins the bottom-left corner's stack, just above the licence
+    notice (`BOTTOM_LEFT_ORDER`), where the runtime lays it out with the
+    controls so it covers none of them. A free centre slot was tried first:
+    slots do not make room for each other sideways, and on a narrow map, or
+    at a big Size, the notice reached across the licence notice.
     """
     if not loads_layers_from_the_web(project):
         return ""
-    settings = project.settings
-    title_below = settings.title_corner is OverlayCorner.BOTTOM_CENTER and bool(
-        _caption_block(project)
-    )
     place = {
-        "position": "top-center" if title_below else "bottom-center",
-        "scale": round(settings.chrome_scale, 3),
+        "position": WIDGET_POSITIONS["layer-notice"],
+        "order": BOTTOM_LEFT_ORDER["layer-notice"],
+        "scale": round(project.settings.chrome_scale, 3),
     }
     template = LAYER_NOTICE_PATH.read_text(encoding="utf-8").rstrip()
     return template.replace("@FALLBACK_TYPE@", FALLBACK_SCRIPT_TYPE).replace(

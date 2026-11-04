@@ -206,10 +206,20 @@ def _state(page) -> dict:
     return page.evaluate(STATE)
 
 
-def _pan_away(page) -> None:
-    """Somewhere none of the stations are, as a reader would drag the map."""
+def _drag(page, dx: float) -> None:
+    """Drag the map sideways by `dx` pixels, as a reader would: pressed in
+    the middle, moved in small steps, released."""
+    x, y = page.evaluate(
+        "() => { const r = document.querySelector('om-map')"
+        ".getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }"
+    )
+    page.mouse.move(x, y)
+    page.mouse.down()
+    page.mouse.move(x + dx, y + 10, steps=25)
+    page.mouse.up()
     page.evaluate(
-        "() => document.querySelector('om-map').setAttribute('center', '[-70.5, 43.2]')"
+        "async () => { await document.querySelector('om-map')"
+        ".whenSettled({ timeout: 30000 }); }"
     )
 
 
@@ -245,16 +255,17 @@ class TestLiveFirst:
         }
 
         seen = len(services.requests)
-        _pan_away(page)
+        # Dragged left, the view moves east, past the area already loaded.
+        _drag(page, -700)
 
-        def asked_there(page):
+        def asked_further_east(page):
             for request in _requests(services, "/cors/wfs", seen):
                 box = [float(v) for v in request["params"]["BBOX"].split(",")[:4]]
-                if box[0] < 43.2 < box[2] and box[1] < -70.5 < box[3]:
+                if box[3] > east + 0.05:
                     return True
             return False
 
-        assert _wait(page, asked_there), "the pan asked the WFS for nothing new"
+        assert _wait(page, asked_further_east), "the pan asked the WFS nothing new"
 
     @pytest.mark.parametrize("service", ["ogc", "arcgis"])
     def test_ogcapi_and_arcgis_page_to_every_feature(
@@ -336,12 +347,9 @@ class TestNotice:
             services.failing = False
 
         # The service is back; the next view loads, and the notice goes.
-        _pan_away(page)
-        page.evaluate(
-            "() => document.querySelector('om-map')"
-            ".setAttribute('center', '[-75.725, 45.35]')"
-        )
+        _drag(page, 120)
         assert _wait(page, lambda p: _state(p)["notice"] is None, 30.0)
+        _drag(page, -120)
         assert _points(page, 12) == 12
         assert _state(page)["live"] == "live-only"
 

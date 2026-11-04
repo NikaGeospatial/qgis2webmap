@@ -24,8 +24,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   requests. Cartograph frames still embed.
 - **A notice for a layer that cannot load.** When a layer fails in the
   reader's browser and has nothing to show instead - a live-only feature
-  layer, or a tile or map service layer - a small "Could not load" notice at
-  the foot of the map names it, and goes once the layer loads again.
+  layer, or a tile or map service layer - a small "Could not load" notice
+  names it, in the bottom-left corner just above the licence notice, and
+  goes once the layer loads again.
 
 ### Changed
 - The map runtime is OnlyMap 0.13.4.

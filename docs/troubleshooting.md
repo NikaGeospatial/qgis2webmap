@@ -339,7 +339,7 @@ header (`*` for a map opened from a file), answers with an error, is an
 a WFS, OGC API Features or ArcGIS FeatureServer layer exported *live first*
 shows the copy of its features carried in the map, as they were when you
 exported. A layer with no copy to show (*live only*, or a tile or map service
-layer) is named in a small "Could not load" notice at the foot of the map,
+layer) is named in a small "Could not load" notice in the bottom-left corner,
 which goes once the layer loads again. The browser's developer tools (Console)
 show the refused request. To send a map that never depends on the service, set
 the layer's **Features** to *embedded* on the Layers tab.

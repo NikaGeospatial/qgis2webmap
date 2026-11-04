@@ -1919,6 +1919,9 @@ WIDGET_POSITIONS = {
     "zoom-controls": "bottom-left",
     "scale-bar": "bottom-left",
     "measure": "bottom-left",
+    # The page's notice of a layer that could not load
+    # (`templates/layer-notice.html`), added only when one fails.
+    "layer-notice": "bottom-left",
 }
 
 # The bottom-left corner as a pyramid: the widest control at the bottom, each
@@ -1938,6 +1941,9 @@ BOTTOM_LEFT_ORDER = {
     "scale-bar": 2,
     "basemap-switcher": 3,
     "measure": 4,
+    # Under the measure tool, right on the licence badge: a sentence, as wide
+    # as the controls allow, and only there while a layer is missing.
+    "layer-notice": 5,
 }
 
 
