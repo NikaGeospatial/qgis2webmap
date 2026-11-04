@@ -165,11 +165,12 @@ card:
 
 - its name, and how many items on it change in the cartograph;
 - its CRS;
-- **In the HTML** - **Interactive** (pan and zoom) or **Image** (a picture of the map);
+- **Interactive** (pan and zoom) or **Image** (a picture of the map), in the
+  card's choice box;
 - for an image frame, the image resolution: 150, 200 (the default) or
   300 dpi;
-- **Match QGIS canvas**, which sets this map's extent to what the QGIS canvas
-  shows.
+- a **⋯** menu, whose **Use canvas extent** sets this map's extent to what
+  the QGIS canvas shows.
 
 ![The Map frames section: the Locator card set to Interactive, and the Main map card set to Image at 200 dpi.](images/cartograph-03-frames.png)
 
