@@ -21,7 +21,7 @@ Built by [NIKA](https://nikaplanet.com), powered by
 plugin exports to, documented at
 [onlymap.nikaplanet.com](https://onlymap.nikaplanet.com/).
 
-> **Status: early release.** `0.1.3` is published on the
+> **Status: early release.** `0.3.2` is published on the
 > [QGIS Plugin Repository](https://plugins.qgis.org/plugins/nika_onlymap_exporter/)
 > and under active development. The repository layout and task plan follow
 > [onlymap-js issue #29](https://github.com/NikaGeospatial/onlymap-js/issues/29).
@@ -35,9 +35,11 @@ else.** That report can include the runtime version, feature and widget usage
 counts, and the hostname of the page the map is running from — never the
 map's data or who opened it. Aside from that one report, an exported file
 works with no internet connection, on a machine that has never had QGIS
-installed - unless you add a basemap or live XYZ, WMS or WMTS layers, which
-draw only while the reader is online. Publishing to NIKA hosting and AI-assisted enhancement are separate,
-explicit actions you start yourself — nothing is uploaded automatically.
+installed - unless you add a basemap, relief, live XYZ, WMS or WMTS layers
+(and their legend pictures), a Cloud Optimized GeoTIFF read from a web address,
+or popup links and web pictures, which need the reader to be online.
+Publishing to NIKA hosting and AI-assisted enhancement are separate, explicit
+actions you start yourself — nothing is uploaded automatically.
 
 See the [privacy page](https://qgis2webmap.nikaplanet.com/privacy.html)
 for exactly what is and isn't sent.
@@ -84,7 +86,7 @@ choose `dist/qgis2webmap-<version>.zip`.
 
 Requires QGIS 3.44 or newer (QGIS 4 supported).
 
-**The first export downloads the map runtime** — about 4.8 MB, once per computer,
+**The first export downloads the map runtime** — about 5.7 MB, once per computer,
 after showing you its licence. Everything works offline after that. The runtime
 is the code that draws the map in a browser and is built into every map you
 export; it is a separate commercial product with its own licence, which is why
@@ -97,8 +99,8 @@ it is fetched rather than bundled into this GPL plugin. See
 
 Everything below is published as a website at
 **[qgis2webmap.nikaplanet.com](https://qgis2webmap.nikaplanet.com/)**
-— read it there rather than as raw Markdown. The same guides ship inside the
-plugin's Help tab, so they work offline too.
+— read it there rather than as raw Markdown. Most of the same guides ship
+inside the plugin's Help tab, so they work offline too.
 
 - [Installation](docs/installation.md)
 - [Your first export](docs/first-export.md)
@@ -107,6 +109,7 @@ plugin's Help tab, so they work offline too.
 - [Putting a map online](docs/hosting.md)
 - [Enhance a map with AI](docs/enhance-with-ai.md)
 - [What gets exported](docs/supported-features.md)
+- [Exporting without the dialog](docs/batch-export.md)
 - [QGIS2WebMap or qgis2web](docs/qgis2web-comparison.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Privacy](docs/privacy.md)
@@ -123,10 +126,11 @@ Deeper articles live at [NIKA Documentation](https://docs.nikaplanet.com).
 ## What gets exported
 
 Vector points, lines and polygons from GeoPackage, Shapefile, GeoJSON and CSV
-sources, with single-symbol, categorized and graduated styling; layer order,
-groups, visibility, field aliases and hidden fields; labels, popups, and data
-attribution. Every map ships a legend, layer switcher, zoom controls, a scale
-bar and a measure tool.
+sources, with single-symbol, categorized, graduated and rule-based styling;
+layer order, groups, visibility, field aliases and hidden fields; labels from a
+field or an expression, popups with links and pictures, and data attribution;
+rasters from disk, and live XYZ, WMS and WMTS layers. Every map ships a legend,
+layer switcher, zoom controls, a scale bar and a measure tool.
 
 Anything that will not survive the trip is listed in the **Fidelity** tab
 *before* you export, classified as preserved, approximated, raster-fallback,
