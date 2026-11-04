@@ -157,6 +157,7 @@ from .license_policy import CapVerdict
 from .live_count import refresh_live_counts
 from .map_services import is_image_tile_template
 from .page_settings import apply_page_choice
+from .popup_media import popup_files_unchanged
 from .print_settings import PrintSettings, apply_to_spec
 from .project_reader import (
     PendingProject,
@@ -1652,6 +1653,10 @@ def _finish_live_read(
         return finish_project(pending, report), None
     slot = (prepared.spec.cartograph_id, prepared.live_frames[index].frame_id)
     held = cache.get(slot, key)
+    if held is not None and not popup_files_unchanged(held.project.layers):
+        # A popup picture replaced or deleted since: the key, taken before
+        # the read, cannot know which files the popups would look for.
+        held = None
     if held is None:
         before = len(report)
         cache.read_count += 1

@@ -1261,6 +1261,10 @@ class ExportLayer:
     # The pictures this layer's popups show from files on this computer, ready
     # to carry; see `PopupPicture`. Empty - almost always - carries nothing.
     popup_pictures: tuple[PopupPicture, ...] = ()
+    # Every file the popups looked for, by path, as it was then (see
+    # `popup_media.file_version`), so a read kept for reuse is known to be
+    # stale once one of them changes.
+    popup_files: tuple[tuple[str, tuple[str, int, int] | None], ...] = ()
 
     def __post_init__(self) -> None:
         # Read-only all the way down (`core.read_only_json`), so the text kept

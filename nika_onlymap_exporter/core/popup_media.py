@@ -188,6 +188,27 @@ def _followed(path: str) -> str:
         return os.path.normpath(os.path.abspath(path))
 
 
+def file_version(path: Path) -> tuple[str, int, int] | None:
+    """Where `path` leads and that file's time and size, or `None` when there
+    is no such file: what a picture read from it depends on."""
+    try:
+        stat = path.stat()
+    except (OSError, ValueError):
+        return None
+    return _followed(str(path)), stat.st_mtime_ns, stat.st_size
+
+
+def popup_files_unchanged(layers: Iterable[ExportLayer]) -> bool:
+    """Whether every file `layers`' popups looked for is as it was then: a
+    read kept for reuse that is not would carry a replaced picture's old
+    bytes, or a deleted one."""
+    return all(
+        file_version(Path(path)) == version
+        for layer in layers
+        for path, version in layer.popup_files
+    )
+
+
 def value_markup(
     value: object,
     field: PopupFieldSpec,
@@ -427,6 +448,7 @@ def _with_media(
     # carried, so a layer of thousands of photos holds no more than the map
     # may carry.
     outcomes: dict[Path, str | PictureProblem] = {}
+    versions: dict[str, tuple[str, int, int] | None] = {}
     pictures: dict[str, PopupPicture] = {}
 
     def carry(path: Path, roots: Sequence[str]) -> str | PictureProblem:
@@ -460,6 +482,8 @@ def _with_media(
             return None
         outcome = outcomes.get(path)
         if outcome is None:
+            # Before the read, so a change made while it reads is a change.
+            versions[str(path)] = file_version(path)
             roots = field.attachment.roots if field.attachment is not None else ()
             outcome = outcomes[path] = carry(path, roots)
         if isinstance(outcome, PictureProblem):
@@ -495,6 +519,7 @@ def _with_media(
             ),
         ),
         popup_pictures=tuple(pictures.values()),
+        popup_files=tuple(versions.items()),
     )
 
 

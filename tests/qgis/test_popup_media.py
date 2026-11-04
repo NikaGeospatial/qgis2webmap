@@ -533,3 +533,118 @@ class TestTheExportedProjectsOwnFolder:
         opened = tmp_path / "opened" / "photos" / "site.png"
         assert base64.b64encode(mine.read_bytes()).decode("ascii") in page
         assert base64.b64encode(opened.read_bytes()).decode("ascii") not in page
+
+
+class TestAReplacedPictureIsReadAgain:
+    """A read kept for reuse - the dialog's, between a preview and an export,
+    and a cartograph frame's, between autosaves - is not reused once a
+    picture it carries is replaced or deleted: it would carry the old one."""
+
+    @staticmethod
+    def _photos_layer(project, saved):
+        """A GeoPackage layer, whose reads the cartograph's cache keeps (it
+        reads a memory layer afresh every time), showing `photos/p.png`."""
+        from qgis.core import QgsCoordinateTransformContext, QgsVectorFileWriter
+
+        memory = qgis_core.QgsVectorLayer(
+            "Point?crs=EPSG:3857&field=photo:string", "sites", "memory"
+        )
+        feature = qgis_core.QgsFeature(memory.fields())
+        feature.setAttributes(["photos/p.png"])
+        feature.setGeometry(
+            qgis_core.QgsGeometry.fromPointXY(qgis_core.QgsPointXY(0, 0))
+        )
+        memory.dataProvider().addFeatures([feature])
+        project.setCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"))
+        path = str(saved / "sites.gpkg")
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName = "GPKG"
+        options.layerName = "sites"
+        error = QgsVectorFileWriter.writeAsVectorFormatV3(
+            memory, path, QgsCoordinateTransformContext(), options
+        )
+        assert error[0] == QgsVectorFileWriter.WriterError.NoError, error
+        layer = qgis_core.QgsVectorLayer(path, "sites", "ogr")
+        assert layer.isValid()
+        project.addMapLayer(layer)
+        _attachment(
+            layer,
+            "photo",
+            DocumentViewer=IMAGE_VIEWER,
+            RelativeStorage=RELATIVE_TO_PROJECT,
+        )
+        return _picture(saved / "photos" / "p.png", 40, 30, "PNG")
+
+    def test_a_cartograph_frame_reads_it_again(
+        self, project, saved, fake_runtime
+    ) -> None:
+        from atlas_fixtures import add_map
+
+        from nika_onlymap_exporter.core.cartograph_export import LiveFrameCache
+
+        picture = self._photos_layer(project, saved)
+        layout = qgis_core.QgsPrintLayout(project)
+        layout.initializeDefaults()
+        layout.setName("replaced-picture")
+        add_map(layout, [project.mapLayersByName("sites")[0]])
+        cache = LiveFrameCache()
+
+        def build() -> str:
+            report = FidelityReportBuilder()
+            prepared = prepare_cartograph(layout, project, fake_runtime, report)
+            prepared = prepare_live_reads(prepared, project, report, live_cache=cache)
+            return finish_cartograph_full(prepared, None, report).html
+
+        def carried(path: Path) -> bool:
+            return base64.b64encode(path.read_bytes()).decode("ascii") in page
+
+        try:
+            page = build()
+            assert carried(picture)
+            page = build()
+            assert cache.read_count == 1, "an unchanged picture reuses the read"
+            old = saved / "old.png"
+            old.write_bytes(picture.read_bytes())
+            _picture(picture, 60, 20, "PNG")
+            page = build()
+            assert cache.read_count == 2
+            assert carried(picture) and not carried(old)
+            picture.unlink()
+            page = build()
+            assert cache.read_count == 3
+            assert not carried(old)
+        finally:
+            cache.clear()
+
+    def test_the_dialog_reads_it_again(self, project, saved, qgis_app) -> None:
+        import time
+
+        from nika_onlymap_exporter.ui.main_dialog import MainDialog
+
+        class FakeIface:
+            def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+                return None
+
+        picture = self._photos_layer(project, saved)
+        dialog = MainDialog(FakeIface(), None)
+        dialog._cached_export, dialog._cached_report = dialog._read_current_project()
+        dialog._cached_signature = dialog.state.data_snapshot()
+
+        def export() -> tuple[bytes, ...]:
+            seen = []
+            assert dialog._ensure_export(lambda e, _r: seen.append(e), "x")
+            deadline = time.monotonic() + 60
+            while (not seen or dialog._job is not None) and (
+                time.monotonic() < deadline
+            ):
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            return tuple(
+                p.data for layer in seen[0].layers for p in layer.popup_pictures
+            )
+
+        assert export() == (picture.read_bytes(),)
+        old = picture.read_bytes()
+        _picture(picture, 60, 20, "PNG")
+        assert export() == (picture.read_bytes(),) != (old,)
+        dialog.close()
