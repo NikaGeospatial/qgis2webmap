@@ -492,8 +492,9 @@ everything else is unaffected.
 
 A credit set on a layer — in **Layer Properties → QGIS Server → Attribution**,
 or as metadata rights — is shown in the map's credit component, in the
-bottom-right corner. Credits from several layers are combined, and duplicates
-appear once.
+bottom-right corner - or just above it, on a screen narrow enough that the
+OnlyMap badge or the controls in the bottom-left corner reach across under
+it. Credits from several layers are combined, and duplicates appear once.
 
 They sit outside the collapsing part of that component, so they stay visible on
 a phone: attribution hidden behind a click does not discharge a licence
@@ -507,7 +508,9 @@ one, so if your source requires attribution, set it in QGIS before exporting.
 Legend, layer switcher, zoom controls, a scale bar and a measure tool are **on
 by default**. The layer switcher is left out of maps that have only one layer
 to switch, since it would hold a single ticked box; labels count as an entry of
-their own, so a labelled layer is enough to bring it back.
+their own, so a labelled layer is enough to bring it back. The legend lists the
+top layer first, as QGIS does; the layer switcher lists them in the order the
+map draws them, bottom first.
 
 The measure tool measures distances and areas on the ground, in metric,
 imperial or nautical units, whatever CRS the project uses. It works in a map
@@ -529,8 +532,8 @@ On the **Appearance** tab you can also:
   of your choosing. The description is the abstract from
   *Project Properties → Metadata*; nothing appears if the project has none.
   Corners are shared with the map controls — the layer switcher is top left,
-  the legend top right, the zoom, scale and measure tool bottom left, and the
-  OnlyMap credit bottom right.
+  the legend top right, the zoom, scale, measure tool and basemap panel bottom
+  left, and the OnlyMap credit bottom right.
 - **Set the size of the legend and the layer switcher**, a width and a height
   in pixels for each. Left on Auto, a panel is as wide as its contents and at
   most half the map tall, at every Size; set, it is that size, but never
@@ -549,9 +552,10 @@ On the **Appearance** tab you can also:
 Each of the last two, plus coordinate precision, can also be set for a single
 layer — see *Settings for one layer only* above.
 
-The starting view comes from your data's extent. Data crossing the 180th
-meridian - Alaska, Fiji, Chukotka - is handled correctly rather than opening
-zoomed out to the whole world.
+The starting view comes from your data's extent: the map opens showing all
+of it, in whatever window it is opened in. It zooms out as far as a phone or
+tall data needs; data that already fits opens as it always did. Data crossing the 180th meridian - Alaska, Fiji, Chukotka - is handled
+correctly rather than opening zoomed out to the whole world.
 
 On the **Map** tab you can open the map on **the current QGIS view** instead.
 That is a plain rectangle, so a view spanning the 180th meridian falls back to
@@ -587,7 +591,8 @@ The Fidelity tab names the provider you are depending on whenever a basemap is
 set.
 
 **Readers can switch basemap** if you tick *Let readers switch basemap* under
-the basemap. The map then carries a Basemap panel listing every basemap above,
+the basemap. The map then carries a Basemap panel, bottom left, listing every
+basemap above,
 the one you chose ticked, and switching to another fetches that one's tiles
 from its own provider - so the Fidelity tab names every provider the panel can
 reach. A Standalone HTML or Share ZIP map leaves OpenStreetMap out of the list,

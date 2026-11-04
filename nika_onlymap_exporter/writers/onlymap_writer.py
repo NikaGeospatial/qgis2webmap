@@ -33,7 +33,7 @@ from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
     build_manifest,
     collect_attributions,
-    switcher_basemaps,
+    opening_view_data,
     texture_credit,
 )
 from ..core.widget_colors import resolve_widget_colors
@@ -231,6 +231,7 @@ class OnlyMapWriter:
             "@MANIFEST@": manifest,
             "@ATTRIBUTION@": _attribution_block(project),
             "@CAPTION@": _caption_block(project),
+            "@OPENING_VIEW@": opening_view_data(project),
             "@WIDGET_COLORS@": _widget_color_block(project),
             # Never compressed: the fallback's CSS gate must work without JS.
             "@RUNTIME_CSS@": runtime.css.decode("utf-8"),
@@ -503,7 +504,7 @@ def _widget_color_block(project: ExportProject) -> str:
     if declarations:
         blocks.append("\n".join(["      :root {", *declarations, "      }"]))
 
-    scale_block = _chrome_scale_block(settings.chrome_scale, settings)
+    scale_block = _chrome_scale_block(settings.chrome_scale)
     if scale_block:
         blocks.append(scale_block)
         stack_block = _top_left_stack_block(project)
@@ -545,7 +546,8 @@ def _panel_size_block(settings: ExportSettings) -> str:
     `chrome_scale`, because its transform grows the panel after layout. A
     height the contents do not fill is the panel's own colour, which the host
     wears, rather than a transparent gap under it. Print is left alone, as the
-    half-the-map cap is.
+    half-the-map cap is. A sized panel can reach the bottom corners, so it is
+    marked as one the page's short-window fold does not count (`map.html`).
     """
     sizes = {
         "legend": (
@@ -571,7 +573,9 @@ def _panel_size_block(settings: ExportSettings) -> str:
             continue
         selectors, slot = _SIZED_PANELS[panel]
         slot_rules = []
-        panel_rules = []
+        # Marks the panel for `map.html`'s short-window fold, which leaves a
+        # panel this size was asked of out of what the corner must clear.
+        panel_rules = ["          --q2w-sized: 1;"]
         if width is not None:
             slot_rules.append(f"          max-width: {cap};")
             panel_rules.extend(
@@ -602,19 +606,24 @@ def _panel_size_block(settings: ExportSettings) -> str:
 
 # Which corner each widget is pinned to, so a scale transform grows it *into*
 # the map rather than off the edge. Mirrors `WIDGET_POSITIONS` in the manifest
-# builder; kept here because it is a CSS concern, not a manifest one.
+# builder; kept here because it is a CSS concern, not a manifest one. The
+# bottom-left corner is not here: see `_BOTTOM_LEFT_WIDGETS`.
 _WIDGET_ORIGINS = {
     "legend": "top right",
     "layer-switcher": "top left",
-    "basemap-switcher": "top left",
     "filter": "top left",
-    "zoom-controls": "bottom left",
-    "scale-bar": "bottom left",
-    "measure": "bottom left",
 }
 
+# The bottom-left corner stacks four controls and the runtime's licence badge
+# in one slot, which lays them out one above the other by their size. They are
+# scaled with `zoom`, which the slot lays out, rather than a transform, which
+# it does not: transformed, each one grew over its neighbour and had to be
+# lifted by hand-measured offsets, which could not follow a measure tool
+# whose readout grows as it measures.
+_BOTTOM_LEFT_WIDGETS = ("basemap-switcher", "zoom-controls", "scale-bar", "measure")
 
-def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
+
+def _chrome_scale_block(scale: float) -> str:
     """Scale the map chrome with a transform, not a font size.
 
     **The runtime exposes no size property.** Its theming surface is six custom
@@ -630,11 +639,17 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
     `transform: scale()` scales the rendered box and everything in it, which is
     what "make the map controls bigger" has to mean. `transform-origin` is set
     per widget so each one grows into the map from the corner it is pinned to,
-    instead of sliding off the edge.
+    instead of sliding off the edge. The bottom-left corner's controls take
+    `zoom` instead, so its slot stacks them at their scaled size
+    (`_BOTTOM_LEFT_WIDGETS`).
 
     The credit component is deliberately absent. Attribution carries licence
     obligations, and a control that can shrink it towards illegibility is a
     control for quietly failing to attribute.
+
+    A narrow map folds the controls into the runtime's drawers, and both the
+    width it folds at and the controls in a drawer follow the size - see
+    `_fold_rules`.
     """
     if abs(scale - 1.0) < 0.01:
         return ""
@@ -649,39 +664,16 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
                 "      }",
             ]
         )
-
-    # `map.html` stacks these two in the bottom-left corner with fixed offsets,
-    # to clear the runtime's licence notice. Those offsets are in unscaled
-    # pixels, so a scaled widget grows straight through its neighbour - measured
-    # at scale 2, where the scale bar landed on top of the zoom controls. The
-    # gaps have to scale with the things they are separating.
     rules.extend(
         [
-            '      om-widget[type="zoom-controls"] {',
-            f"        bottom: {round(58.0 * scale, 1)}px !important;",
-            "      }",
-            '      om-widget[type="scale-bar"] {',
-            f"        bottom: {round(30.0 * scale, 1)}px !important;",
+            ",\n".join(
+                f'      om-widget[type="{widget}"]' for widget in _BOTTOM_LEFT_WIDGETS
+            )
+            + " {",
+            f"        zoom: {scale};",
             "      }",
         ]
     )
-
-    # The measure tool sits above those two in the same corner, and nothing
-    # moves it out of their way: a transform leaves the layout as it was, so
-    # the zoom controls, lifted and grown by the rules above, reached up into
-    # its readout - measured at scale 2. It is lifted by their lift plus their
-    # growth, so the gap between them scales like the others. The zoom
-    # controls are two `--om-widget-size` buttons (30px unless the page raises
-    # it for touch), and 8px is the runtime's gap between stacked widgets.
-    lift = _measure_lift(scale, settings)
-    if lift:
-        rules.extend(
-            [
-                '      om-widget[type="measure"] {',
-                f"        bottom: {lift} !important;",
-                "      }",
-            ]
-        )
 
     # `map.html` caps each top corner at half the map, and the transform
     # grows the panel in it after layout: at 2x a crowded legend reached past
@@ -710,7 +702,45 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
             "      }",
         ]
     )
+
+    rules.extend(_fold_rules(scale))
     return "\n".join(rules)
+
+
+def _fold_rules(scale: float) -> list[str]:
+    """Fold the controls in time for their size, and keep them whole folded.
+
+    The runtime folds the controls into a drawer per side at 640px - a width
+    set for controls at their own size. Scaled up, they ran out of room long
+    before it: at Largest the 558px measure tool reached under the legend on
+    a phone, and past the edge of the map. So a bigger size folds at a
+    proportionally wider map, which leaves each control the room it had at
+    Normal. A smaller one keeps the runtime's width.
+
+    A drawer is the runtime's own panel, no wider than 360px, nor 80% of the
+    screen, and it scrolls what it cannot show. A transform moves nothing out
+    of the way, so a scaled control overflowed it, out of reach of the
+    scroll: the measure tool grew up past the top of the screen. In a drawer
+    the controls are therefore at their own size.
+    """
+    rules: list[str] = []
+    if scale > 1.0:
+        rules.extend(
+            [
+                "      :root {",
+                f"        --om-widget-fold-breakpoint: {round(640 * scale)}px;",
+                "      }",
+            ]
+        )
+    rules.extend(
+        [
+            "      [data-om-fold-panel] > om-widget {",
+            "        transform: none !important;",
+            "        zoom: 1 !important;",
+            "      }",
+        ]
+    )
+    return rules
 
 
 def _top_left_stack_block(project: ExportProject) -> str:
@@ -718,16 +748,14 @@ def _top_left_stack_block(project: ExportProject) -> str:
 
     A transform moves nothing out of the way, so each panel scaled on its own
     grew down over the one under it. The layer switcher was alone up there
-    until the basemap switcher and the filter panels joined it; with company,
-    the corner's slot is scaled from its corner instead, and the panels in it
-    are not scaled again.
+    until the filter panels joined it; with company, the corner's slot is
+    scaled from its corner instead, and the panels in it are not scaled
+    again.
     A narrow map that folds them into a drawer takes them out of the slot,
-    where each keeps its own scale. Empty for a corner with the switcher alone,
-    which keeps the rules it always had.
+    where each is at its own size (`_fold_rules`). Empty for a corner with the
+    switcher alone, which keeps the rules it always had.
     """
-    if not switcher_basemaps(project.settings) and not any(
-        layer.filter is not None for layer in project.exportable_layers
-    ):
+    if not any(layer.filter is not None for layer in project.exportable_layers):
         return ""
     scale = project.settings.chrome_scale
     return "\n".join(
@@ -741,25 +769,6 @@ def _top_left_stack_block(project: ExportProject) -> str:
             "      }",
         ]
     )
-
-
-def _measure_lift(scale: float, settings: ExportSettings) -> str:
-    """How far a scaled measure tool rises to clear what is stacked under it.
-
-    Empty when it is not on the map, or when nothing is under it to grow into.
-    """
-    if not settings.show_measure:
-        return ""
-    growth = round(scale - 1.0, 3)
-    if settings.show_zoom_controls:
-        return (
-            f"calc({round(58.0 * scale, 1)}px + {growth} * "
-            "(var(--om-widget-size, 30px) * 2 + 8px))"
-        )
-    if settings.show_scale_bar:
-        # The scale bar measured 27px tall, its padding included.
-        return f"{round(30.0 * scale + growth * (27.0 + 8.0), 1)}px"
-    return ""
 
 
 def _attribution_block(project: ExportProject) -> str:

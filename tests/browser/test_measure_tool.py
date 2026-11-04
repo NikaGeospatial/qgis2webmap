@@ -300,9 +300,10 @@ class TestTheToolOnTheMap:
     def test_bigger_controls_do_not_grow_into_it(
         self, page, runtime, tmp_path, scale
     ) -> None:
-        """Size scales each control from its corner with a transform, which
+        """Size scaled each control from its corner with a transform, which
         moves nothing out of the way: unlifted, the zoom controls grew up
-        through the measure tool's readout at the largest size."""
+        through the measure tool's readout at the largest size. The corner now
+        narrows upward, the zoom controls above the measure tool."""
         result = OnlyMapWriter(runtime_provider=runtime).write(
             _project(ExportSettings(chrome_scale=scale)), tmp_path
         )
@@ -314,7 +315,7 @@ class TestTheToolOnTheMap:
         tool = page.locator(MEASURE).bounding_box()
         zoom = page.locator('om-widget[type="zoom-controls"]').bounding_box()
         assert tool is not None and zoom is not None
-        assert tool["y"] + tool["height"] <= zoom["y"], (
+        assert zoom["y"] + zoom["height"] <= tool["y"], (
             f"at size {scale} the zoom controls reach into the measure tool"
         )
 

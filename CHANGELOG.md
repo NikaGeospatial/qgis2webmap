@@ -21,9 +21,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   distance or an area on it, in metric, imperial or nautical units, measured
   on the ground whatever CRS the project uses. On by default, like the other
   map controls; untick **Measure tool** on the Appearance tab, or the
-  Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
-  the zoom controls, bottom left, and is not drawn in a cartograph's
-  interactive frames.
+  Processing algorithm's *Measure tool* parameter, to leave it off. It sits
+  bottom left, just above the licence notice, and is not drawn in a
+  cartograph's interactive frames.
 - **Filter by**, a new choice on a vector layer's *This layer only* row in
   the Layers tab: the web map gets a panel, top left, that filters the layer
   by that field - a slider for a number or a date, a tick box per value for
@@ -33,8 +33,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   is there, a filtered layer's points are not merged into count bubbles, and
   its labels are not filtered.
 - **Let readers switch basemap**, a new switch under the basemap on the Map
-  tab, off by default: the map carries a Basemap panel, top left under the
-  layer switcher, listing the keyless basemaps with the map's own ticked. In a
+  tab, off by default: the map carries a Basemap panel, bottom left with the
+  zoom controls, scale bar and measure tool, listing the keyless basemaps with the map's own ticked. In a
   Standalone HTML or Share ZIP map it leaves out OpenStreetMap, whose servers
   refuse maps opened from a file. The Fidelity tab and the export's list of
   network dependencies name every provider the panel can reach. Not available
@@ -159,6 +159,32 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - OGC API Features and SensorThings layers are described as web services in
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
+- The map opens showing the whole data extent, top to bottom and side to
+  side, in the window it is opened in. The opening zoom only fitted the
+  extent's width into a nominal 512px, so tall data opened cropped top and
+  bottom and a phone cut the sides off wide data. A map whose extent already
+  fits opens as before; a map opened with a saved camera (the Preview keeps
+  one) or with its `center` or `zoom` edited by hand opens on that.
+- On a narrow screen the OnlyMap licence badge, bottom left, no longer
+  covers the data credit, bottom right - on a relief map, whose imagery
+  credit is long, from about 540px wide down. The credit moves up clear of
+  the badge and of whatever else is in the bottom row, and back down when
+  there is room.
+- The bottom-left corner narrows upward, the widest control at the bottom:
+  the measure tool, then the basemap panel, the scale bar and the zoom
+  controls, all above the licence notice. Its controls are scaled by **Size**
+  so that the corner stacks them at their scaled size, and on a window too
+  short for them they fold into their drawer, as on a narrow one, rather than
+  reach the top-left corner's panels.
+- At a Size above Normal on the Appearance tab, the map controls fold into
+  their drawers in time: at Largest the measure tool reached under the
+  legend and past the edge of a phone's screen. A bigger size folds them at
+  a proportionally wider map, and in a drawer every control is at its Normal
+  size, which the drawer has room for - a scaled control overflowed it, and
+  the measure tool could not be reached at all.
+- The legend lists the top layer first, as QGIS's Layers panel does, with a
+  layer's labels right under it. It listed them bottom first, in the order
+  the map draws them. The layer switcher's order is still OnlyMap's.
 
 ## [0.3.1] - 2026-11-03
 

@@ -1863,13 +1863,30 @@ def _popup_behavior(
 WIDGET_POSITIONS = {
     "legend": "top-right",
     "layer-switcher": "top-left",
-    # Under the layer switcher: the other list of what the map shows.
-    "basemap-switcher": "top-left",
-    # Under both: each narrows one layer the switcher lists.
+    # Under the layer switcher: each narrows one layer the switcher lists.
     "filter": "top-left",
+    # With the other controls that work the map rather than list its layers.
+    "basemap-switcher": "bottom-left",
     "zoom-controls": "bottom-left",
     "scale-bar": "bottom-left",
     "measure": "bottom-left",
+}
+
+# The bottom-left corner as a pyramid: the widest control at the bottom, each
+# one above it narrower. The runtime stacks the corner's slot by `order`,
+# lowest at the top, and its licence badge - the widest of all, 346px - stays
+# under everything: it is mandated chrome, which the runtime always puts last.
+# Widths measured at Normal size in chromium: measure tool 279px, basemap
+# switcher 164px (its panel's own minimum is 140px), scale bar 89-115px (it
+# picks a round distance, so it changes as the map zooms, but stays under
+# 140px), zoom controls 30px (44px on a touch screen). Every Size scales them
+# alike, so the order holds at each one, and a control left off leaves the
+# rest in order.
+BOTTOM_LEFT_ORDER = {
+    "zoom-controls": 1,
+    "scale-bar": 2,
+    "basemap-switcher": 3,
+    "measure": 4,
 }
 
 
@@ -2163,6 +2180,9 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     generated JavaScript this project exists not to write, and it needs nothing
     from the Content Security Policy beyond the `data:` images.
 
+    Top layer first, as QGIS's Layers panel lists them: the model is in draw
+    order, bottom first (see `build_manifest`), so it is walked in reverse.
+
     What it gives up against the built-in widget is reactivity: it cannot grey
     a layer out when the layer switcher hides it. That is why it is used only
     when a layer needs a swatch the built-in widget cannot produce - an image
@@ -2174,7 +2194,7 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     lines.append(f'{indent}  <div class="omni-panel">')
     lines.append(f"{indent}    <h4>{escape_attr(title or 'Legend')}</h4>")
 
-    for layer in project.exportable_layers:
+    for layer in reversed(project.exportable_layers):
         symbol = layer.renderer.representative_symbol or SymbolSpec()
         lines.append(
             f'{indent}    <div class="omni-row">'
@@ -2187,6 +2207,62 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     lines.append(f"{indent}  </div>")
     lines.append(f"{indent}</om-widget>")
     return "\n".join(lines)
+
+
+# The built-in legend lists the map's layers in document order, which is draw
+# order - the bottom layer first, the reverse of QGIS. The widget has no order
+# of its own, and reordering the `<om-layer>`s would change what draws on top,
+# so the rows are reordered where they are drawn: the widget moves its
+# children into its shadow root, a `<style>` among them, and every row and
+# class list it renders carries its layer's id in `data-layer`. A flex column
+# takes an `order`; it does not collapse margins the way the panel's block
+# flow did, so the rows' own margins are reset to the gaps they collapsed to -
+# through `.omni-panel >`, because the widget's own stylesheet lands after this
+# one and would win a tie.
+LEGEND_ORDER_STYLES = """.omni-panel { display: flex; flex-direction: column; }
+.omni-panel > .omni-row, .omni-panel > .omni-legend-sub { margin-top: 0; }
+.omni-legend-sub > :first-child { margin-top: 0; }
+.omni-legend-sub > :last-child { margin-bottom: 0; }"""
+
+
+def _css_string(value: str) -> str:
+    """A quoted CSS string for any text: everything but a plain identifier
+    character goes in as a hex escape, so no id can close the string, the
+    rule, or the `<style>` element."""
+    return (
+        '"'
+        + "".join(
+            char
+            if char.isascii() and (char.isalnum() or char in "-_")
+            else f"\\{ord(char):x} "
+            for char in value
+        )
+        + '"'
+    )
+
+
+def _legend_order_style(project: ExportProject, indent: str) -> list[str]:
+    """The built-in legend's rows top layer first, as QGIS lists them.
+
+    A layer's labels share its place, and so sit right under it: they are
+    emitted after every layer (`build_manifest`), and rows with the same
+    `order` keep their document order. Nothing for a single layer, which has
+    no order to change.
+    """
+    layers = project.exportable_layers
+    if len(layers) < 2:
+        return []
+    rules = [
+        f"[data-layer={_css_string(layer_id)}] {{ order: {place}; }}"
+        for place, layer in enumerate(reversed(layers), start=1)
+        for layer_id in (layer.layer_id, f"{layer.layer_id}-labels")
+    ]
+    return [
+        f"{indent}  <style>",
+        *(f"{indent}    {line}" for line in LEGEND_ORDER_STYLES.splitlines()),
+        *(f"{indent}    {rule}" for rule in rules),
+        f"{indent}  </style>",
+    ]
 
 
 def _switchable_layer_count(project: ExportProject) -> int:
@@ -2235,9 +2311,15 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
             title_attribute = (
                 f'title="{escape_attr(legend_title)}" ' if legend_title else ""
             )
-            widgets.append(
+            opening = (
                 f'{indent}<om-widget type="legend" {title_attribute}'
-                f'position="{WIDGET_POSITIONS["legend"]}"></om-widget>'
+                f'position="{WIDGET_POSITIONS["legend"]}">'
+            )
+            order = _legend_order_style(project, indent)
+            widgets.append(
+                "\n".join([opening, *order, f"{indent}</om-widget>"])
+                if order
+                else f"{opening}</om-widget>"
             )
     if settings.show_layer_switcher and _switchable_layer_count(project) > 1:
         widgets.append(
@@ -2251,9 +2333,10 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
         widgets.append(
             f'{indent}<om-widget type="basemap-switcher" '
             f'options="{" ".join(basemaps)}" '
+            f'order="{BOTTOM_LEFT_ORDER["basemap-switcher"]}" '
             f'position="{WIDGET_POSITIONS["basemap-switcher"]}"></om-widget>'
         )
-    # One panel per filtered layer, in draw order, under the switchers.
+    # One panel per filtered layer, in draw order, under the layer switcher.
     widgets.extend(
         build_filter_widget(layer, indent)
         for layer in project.exportable_layers
@@ -2262,16 +2345,19 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     if settings.show_measure:
         widgets.append(
             f'{indent}<om-widget type="measure" '
+            f'order="{BOTTOM_LEFT_ORDER["measure"]}" '
             f'position="{WIDGET_POSITIONS["measure"]}"></om-widget>'
         )
     if settings.show_zoom_controls:
         widgets.append(
             f'{indent}<om-widget type="zoom-controls" '
+            f'order="{BOTTOM_LEFT_ORDER["zoom-controls"]}" '
             f'position="{WIDGET_POSITIONS["zoom-controls"]}"></om-widget>'
         )
     if settings.show_scale_bar:
         widgets.append(
             f'{indent}<om-widget type="scale-bar" '
+            f'order="{BOTTOM_LEFT_ORDER["scale-bar"]}" '
             f'position="{WIDGET_POSITIONS["scale-bar"]}"></om-widget>'
         )
 
@@ -2311,20 +2397,15 @@ def build_manifest(
     first. The model already reversed QGIS's top-first tree.
     """
     inner = indent + "  "
-    center_lon, center_lat = (0.0, 0.0)
-    zoom = 2.0
-
-    if project.extent is not None:
-        center_lon, center_lat = project.extent.center
-        zoom = _zoom_for_extent(project.extent.width_degrees)
+    center, zoom = opening_camera(project)
 
     # A projected map draws flat, in its own plane: the runtime refuses a
     # MapLibre basemap, terrain, pitch and bearing on it, each one an error.
     projected = project.settings.map_crs is not None
 
     attributes: list[tuple[str, str | None]] = [
-        ("center", f"[{center_lon:.6f}, {center_lat:.6f}]"),
-        ("zoom", _number(round(zoom, 2))),
+        ("center", center),
+        ("zoom", zoom),
         # Falls back to "none" rather than trusting the value: an unknown preset
         # would make the runtime request a style it cannot resolve, and a broken
         # basemap is worse than the absent one the user could have had.
@@ -2436,13 +2517,51 @@ def build_manifest(
     return "\n".join(sections)
 
 
-def _zoom_for_extent(width_degrees: float) -> float:
-    """A starting zoom that fits the data's longitude span.
+def opening_camera(project: ExportProject) -> tuple[str, str]:
+    """The `center` and `zoom` the map is written with, as attribute values.
 
-    Approximate: it fits the longitude span into one 512 px tile width and
-    ignores the latitude span and the viewport, and the runtime opens on this
-    zoom as written - it does not refit once it has measured the viewport. Tall
-    data can therefore open cropped.
+    The page's opening-view script (`map.html`, filled by `opening_view_data`)
+    lowers this zoom when the extent would not fit the window, and only while
+    the attributes are still these, so a hand edit to either one stands.
+    """
+    if project.extent is None:
+        return "[0.000000, 0.000000]", _number(2.0)
+    center_lon, center_lat = project.extent.center
+    zoom = _zoom_for_extent(project.extent.width_degrees)
+    return f"[{center_lon:.6f}, {center_lat:.6f}]", _number(round(zoom, 2))
+
+
+def opening_view_data(project: ExportProject) -> str:
+    """What the page needs to open on the whole extent, as a JavaScript value.
+
+    `null` without an extent. Otherwise the written camera, which the script
+    refits only while the map still carries it, and the extent's longitude
+    span and its south and north edges: the centre is the extent's middle, so
+    the span is what has to fit either side of it.
+    """
+    extent = project.extent
+    if extent is None:
+        return "null"
+    center, zoom = opening_camera(project)
+    return json.dumps(
+        {
+            "center": center,
+            "zoom": zoom,
+            "lonSpan": round(extent.width_degrees, 6),
+            "south": round(extent.south, 6),
+            "north": round(extent.north, 6),
+        }
+    )
+
+
+def _zoom_for_extent(width_degrees: float) -> float:
+    """The written zoom: the data's longitude span in one 512 px tile width.
+
+    A first guess, not the opening view. It ignores the latitude span and the
+    window, so the page refits it before the runtime starts (`map.html`):
+    lowered to whatever shows the whole extent, on both axes, in the window
+    the map is opened in, and left as it is when the extent already fits. A
+    zero-width extent - one point, or one meridian - starts at zoom 12.
     """
     if width_degrees <= 0:
         return 12.0

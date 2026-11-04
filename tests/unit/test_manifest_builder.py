@@ -64,6 +64,7 @@ from nika_onlymap_exporter.core.manifest_builder import (
     line_color_expression,
     needs_image_legend,
     numeric_expression,
+    opening_view_data,
     terrain_note,
 )
 
@@ -549,7 +550,9 @@ class TestManifest:
     def test_the_measure_tool_is_on_by_default(self) -> None:
         markup = build_manifest(make_project())
         assert re.search(
-            r'<om-widget type="measure" position="bottom-left"></om-widget>', markup
+            r'<om-widget type="measure" order="\d+" position="bottom-left">'
+            r"</om-widget>",
+            markup,
         )
 
     def test_the_measure_tool_can_be_switched_off(self) -> None:
@@ -561,12 +564,24 @@ class TestManifest:
         assert 'type="zoom-controls"' in markup
         assert 'type="scale-bar"' in markup
 
-    def test_the_measure_tool_stacks_above_the_zoom_controls(self) -> None:
-        """Same corner, earlier in the page, so the runtime stacks it on top -
-        `_chrome_scale_block` lifts it on that assumption."""
-        markup = build_manifest(make_project())
-        assert markup.index('type="measure"') < markup.index('type="zoom-controls"')
-        assert WIDGET_POSITIONS["measure"] == WIDGET_POSITIONS["zoom-controls"]
+    def test_the_bottom_left_corner_narrows_upward(self) -> None:
+        """Widest at the bottom: the slot stacks by `order`, lowest on top."""
+        markup = build_manifest(
+            make_project(
+                settings=ExportSettings(basemap="positron", basemap_switcher=True)
+            )
+        )
+        orders = {
+            kind: int(re.search(rf'type="{kind}"[^>]*order="(\d+)"', markup).group(1))
+            for kind in ("zoom-controls", "scale-bar", "basemap-switcher", "measure")
+        }
+        assert sorted(orders, key=orders.get) == [
+            "zoom-controls",
+            "scale-bar",
+            "basemap-switcher",
+            "measure",
+        ]
+        assert {WIDGET_POSITIONS[kind] for kind in orders} == {"bottom-left"}
 
     def test_widgets_can_be_switched_off(self) -> None:
         project = make_project(
@@ -2185,6 +2200,76 @@ class TestImageLegend:
         markup = build_legend_widget(project)
         assert "<img onerror" not in markup
         assert "&lt;img onerror" in markup
+
+
+class TestLegendOrder:
+    """QGIS lists the top layer first; the map draws the bottom one first."""
+
+    LAYERS = (
+        make_layer(layer_id="under", name="Under layer"),
+        make_layer(layer_id="over", name="Over layer"),
+    )
+
+    def test_our_legend_lists_the_top_layer_first(self) -> None:
+        layers = [
+            make_icon_layer(SINGLE_ICON, layer_id=lid, name=name)
+            for lid, name in (("under", "Under layer"), ("over", "Over layer"))
+        ]
+        markup = build_legend_widget(make_project(layers))
+        assert markup.index("Over layer") < markup.index("Under layer")
+
+    def test_the_built_in_legend_is_ordered_top_first(self) -> None:
+        widgets = build_widget_elements(make_project(list(self.LAYERS)))
+        legend = widgets[widgets.index('<om-widget type="legend"') :]
+        legend = legend[: legend.index("</om-widget>")]
+        assert '[data-layer="over"] { order: 1; }' in legend
+        assert '[data-layer="over-labels"] { order: 1; }' in legend
+        assert '[data-layer="under"] { order: 2; }' in legend
+        # The draw order itself is left alone.
+        manifest = build_manifest(make_project(list(self.LAYERS)))
+        assert manifest.index('id="under"') < manifest.index('id="over"')
+
+    def test_a_single_layer_legend_is_as_before(self) -> None:
+        widgets = build_widget_elements(make_project())
+        assert '"></om-widget>' in widgets.split('type="legend"', 1)[1].split("\n")[0]
+
+    def test_an_id_cannot_break_out_of_the_rule(self) -> None:
+        layers = [
+            make_layer(layer_id='a"] </style><b>', name="Odd"),
+            make_layer(layer_id="plain", name="Plain"),
+        ]
+        widgets = build_widget_elements(make_project(layers))
+        rules = widgets.split("<style>", 1)[1].split("</style>", 1)[0]
+        assert "<" not in rules and '"]' not in rules.replace('"] {', "")
+        assert "<b>" not in widgets
+
+
+class TestOpeningView:
+    def test_it_carries_the_written_camera_and_the_extent(self) -> None:
+        project = make_project(
+            extent=Extent(west=10.0, south=40.0, east=10.5, north=60.0)
+        )
+        data = json.loads(opening_view_data(project))
+        manifest = build_manifest(project)
+        assert f'center="{data["center"]}"' in manifest
+        assert f'zoom="{data["zoom"]}"' in manifest
+        assert data["lonSpan"] == 0.5
+        assert (data["south"], data["north"]) == (40.0, 60.0)
+
+    def test_an_antimeridian_extent_spans_its_own_width(self) -> None:
+        project = make_project(
+            extent=Extent(
+                west=170.0,
+                south=50.0,
+                east=-170.0,
+                north=60.0,
+                crosses_antimeridian=True,
+            )
+        )
+        assert json.loads(opening_view_data(project))["lonSpan"] == 20.0
+
+    def test_no_extent_gives_the_page_nothing_to_fit(self) -> None:
+        assert opening_view_data(make_project(extent=None)) == "null"
 
 
 class TestPopupsDoNotStack:

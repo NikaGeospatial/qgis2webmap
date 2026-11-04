@@ -458,7 +458,7 @@ class TestBasemapSwitcher:
             )
         )
         assert self._options(markup) == [p for p in BASEMAP_PRESETS if p != "none"]
-        assert 'position="top-left"' in markup.split('type="basemap-switcher"')[1]
+        assert 'position="bottom-left"' in markup.split('type="basemap-switcher"')[1]
 
     def test_a_chosen_osm_stays_in_the_list_from_a_file(self) -> None:
         """The author was warned; the switcher must still show the map's own."""
@@ -546,22 +546,20 @@ class TestBasemapSwitcher:
         assert warning == OSM_FILE_NOTE
         assert "openfreemap.org or cartocdn.com" in note
 
-    def test_scaled_it_grows_with_the_corner_not_over_the_switcher(self) -> None:
-        """Each panel scaled alone would grow down over the one under it."""
+    def test_it_scales_with_the_bottom_left_corner(self) -> None:
+        """In the bottom-left slot, scaled by `zoom` like the controls under it,
+        so the slot stacks it at its size; the top-left corner is left as it
+        is."""
         block = _widget_color_block(
             make_project(basemap="positron", basemap_switcher=True, chrome_scale=2.0)
         )
-        corner = block.split('[data-om-widget-slot="top-start"] {')[1].split("}")[0]
-        assert "transform: scale(2.0);" in corner
-        assert (
-            '[data-om-widget-slot="top-start"] > om-widget {\n        transform: none;'
-            in block
-        )
-        # Without the switcher the corner keeps the rules it always had: its
-        # panel scaled alone, the corner itself not.
-        alone = _widget_color_block(make_project(basemap="positron", chrome_scale=2.0))
-        assert '[data-om-widget-slot="top-start"] {' not in alone
-        assert "transform: none;" not in alone
+        zoomed = block.split("zoom: 2.0;")[0].rsplit("}", 1)[-1]
+        assert 'om-widget[type="basemap-switcher"]' in zoomed
+        # The top-left corner is only capped, as every top corner is at a
+        # Size other than Normal - never scaled as a whole.
+        assert "transform: scale(2.0);" not in block.split(
+            '[data-om-widget-slot="top-start"]'
+        )[1].split("}")[0]
 
 
 class TestChromeScale:
@@ -593,36 +591,33 @@ class TestChromeScale:
         block = self._block(1.5)
         assert block.count("transform: scale(") == block.count("transform-origin:")
 
-    def test_the_stacked_corner_offsets_scale_too(self) -> None:
-        """Fixed offsets let a scaled scale-bar land on the zoom controls."""
+    def test_the_bottom_left_corner_scales_by_zoom_without_lifts(self) -> None:
+        """A transform left the slot stacking unscaled boxes, so each control
+        grew over its neighbour and was lifted by hand-measured offsets; `zoom`
+        is laid out, so the slot stacks them at their size."""
         block = self._block(2.0)
-        assert "bottom: 116.0px !important" in block
-        assert "bottom: 60.0px !important" in block
+        zoomed = block.split("zoom: 2.0;")[0].rsplit("}", 1)[-1]
+        for widget in ("measure", "zoom-controls", "scale-bar", "basemap-switcher"):
+            assert f'om-widget[type="{widget}"]' in zoomed
+        assert "bottom:" not in block
+        assert 'om-widget[type="measure"] {\n        transform' not in block
 
-    def test_the_measure_tool_is_lifted_clear_of_the_scaled_zoom_controls(
-        self,
-    ) -> None:
-        """A transform moves nothing out of the way, so the zoom controls grew up
-        into the measure tool above them. Lifted by their lift plus growth."""
-        block = self._block(2.0).split('om-widget[type="measure"] {')[-1]
-        assert (
-            "bottom: calc(116.0px + 1.0 * (var(--om-widget-size, 30px) * 2 + 8px))"
-            " !important" in block
-        )
+    def test_a_bigger_size_folds_at_a_proportionally_wider_map(self) -> None:
+        """The runtime folds at 640px, a width for controls at their own size;
+        at Largest the measure tool ran past the map on a phone."""
+        assert "--om-widget-fold-breakpoint: 1280px;" in self._block(2.0)
+        assert "--om-widget-fold-breakpoint: 800px;" in self._block(1.25)
+        assert "--om-widget-fold-breakpoint" not in self._block(0.85)
 
-    def test_without_zoom_controls_it_clears_the_scale_bar(self) -> None:
-        from nika_onlymap_exporter.writers.onlymap_writer import _widget_color_block
-
-        block = _widget_color_block(
-            make_project(chrome_scale=2.0, show_zoom_controls=False)
-        ).split('om-widget[type="measure"] {')[-1]
-        assert "bottom: 95.0px !important" in block
-
-    def test_no_lift_when_the_measure_tool_is_off(self) -> None:
-        from nika_onlymap_exporter.writers.onlymap_writer import _widget_color_block
-
-        block = _widget_color_block(make_project(chrome_scale=2.0, show_measure=False))
-        assert 'om-widget[type="measure"] {\n        bottom' not in block
+    def test_a_folded_control_is_at_its_own_size(self) -> None:
+        """A scaled control overflowed the drawer, out of reach of its scroll.
+        Last in the block, so it outranks the lifts it matches as closely."""
+        for scale in (0.85, 1.5, 2.0):
+            block = self._block(scale)
+            drawer = block.index("[data-om-fold-panel] > om-widget {")
+            assert "transform: none !important;" in block[drawer:]
+            assert "zoom: 1 !important;" in block[drawer:]
+            assert block.rindex("!important") < block.index("}", drawer)
 
     def test_the_top_corners_cap_allows_for_the_scale(self) -> None:
         """`map.html` caps each top corner at half the map, and the transform
