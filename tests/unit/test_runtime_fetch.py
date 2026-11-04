@@ -347,7 +347,7 @@ class TestCartographLockEntries:
 
     def test_the_pin_was_not_moved_to_a_new_version(self) -> None:
         """Adding cartograph entries must not look like a runtime bump."""
-        assert rm.read_lock()["version"] == "0.13.3"
+        assert rm.read_lock()["version"] == "0.13.4"
 
 
 class TestCartographExtraction:

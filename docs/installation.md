@@ -73,7 +73,7 @@ version is released, so you have to come back and check.
 The first time you preview or export a map, a window appears asking permission
 to download the **OnlyMap runtime**. **This is expected. Say yes.**
 
-It is about 5.7 MB and the licence is asked for once on this computer. A later
+It is about 5.9 MB and the licence is asked for once on this computer. A later
 plugin update that needs a newer runtime downloads it again, without asking.
 
 The runtime is the piece of code that draws the map in a web browser. A copy of
