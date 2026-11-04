@@ -121,7 +121,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   one line and 5,000 on one layer; past either the repeats spread out, and the
   Fidelity tab says so.
 - **Formatted numbers** in a layer's label settings apply to labels from a
-  field or an expression: a label that reads as a number has the decimal
+  field or an expression, and to a point layer's **Names**: a label that reads as a number has the decimal
   places and plus sign QGIS draws, in QGIS's number format for its language
   (for example `+1.234,50` in German, with a narrow no-break space between
   thousands in French). The text is worked out at export.

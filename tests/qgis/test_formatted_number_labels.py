@@ -21,6 +21,7 @@ from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.label_points import LABEL_PROPERTY
 from nika_onlymap_exporter.core.manifest_builder import build_label_element
 from nika_onlymap_exporter.core.project_reader import read_project
+from nika_onlymap_exporter.core.settings import LayerSettings
 
 qgis_core = pytest.importorskip("qgis.core")
 QtCore = pytest.importorskip("qgis.PyQt.QtCore")
@@ -94,10 +95,16 @@ def _qgis_texts(layer) -> dict[int, str]:
     }
 
 
-def _exported(project, layer):
+def _exported(project, layer, layer_settings=None):
     project.addMapLayer(layer)
     report = FidelityReportBuilder()
-    (read,) = read_project(project, report).layers
+    (read,) = read_project(
+        project,
+        report,
+        layer_settings=(
+            {layer.id(): layer_settings} if layer_settings is not None else None
+        ),
+    ).layers
     markup = build_label_element(read)
     payload = json.loads(
         markup.split('<script type="application/json">')[1].split("</script>")[0]
@@ -144,6 +151,32 @@ def test_an_expression_label_is_formatted_too(project, locale) -> None:
     exported, _, _ = _exported(project, layer)
     assert qgis[0] == "+12.000,00"
     assert exported == qgis
+
+
+@pytest.mark.parametrize("kind", ["double", "string"])
+def test_names_beside_points_are_formatted_as_the_labels_are(
+    project, locale, kind
+) -> None:
+    """The Layers tab's Names show a field in place of the labels, with the
+    labels' Formatted numbers: as QGIS would draw that field as a label."""
+    locale("de_DE")
+    qgis = _qgis_texts(_layer(kind, 2, True))
+    layer = _layer(kind, 2, True, expression="'not the names'")
+    exported, _, report = _exported(project, layer, LayerSettings(name_field="v"))
+    assert len(qgis) == len(VALUES[kind])
+    assert exported == qgis
+    assert "formatted as the layer's labels are" in " ".join(
+        item.detail for item in report.items if item.subject.startswith("Names")
+    )
+
+
+def test_a_names_locale_separator_reaches_the_font_atlas(project, locale) -> None:
+    """As for labels: the page collects the glyphs from the formatted names."""
+    locale("fr_FR")
+    layer = _layer("integer", 0, False, expression="'not the names'")
+    exported, markup, _ = _exported(project, layer, LayerSettings(name_field="v"))
+    assert exported[3] == "1\u202f234\u202f567"
+    assert "\u202f" in markup.split('character-set="')[1].split('"')[0]
 
 
 def test_a_locale_separator_reaches_the_font_atlas(project, locale) -> None:

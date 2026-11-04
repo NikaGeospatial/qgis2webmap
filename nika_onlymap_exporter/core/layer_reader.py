@@ -61,6 +61,7 @@ from .export_ir import (
 from .fidelity_report import FidelityReportBuilder
 from .labeling_translator import (
     collect_character_set,
+    expression_label_property,
     format_label_number,
     label_expression_context,
     translate_labeling,
@@ -2409,7 +2410,10 @@ NAME_HALO = Color(255, 255, 255, 0.9)
 
 
 def point_names(
-    labeling: LabelingSpec, field_name: str, character_set: str | None
+    labeling: LabelingSpec,
+    field_name: str,
+    character_set: str | None,
+    formatted_property: str | None = None,
 ) -> LabelingSpec:
     """`labeling` showing `field_name`, always, with a halo.
 
@@ -2418,7 +2422,22 @@ def point_names(
     the names field's own (`collect_character_set`): the labelling's is its
     label field's, and the atlas it builds *replaces* the runtime's, so a name
     with a glyph only the names field uses would draw blank.
+
+    With the labelling's Formatted numbers on, `formatted_property` names the
+    property the names are worked out into at export, as a formatted label's
+    field is (`translate_labeling`); the page collects their characters then,
+    so there is no `character_set`.
     """
+    if labeling.number_format is not None and formatted_property is not None:
+        return dataclasses.replace(
+            labeling,
+            enabled=True,
+            field_name=formatted_property,
+            expression=QgsExpression.quotedColumnRef(field_name),
+            character_set=None,
+            halo_color=labeling.halo_color or NAME_HALO,
+            halo_width=labeling.halo_width or 1.0,
+        )
     return dataclasses.replace(
         labeling,
         enabled=True,
@@ -2768,20 +2787,35 @@ def prepare_layer(
         and kind is GeometryKind.POINT
         and layer.fields().indexOf(name_field) >= 0
     ):
+        # With Formatted numbers on, the names are worked out at export, and
+        # the page collects their characters then.
+        formatted = labeling.number_format is not None
+        if formatted:
+            character_set = None
+        elif scans is None:
+            character_set = collect_character_set(
+                layer, name_field, labeling.capitalization
+            )
+        else:
+            character_set = scans.character_set(
+                layer, name_field, labeling.capitalization, collect_character_set
+            )
         labeling = point_names(
             labeling,
             name_field,
-            collect_character_set(layer, name_field, labeling.capitalization)
-            if scans is None
-            else scans.character_set(
-                layer, name_field, labeling.capitalization, collect_character_set
-            ),
+            character_set,
+            expression_label_property(layer) if formatted else None,
+        )
+        numbers = (
+            " Names that read as numbers are formatted as the layer's labels are."
+            if formatted
+            else ""
         )
         report.preserved(
             f"Names on '{name}'",
             f"Each point's '{name_field}' shows beside it with a halo, without "
             "a click. Like labels, the names appear from the zoom where most of "
-            "them have room.",
+            f"them have room.{numbers}",
             layer_id,
         )
     elevation = translate_elevation(layer, report, kind, project)
