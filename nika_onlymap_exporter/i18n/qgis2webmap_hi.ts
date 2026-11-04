@@ -916,7 +916,15 @@ The choices saved for the layout in Web → QGIS2WebMap by NIKA - each map's fra
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
-      <translation type="unfinished" />
+      <translation>QGIS मुद्रण लेआउट को मानचित्र पट्टिका में निर्यात करता है: एक पोर्टेबल HTML फ़ाइल जो डबल-क्लिक से खुलती है और ब्राउज़र से वास्तविक पृष्ठ आकार में प्रिंट होती है।
+
+मानचित्र आइटम इंटरैक्टिव फ़्रेम (पैन और ज़ूम, Web Mercator में या मानचित्र के अपने CRS में) या छवि फ़्रेम (लेआउट के अपने CRS में पिक्सेल-सटीक छवि) बन जाते हैं। डिफ़ॉल्ट रूप से मानचित्र तब इंटरैक्टिव होता है जब ब्राउज़र उसे QGIS की तरह बना सके (EPSG:3857 या EPSG:4326, या वेक्टर परतों या छवि टाइलों वाला कोई अन्य बिना घुमाया मानचित्र), अन्यथा छवि; 'फ़्रेम' विकल्प लेआउट के हर मानचित्र के लिए इसे बदल देता है।
+
+वेब → QGIS2WebMap by NIKA में लेआउट के लिए सहेजे गए विकल्प - हर मानचित्र का फ़्रेम और रिज़ॉल्यूशन, परतें अनुभाग के पॉपअप और लेबल विकल्प, प्रिंट सेटिंग और पेज का श्रेय - यहाँ भी उपयोग होते हैं। यहाँ सेट किए गए 'फ़्रेम' और रिज़ॉल्यूशन हर मानचित्र के सहेजे गए विकल्प की जगह लेते हैं; यह डायलॉग इन्हें हमेशा भेजता है, जबकि कोई स्क्रिप्ट या qgis_process रन जो इन्हें छोड़ दे, सहेजे गए विकल्प ही रखता है।
+
+जो कुछ ठीक-ठीक अनुवादित नहीं हो सकता, उसकी सूचना लॉग में दी जाती है। यदि कोई आइटम अवरुद्ध है (जैसे दूसरा पृष्ठ, जो निर्यात नहीं होता), तो निर्यात रुक जाता है, जब तक 'कुछ आइटम अवरुद्ध हों तब भी निर्यात करें' चुना न हो।
+
+&lt;b&gt;नए कंप्यूटर पर पहली बार:&lt;/b&gt; वेब → QGIS2WebMap by NIKA खोलें और वहीं से एक बार निर्यात करें, इससे OnlyMap रनटाइम इंस्टॉल होता है। तब तक यह एल्गोरिदम रुक जाता है और यही बताता है।</translation>
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="130" />
@@ -937,7 +945,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     <message>
       <location filename="../processing/export_layout.py" line="140" />
       <source>Title (blank uses the layout's title, then the project title)</source>
-      <translation type="unfinished" />
+      <translation>शीर्षक (खाली छोड़ने पर लेआउट का शीर्षक, फिर प्रोजेक्ट का शीर्षक उपयोग होगा)</translation>
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="147" />
@@ -984,7 +992,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     <message>
       <location filename="../processing/export_project.py" line="193" />
       <source>This project's web map is set to export only the features in the QGIS view, and a Processing run has no QGIS view to clip to, so nothing was exported rather than every feature. To export the whole layers, untick 'Export only the features in this view' in the QGIS2WebMap dialog and save the project.</source>
-      <translation type="unfinished" />
+      <translation>इस प्रोजेक्ट का वेब मानचित्र केवल QGIS दृश्य के फ़ीचर निर्यात करने के लिए सेट है, और प्रोसेसिंग रन के पास क्लिप करने के लिए कोई QGIS दृश्य नहीं होता, इसलिए हर फ़ीचर निर्यात करने के बजाय कुछ भी निर्यात नहीं किया गया। पूरी परतें निर्यात करने के लिए QGIS2WebMap डायलॉग में 'केवल इस दृश्य के फ़ीचर निर्यात करें' का टिक हटाएँ और प्रोजेक्ट सहेजें।</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="54" />
@@ -1023,7 +1031,15 @@ Anything that cannot be translated exactly is reported in the log rather than dr
 The choices made in that dialog and saved with the project - which layers to include, each layer's popup, labels and clustering, the basemap and the rest of the Appearance tab - are used here too. A title or control set here replaces the saved one; this window always sends its control ticks, while a script or qgis_process run that leaves one out keeps the saved choice.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there. It shows the OnlyMap runtime licence and installs the runtime ({size}, once per computer). This algorithm cannot do that itself - there is no way to show a licence during a batch run - so until then it stops immediately and says so. Every run after that works offline.</source>
-      <translation type="unfinished" />
+      <translation>मौजूदा QGIS प्रोजेक्ट को पोर्टेबल OnlyMap वेब मानचित्र में निर्यात करता है।
+
+डिफ़ॉल्ट आउटपुट एक अकेली HTML फ़ाइल है जिसे कोई और डबल-क्लिक करके QGIS के बिना इस्तेमाल कर सकता है। निर्यात किए गए मानचित्र लोड होने पर NIKA को एक गुमनाम उपयोग रिपोर्ट भेजते हैं, और कुछ नहीं - docs/privacy.md देखें।
+
+जो कुछ ठीक-ठीक नहीं ले जाया जा सकता, उसे चुपचाप छोड़ने के बजाय लॉग में बताया जाता है। अगर प्रोजेक्ट का कोई हिस्सा बिल्कुल पढ़ा नहीं जा सकता (एक अवरुद्ध आइटम, जैसे वह परत जिसका डेटा स्रोत गायब है), तो निर्यात रुक जाता है और समस्याएँ सूचीबद्ध करता है, जब तक 'कुछ आइटम अवरुद्ध हों तब भी निर्यात करें' पर टिक न हो - तब मानचित्र उनके बिना लिखा जाता है और हर एक को चेतावनी के रूप में लॉग किया जाता है। पूरी विश्वसनीयता रिपोर्ट के लिए Web → QGIS2WebMap by NIKA का उपयोग करें।
+
+उस डायलॉग में चुने गए और प्रोजेक्ट के साथ सहेजे गए विकल्प - कौन-सी परतें शामिल हों, हर परत का पॉपअप, लेबल और समूहन, आधार मानचित्र और रूप-रंग टैब की बाकी सेटिंग - यहाँ भी उपयोग होते हैं। यहाँ सेट किया गया शीर्षक या नियंत्रण सहेजे गए की जगह लेता है; यह डायलॉग अपने नियंत्रणों के टिक हमेशा भेजता है, जबकि कोई स्क्रिप्ट या qgis_process रन जो किसी को छोड़ दे, सहेजा गया विकल्प ही रखता है।
+
+&lt;b&gt;नए कंप्यूटर पर पहली बार:&lt;/b&gt; Web → QGIS2WebMap by NIKA खोलें और वहाँ से एक बार निर्यात करें। यह OnlyMap रनटाइम लाइसेंस दिखाता है और रनटाइम इंस्टॉल करता है ({size}, हर कंप्यूटर पर एक बार)। यह एल्गोरिदम ख़ुद ऐसा नहीं कर सकता - बैच रन के दौरान लाइसेंस दिखाने का कोई तरीका नहीं है - इसलिए तब तक यह तुरंत रुक जाता है और कारण बताता है। उसके बाद हर रन ऑफ़लाइन काम करता है।</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="131" />
@@ -1033,7 +1049,7 @@ The choices made in that dialog and saved with the project - which layers to inc
     <message>
       <location filename="../processing/export_project.py" line="139" />
       <source>Map title (blank uses the saved map name, then the project title)</source>
-      <translation type="unfinished" />
+      <translation>मानचित्र शीर्षक (खाली छोड़ने पर सहेजा गया मानचित्र का नाम, फिर प्रोजेक्ट शीर्षक)</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="150" />
@@ -1072,7 +1088,7 @@ The choices made in that dialog and saved with the project - which layers to inc
       <location filename="../processing/export_project.py" line="163" />
       <location filename="../ui/main_dialog.py" line="2542" />
       <source>Measure tool</source>
-      <translation type="unfinished" />
+      <translation>माप उपकरण</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="181" />
@@ -5371,7 +5387,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="656" />
       <source>Auto</source>
-      <translation type="unfinished" />
+      <translation>स्वचालित</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="778" />
@@ -5423,7 +5439,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="1143" />
       <source>Let readers switch basemap</source>
-      <translation type="unfinished" />
+      <translation>पाठकों को आधार मानचित्र बदलने दें</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1165" />
@@ -5468,7 +5484,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="1380" />
       <source>Choose a basemap first.</source>
-      <translation type="unfinished" />
+      <translation>पहले एक आधार मानचित्र चुनें।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1581" />
@@ -5545,7 +5561,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2246" />
       <source>Filter by: none</source>
-      <translation type="unfinished" />
+      <translation>फ़िल्टर का आधार: कोई नहीं</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2282" />
@@ -5960,12 +5976,12 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="1382" />
       <source>Not with a ground surface: relief replaces the basemap with imagery draped over it, which readers cannot switch.</source>
-      <translation type="unfinished" />
+      <translation>भू-सतह के साथ उपलब्ध नहीं: उभार आधार मानचित्र की जगह अपने ऊपर चढ़ाई गई इमेजरी दिखाता है, जिसे पाठक बदल नहीं सकते।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1391" />
       <source>Adds a panel to the map listing the other basemaps, so readers can pick one. Each loads its tiles from its own server, which the Fidelity tab names.</source>
-      <translation type="unfinished" />
+      <translation>मानचित्र में एक पैनल जोड़ता है जिसमें बाकी आधार मानचित्र सूचीबद्ध होते हैं, ताकि पाठक कोई एक चुन सकें। हर एक अपनी टाइलें अपने सर्वर से लोड करता है, जिसका नाम विश्वसनीयता टैब बताता है।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1573" />
@@ -6061,12 +6077,12 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2656" />
       <source>Scales the legend, layer switcher, zoom controls, scale bar, measure tool and title together. The credit stays fixed so attribution cannot be shrunk out of legibility.</source>
-      <translation type="unfinished" />
+      <translation>लेजेंड, परत स्विचर, ज़ूम नियंत्रण, स्केल बार, माप उपकरण और शीर्षक को एक साथ छोटा-बड़ा करता है। क्रेडिट स्थिर रहता है ताकि श्रेय पढ़ने लायक बना रहे।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2667" />
       <source>Applies to the legend, layer switcher, zoom controls, scale bar and measure tool. Leave both unset to keep the map's own styling.</source>
-      <translation type="unfinished" />
+      <translation>लेजेंड, परत स्विचर, ज़ूम नियंत्रण, स्केल बार और माप उपकरण पर लागू होता है। मानचित्र की अपनी शैली रखने के लिए दोनों खाली छोड़ें।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2693" />
@@ -6198,7 +6214,7 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2238" />
       <source>Adds a panel to the map that filters this layer by the field: a slider for a number or a date, a tick box for each value of text (up to {limit} values). A filtered layer's points are not merged into count bubbles, because the filter cannot count them again.</source>
-      <translation type="unfinished" />
+      <translation>मानचित्र में एक पैनल जोड़ता है जो इस परत को फ़ील्ड के अनुसार फ़िल्टर करता है: संख्या या तारीख़ के लिए स्लाइडर, टेक्स्ट के हर मान के लिए एक टिक बॉक्स ({limit} मानों तक)। फ़िल्टर की गई परत के बिंदु गिनती वाले बबल में नहीं मिलते, क्योंकि फ़िल्टर उन्हें दोबारा गिन नहीं सकता।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2500" />
@@ -6213,22 +6229,22 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2731" />
       <source>Width in pixels, {low} to {high}. Auto is as wide as its contents. On a narrower map it is as wide as the map.</source>
-      <translation type="unfinished" />
+      <translation>चौड़ाई पिक्सेल में, {low} से {high} तक। स्वचालित होने पर पैनल अपनी सामग्री जितना चौड़ा होता है। मानचित्र इससे संकरा हो तो पैनल मानचित्र जितना चौड़ा होता है।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2737" />
       <source>Height in pixels, {low} to {high}; what does not fit scrolls inside it. Auto grows with its contents up to half the map. On a shorter map it is as tall as the map.</source>
-      <translation type="unfinished" />
+      <translation>ऊँचाई पिक्सेल में, {low} से {high} तक; जो न समाए वह पैनल के अंदर स्क्रॉल होता है। स्वचालित होने पर पैनल अपनी सामग्री के साथ मानचित्र की आधी ऊँचाई तक बढ़ता है। मानचित्र इससे छोटा हो तो पैनल मानचित्र जितना ऊँचा होता है।</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2743" />
       <source>{control} width</source>
-      <translation type="unfinished" />
+      <translation>{control} की चौड़ाई</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2744" />
       <source>{control} height</source>
-      <translation type="unfinished" />
+      <translation>{control} की ऊँचाई</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3806" />
@@ -6343,7 +6359,7 @@ Pick somewhere that exists, or create it first.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2250" />
       <source>Filter by: {field}</source>
-      <translation type="unfinished" />
+      <translation>फ़िल्टर का आधार: {field}</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2491" />

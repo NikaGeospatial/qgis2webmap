@@ -916,7 +916,15 @@ The choices saved for the layout in Web → QGIS2WebMap by NIKA - each map's fra
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
-      <translation type="unfinished" />
+      <translation>Exporta um layout de impressão do QGIS para uma prancha cartográfica: um único arquivo HTML portátil que abre com duplo clique e imprime no tamanho real da página pelo navegador.
+
+Os itens de mapa viram quadros interativos (deslocar e ampliar, em Web Mercator ou no SRC do próprio mapa) ou quadros de imagem (uma imagem exata ao pixel no SRC do próprio layout). Por padrão, um mapa é interativo quando o navegador consegue desenhá-lo como o QGIS (EPSG:3857 ou EPSG:4326, ou qualquer outro mapa sem rotação de camadas vetoriais ou tiles de imagem) e de imagem nos demais casos; "Quadros" substitui essa escolha para todos os mapas do layout.
+
+As escolhas salvas para o layout em Web → QGIS2WebMap by NIKA - o quadro e a resolução de cada mapa, as escolhas de pop-ups e rótulos da seção Camadas, as configurações de impressão e a atribuição da página - também são usadas aqui. "Quadros" e a resolução definidos aqui substituem a escolha salva de cada mapa; esta janela sempre os envia, enquanto uma execução por script ou pelo qgis_process que os omita mantém as escolhas salvas.
+
+Tudo o que não puder ser traduzido exatamente é informado no registro. Se um item estiver Bloqueado (por exemplo, uma segunda página, que não é exportada), a exportação para, a menos que "Exportar mesmo que alguns itens estejam bloqueados" esteja marcado.
+
+&lt;b&gt;Primeira execução em um computador novo:&lt;/b&gt; abra Web → QGIS2WebMap by NIKA e exporte uma vez por lá, o que instala o ambiente de execução do OnlyMap. Até lá, este algoritmo para e avisa.</translation>
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="130" />
@@ -937,7 +945,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     <message>
       <location filename="../processing/export_layout.py" line="140" />
       <source>Title (blank uses the layout's title, then the project title)</source>
-      <translation type="unfinished" />
+      <translation>Título (em branco usa o título do layout e depois o do projeto)</translation>
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="147" />
@@ -984,7 +992,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     <message>
       <location filename="../processing/export_project.py" line="193" />
       <source>This project's web map is set to export only the features in the QGIS view, and a Processing run has no QGIS view to clip to, so nothing was exported rather than every feature. To export the whole layers, untick 'Export only the features in this view' in the QGIS2WebMap dialog and save the project.</source>
-      <translation type="unfinished" />
+      <translation>O mapa web deste projeto está configurado para exportar só as feições da visualização do QGIS, e uma execução do Processamento não tem visualização do QGIS para recortar, então nada foi exportado em vez de todas as feições. Para exportar as camadas inteiras, desmarque 'Exportar só as feições desta visualização' na janela do QGIS2WebMap e salve o projeto.</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="54" />
@@ -1023,7 +1031,15 @@ Anything that cannot be translated exactly is reported in the log rather than dr
 The choices made in that dialog and saved with the project - which layers to include, each layer's popup, labels and clustering, the basemap and the rest of the Appearance tab - are used here too. A title or control set here replaces the saved one; this window always sends its control ticks, while a script or qgis_process run that leaves one out keeps the saved choice.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there. It shows the OnlyMap runtime licence and installs the runtime ({size}, once per computer). This algorithm cannot do that itself - there is no way to show a licence during a batch run - so until then it stops immediately and says so. Every run after that works offline.</source>
-      <translation type="unfinished" />
+      <translation>Exporta o projeto atual do QGIS para um mapa web portátil do OnlyMap.
+
+A saída padrão é um único arquivo HTML que outra pessoa pode abrir com clique duplo e usar sem o QGIS. Os mapas exportados enviam um único relatório de uso anônimo à NIKA ao carregar, e nada mais - veja docs/privacy.md.
+
+Tudo o que não pode ser levado com exatidão é informado no log em vez de ser descartado em silêncio. Se parte do projeto não puder ser lida (um item bloqueado, como uma camada cuja fonte de dados sumiu), a exportação para e lista os problemas, a menos que 'Exportar mesmo que alguns itens estejam bloqueados' esteja marcado - então o mapa é gravado sem eles e cada um vai para o log como aviso. Para o relatório de fidelidade completo, use Web → QGIS2WebMap by NIKA.
+
+As escolhas feitas nessa janela e salvas com o projeto - quais camadas incluir, o pop-up, os rótulos e o agrupamento de cada camada, o mapa base e o resto da aba Aparência - também são usadas aqui. Um título ou controle definido aqui substitui o salvo; esta janela sempre envia as marcações dos seus controles, enquanto uma execução por script ou pelo qgis_process que omita algum deles mantém a escolha salva.
+
+&lt;b&gt;Primeira execução num computador novo:&lt;/b&gt; abra Web → QGIS2WebMap by NIKA e exporte uma vez por lá. Ele mostra a licença do runtime do OnlyMap e instala o runtime ({size}, uma vez por computador). Este algoritmo não consegue fazer isso sozinho - não há como mostrar uma licença numa execução em lote - então, até lá, ele para na hora e avisa. Depois disso, toda execução funciona offline.</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="131" />
@@ -1033,7 +1049,7 @@ The choices made in that dialog and saved with the project - which layers to inc
     <message>
       <location filename="../processing/export_project.py" line="139" />
       <source>Map title (blank uses the saved map name, then the project title)</source>
-      <translation type="unfinished" />
+      <translation>Título do mapa (em branco usa o nome do mapa salvo e depois o título do projeto)</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="150" />
@@ -1072,7 +1088,7 @@ The choices made in that dialog and saved with the project - which layers to inc
       <location filename="../processing/export_project.py" line="163" />
       <location filename="../ui/main_dialog.py" line="2542" />
       <source>Measure tool</source>
-      <translation type="unfinished" />
+      <translation>Ferramenta de medição</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="181" />
@@ -5371,7 +5387,7 @@ Eles também estão online em &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="656" />
       <source>Auto</source>
-      <translation type="unfinished" />
+      <translation>Auto</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="778" />
@@ -5423,7 +5439,7 @@ Eles também estão online em &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="1143" />
       <source>Let readers switch basemap</source>
-      <translation type="unfinished" />
+      <translation>Permitir que os leitores troquem o mapa base</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1165" />
@@ -5468,7 +5484,7 @@ Eles também estão online em &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="1380" />
       <source>Choose a basemap first.</source>
-      <translation type="unfinished" />
+      <translation>Escolha primeiro um mapa base.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1581" />
@@ -5545,7 +5561,7 @@ Eles também estão online em &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2246" />
       <source>Filter by: none</source>
-      <translation type="unfinished" />
+      <translation>Filtrar por: nenhum</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2282" />
@@ -5960,12 +5976,12 @@ Preencha Salvar em na aba Mapa e tente de novo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="1382" />
       <source>Not with a ground surface: relief replaces the basemap with imagery draped over it, which readers cannot switch.</source>
-      <translation type="unfinished" />
+      <translation>Indisponível com uma superfície do terreno: o relevo substitui o mapa base por imagens aplicadas sobre ele, que os leitores não podem trocar.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1391" />
       <source>Adds a panel to the map listing the other basemaps, so readers can pick one. Each loads its tiles from its own server, which the Fidelity tab names.</source>
-      <translation type="unfinished" />
+      <translation>Adiciona ao mapa um painel com os outros mapas base, para os leitores escolherem um. Cada um carrega seus blocos do próprio servidor, que a aba Fidelidade informa.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1573" />
@@ -6061,12 +6077,12 @@ Preencha Salvar em na aba Mapa e tente de novo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2656" />
       <source>Scales the legend, layer switcher, zoom controls, scale bar, measure tool and title together. The credit stays fixed so attribution cannot be shrunk out of legibility.</source>
-      <translation type="unfinished" />
+      <translation>Ajusta juntos a legenda, o seletor de camadas, os controles de zoom, a barra de escala, a ferramenta de medição e o título. Os créditos ficam fixos para a atribuição não ficar ilegível.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2667" />
       <source>Applies to the legend, layer switcher, zoom controls, scale bar and measure tool. Leave both unset to keep the map's own styling.</source>
-      <translation type="unfinished" />
+      <translation>Vale para a legenda, o seletor de camadas, os controles de zoom, a barra de escala e a ferramenta de medição. Deixe as duas em branco para manter o estilo próprio do mapa.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2693" />
@@ -6198,7 +6214,7 @@ Preencha Salvar em na aba Mapa e tente de novo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2238" />
       <source>Adds a panel to the map that filters this layer by the field: a slider for a number or a date, a tick box for each value of text (up to {limit} values). A filtered layer's points are not merged into count bubbles, because the filter cannot count them again.</source>
-      <translation type="unfinished" />
+      <translation>Adiciona ao mapa um painel que filtra esta camada pelo campo: um controle deslizante para um número ou uma data, uma caixa de seleção para cada valor de texto (até {limit} valores). Os pontos de uma camada filtrada não se juntam em bolhas com a contagem, porque o filtro não consegue contá-los de novo.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2500" />
@@ -6213,22 +6229,22 @@ Preencha Salvar em na aba Mapa e tente de novo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2731" />
       <source>Width in pixels, {low} to {high}. Auto is as wide as its contents. On a narrower map it is as wide as the map.</source>
-      <translation type="unfinished" />
+      <translation>Largura em pixels, de {low} a {high}. Com Auto, o painel fica tão largo quanto o conteúdo. Num mapa mais estreito, fica tão largo quanto o mapa.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2737" />
       <source>Height in pixels, {low} to {high}; what does not fit scrolls inside it. Auto grows with its contents up to half the map. On a shorter map it is as tall as the map.</source>
-      <translation type="unfinished" />
+      <translation>Altura em pixels, de {low} a {high}; o que não couber rola dentro do painel. Com Auto, ele cresce com o conteúdo até a metade do mapa. Num mapa mais baixo, fica tão alto quanto o mapa.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2743" />
       <source>{control} width</source>
-      <translation type="unfinished" />
+      <translation>{control}: largura</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2744" />
       <source>{control} height</source>
-      <translation type="unfinished" />
+      <translation>{control}: altura</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3806" />
@@ -6343,7 +6359,7 @@ Escolha um lugar que exista ou crie a pasta antes.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2250" />
       <source>Filter by: {field}</source>
-      <translation type="unfinished" />
+      <translation>Filtrar por: {field}</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2491" />

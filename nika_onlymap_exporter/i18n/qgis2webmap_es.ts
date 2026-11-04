@@ -916,7 +916,15 @@ The choices saved for the layout in Web → QGIS2WebMap by NIKA - each map's fra
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
-      <translation type="unfinished" />
+      <translation>Exporta un diseño de impresión de QGIS a una lámina cartográfica: un único archivo HTML portátil que se abre con doble clic y se imprime a tamaño real de página desde el navegador.
+
+Los elementos de mapa se convierten en marcos interactivos (desplazamiento y zoom, en Web Mercator o en el SRC propio del mapa) o en marcos de imagen (una imagen exacta al píxel en el SRC propio del diseño). De forma predeterminada, un mapa es interactivo cuando el navegador puede dibujarlo como lo hace QGIS (EPSG:3857 o EPSG:4326, o cualquier otro mapa sin rotación de capas vectoriales o teselas de imagen) y de imagen en caso contrario; «Marcos» sustituye esa opción para todos los mapas del diseño.
+
+Las opciones guardadas para el diseño en Web → QGIS2WebMap by NIKA (el marco y la resolución de cada mapa, las opciones de emergentes y etiquetas de la sección Capas, la configuración de impresión y la atribución de la página) también se usan aquí. «Marcos» y la resolución definidos aquí sustituyen la opción guardada de cada mapa; esta ventana siempre los envía, mientras que una ejecución desde un script o desde qgis_process que los omita conserva los guardados.
+
+Todo lo que no pueda traducirse exactamente se indica en el registro. Si un elemento está Bloqueado (por ejemplo, una segunda página, que no se exporta), la exportación se detiene, salvo que esté marcado «Exportar aunque algunos elementos estén bloqueados».
+
+&lt;b&gt;Primera vez en un equipo nuevo:&lt;/b&gt; abre Web → QGIS2WebMap by NIKA y exporta una vez desde ahí, lo que instala el entorno de ejecución de OnlyMap. Hasta entonces este algoritmo se detiene y lo indica.</translation>
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="130" />
@@ -937,7 +945,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     <message>
       <location filename="../processing/export_layout.py" line="140" />
       <source>Title (blank uses the layout's title, then the project title)</source>
-      <translation type="unfinished" />
+      <translation>Título (vacío usa el título del diseño y luego el del proyecto)</translation>
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="147" />
@@ -984,7 +992,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     <message>
       <location filename="../processing/export_project.py" line="193" />
       <source>This project's web map is set to export only the features in the QGIS view, and a Processing run has no QGIS view to clip to, so nothing was exported rather than every feature. To export the whole layers, untick 'Export only the features in this view' in the QGIS2WebMap dialog and save the project.</source>
-      <translation type="unfinished" />
+      <translation>El mapa web de este proyecto está configurado para exportar solo las entidades de la vista de QGIS, y una ejecución de Procesos no tiene vista de QGIS a la que recortar, así que no se exportó nada en lugar de exportar todas las entidades. Para exportar las capas completas, desmarca 'Exportar solo las entidades de esta vista' en el cuadro de diálogo QGIS2WebMap y guarda el proyecto.</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="54" />
@@ -1023,7 +1031,15 @@ Anything that cannot be translated exactly is reported in the log rather than dr
 The choices made in that dialog and saved with the project - which layers to include, each layer's popup, labels and clustering, the basemap and the rest of the Appearance tab - are used here too. A title or control set here replaces the saved one; this window always sends its control ticks, while a script or qgis_process run that leaves one out keeps the saved choice.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there. It shows the OnlyMap runtime licence and installs the runtime ({size}, once per computer). This algorithm cannot do that itself - there is no way to show a licence during a batch run - so until then it stops immediately and says so. Every run after that works offline.</source>
-      <translation type="unfinished" />
+      <translation>Exporta el proyecto actual de QGIS a un mapa web portátil de OnlyMap.
+
+La salida predeterminada es un único archivo HTML que otra persona puede abrir con doble clic y usar sin QGIS. Los mapas exportados envían un único informe de uso anónimo a NIKA al cargarse, y nada más; consulta docs/privacy.md.
+
+Todo lo que no se puede trasladar con exactitud se indica en el registro en lugar de descartarse en silencio. Si parte del proyecto no se puede leer en absoluto (un elemento bloqueado, como una capa cuya fuente de datos falta), la exportación se detiene y enumera los problemas, salvo que esté marcado 'Exportar aunque algunos elementos estén bloqueados': entonces el mapa se escribe sin ellos y cada uno se registra como advertencia. Para el informe de fidelidad completo, usa Web → QGIS2WebMap by NIKA.
+
+Las opciones elegidas en ese cuadro de diálogo y guardadas con el proyecto (qué capas incluir, el emergente, las etiquetas y la agrupación de cada capa, el mapa base y el resto de la pestaña Apariencia) también se usan aquí. Un título o un control definido aquí sustituye al guardado; esta ventana siempre envía las casillas de sus controles, mientras que una ejecución desde un script o desde qgis_process que omita alguno conserva la opción guardada.
+
+&lt;b&gt;Primera ejecución en un equipo nuevo:&lt;/b&gt; abre Web → QGIS2WebMap by NIKA y exporta una vez desde ahí. Muestra la licencia del runtime de OnlyMap e instala el runtime ({size}, una vez por equipo). Este algoritmo no puede hacerlo por sí mismo (no hay forma de mostrar una licencia en una ejecución por lotes), así que hasta entonces se detiene de inmediato y lo indica. Después, cada ejecución funciona sin conexión.</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="131" />
@@ -1033,7 +1049,7 @@ The choices made in that dialog and saved with the project - which layers to inc
     <message>
       <location filename="../processing/export_project.py" line="139" />
       <source>Map title (blank uses the saved map name, then the project title)</source>
-      <translation type="unfinished" />
+      <translation>Título del mapa (en blanco usa el nombre del mapa guardado y luego el título del proyecto)</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="150" />
@@ -1072,7 +1088,7 @@ The choices made in that dialog and saved with the project - which layers to inc
       <location filename="../processing/export_project.py" line="163" />
       <location filename="../ui/main_dialog.py" line="2542" />
       <source>Measure tool</source>
-      <translation type="unfinished" />
+      <translation>Herramienta de medición</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="181" />
@@ -5371,7 +5387,7 @@ También están en línea en &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="656" />
       <source>Auto</source>
-      <translation type="unfinished" />
+      <translation>Auto</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="778" />
@@ -5423,7 +5439,7 @@ También están en línea en &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="1143" />
       <source>Let readers switch basemap</source>
-      <translation type="unfinished" />
+      <translation>Permitir que los lectores cambien el mapa base</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1165" />
@@ -5468,7 +5484,7 @@ También están en línea en &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="1380" />
       <source>Choose a basemap first.</source>
-      <translation type="unfinished" />
+      <translation>Elige primero un mapa base.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1581" />
@@ -5545,7 +5561,7 @@ También están en línea en &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2246" />
       <source>Filter by: none</source>
-      <translation type="unfinished" />
+      <translation>Filtrar por: ninguno</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2282" />
@@ -5960,12 +5976,12 @@ Rellena Guardar en en la pestaña Mapa y vuelve a intentarlo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="1382" />
       <source>Not with a ground surface: relief replaces the basemap with imagery draped over it, which readers cannot switch.</source>
-      <translation type="unfinished" />
+      <translation>No disponible con una superficie del terreno: el relieve sustituye el mapa base por imágenes superpuestas sobre él, que los lectores no pueden cambiar.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1391" />
       <source>Adds a panel to the map listing the other basemaps, so readers can pick one. Each loads its tiles from its own server, which the Fidelity tab names.</source>
-      <translation type="unfinished" />
+      <translation>Añade al mapa un panel con los demás mapas base, para que los lectores puedan elegir uno. Cada uno carga sus teselas desde su propio servidor, que indica la pestaña Fidelidad.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1573" />
@@ -6061,12 +6077,12 @@ Rellena Guardar en en la pestaña Mapa y vuelve a intentarlo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2656" />
       <source>Scales the legend, layer switcher, zoom controls, scale bar, measure tool and title together. The credit stays fixed so attribution cannot be shrunk out of legibility.</source>
-      <translation type="unfinished" />
+      <translation>Escala a la vez la leyenda, el selector de capas, los controles de zoom, la barra de escala, la herramienta de medición y el título. Los créditos quedan fijos para que la atribución no se vuelva ilegible.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2667" />
       <source>Applies to the legend, layer switcher, zoom controls, scale bar and measure tool. Leave both unset to keep the map's own styling.</source>
-      <translation type="unfinished" />
+      <translation>Se aplica a la leyenda, el selector de capas, los controles de zoom, la barra de escala y la herramienta de medición. Deja ambos sin definir para conservar el estilo propio del mapa.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2693" />
@@ -6198,7 +6214,7 @@ Rellena Guardar en en la pestaña Mapa y vuelve a intentarlo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2238" />
       <source>Adds a panel to the map that filters this layer by the field: a slider for a number or a date, a tick box for each value of text (up to {limit} values). A filtered layer's points are not merged into count bubbles, because the filter cannot count them again.</source>
-      <translation type="unfinished" />
+      <translation>Añade al mapa un panel que filtra esta capa por el campo: un control deslizante para un número o una fecha, una casilla para cada valor de texto (hasta {limit} valores). Los puntos de una capa filtrada no se unen en burbujas con el recuento, porque el filtro no puede volver a contarlos.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2500" />
@@ -6213,22 +6229,22 @@ Rellena Guardar en en la pestaña Mapa y vuelve a intentarlo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2731" />
       <source>Width in pixels, {low} to {high}. Auto is as wide as its contents. On a narrower map it is as wide as the map.</source>
-      <translation type="unfinished" />
+      <translation>Ancho en píxeles, de {low} a {high}. Con Auto, el panel es tan ancho como su contenido. En un mapa más estrecho, es tan ancho como el mapa.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2737" />
       <source>Height in pixels, {low} to {high}; what does not fit scrolls inside it. Auto grows with its contents up to half the map. On a shorter map it is as tall as the map.</source>
-      <translation type="unfinished" />
+      <translation>Alto en píxeles, de {low} a {high}; lo que no cabe se desplaza dentro del panel. Con Auto, crece con su contenido hasta la mitad del mapa. En un mapa más bajo, es tan alto como el mapa.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2743" />
       <source>{control} width</source>
-      <translation type="unfinished" />
+      <translation>{control}: ancho</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2744" />
       <source>{control} height</source>
-      <translation type="unfinished" />
+      <translation>{control}: alto</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3806" />
@@ -6343,7 +6359,7 @@ Elige un lugar que exista o créalo primero.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2250" />
       <source>Filter by: {field}</source>
-      <translation type="unfinished" />
+      <translation>Filtrar por: {field}</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2491" />

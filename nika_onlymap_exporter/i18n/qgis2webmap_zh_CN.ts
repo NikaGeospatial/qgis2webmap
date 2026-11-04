@@ -916,7 +916,15 @@ The choices saved for the layout in Web → QGIS2WebMap by NIKA - each map's fra
 Anything that cannot be translated exactly is reported in the log. If an item is Blocked (for example a second page, which is not exported), the export stops unless 'Export even if some items are blocked' is ticked.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there, which installs the OnlyMap runtime. Until then this algorithm stops and says so.</source>
-      <translation type="unfinished" />
+      <translation>将 QGIS 打印布局导出为图版：一个可移植的 HTML 文件，双击即可打开，并可在浏览器中按真实页面大小打印。
+
+地图项会成为交互式画框（可平移和缩放，使用 Web Mercator 或地图自身的坐标系）或图片画框（使用布局自身坐标系的像素级精确图片）。默认情况下，当浏览器能像 QGIS 一样绘制时，地图为交互式（EPSG:3857 或 EPSG:4326，或任何其他未旋转、由矢量图层或图片瓦片组成的地图），否则为图片；“画框”选项会对布局上的所有地图统一覆盖该设置。
+
+在 Web → QGIS2WebMap by NIKA 中为该布局保存的选项——每幅地图的画框和分辨率、“图层”部分的弹窗和标注选项、打印设置以及页面的版权信息——在这里同样适用。此处设置的“画框”和分辨率会替换每幅地图已保存的选项；此窗口总会发送这两项，而省略它们的脚本或 qgis_process 运行会保留已保存的选项。
+
+无法精确转换的内容会在日志中报告。如果某项被阻止（例如不会导出的第二页），导出将停止，除非勾选“即使部分项被阻止也导出”。
+
+&lt;b&gt;在新电脑上首次使用：&lt;/b&gt;打开 Web → QGIS2WebMap by NIKA 并从那里导出一次，这会安装 OnlyMap 运行时。在此之前，此算法会停止并提示这一点。</translation>
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="130" />
@@ -937,7 +945,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     <message>
       <location filename="../processing/export_layout.py" line="140" />
       <source>Title (blank uses the layout's title, then the project title)</source>
-      <translation type="unfinished" />
+      <translation>标题（留空则使用布局标题，其次使用项目标题）</translation>
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="147" />
@@ -984,7 +992,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     <message>
       <location filename="../processing/export_project.py" line="193" />
       <source>This project's web map is set to export only the features in the QGIS view, and a Processing run has no QGIS view to clip to, so nothing was exported rather than every feature. To export the whole layers, untick 'Export only the features in this view' in the QGIS2WebMap dialog and save the project.</source>
-      <translation type="unfinished" />
+      <translation>此项目的网络地图设置为仅导出 QGIS 视图中的要素，而处理工具运行时没有可用于裁剪的 QGIS 视图，因此没有导出任何内容，而不是导出全部要素。如需导出完整图层，请在 QGIS2WebMap 对话框中取消勾选“仅导出此视图中的要素”并保存项目。</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="54" />
@@ -1023,7 +1031,15 @@ Anything that cannot be translated exactly is reported in the log rather than dr
 The choices made in that dialog and saved with the project - which layers to include, each layer's popup, labels and clustering, the basemap and the rest of the Appearance tab - are used here too. A title or control set here replaces the saved one; this window always sends its control ticks, while a script or qgis_process run that leaves one out keeps the saved choice.
 
 &lt;b&gt;First run on a new computer:&lt;/b&gt; open Web → QGIS2WebMap by NIKA and export once from there. It shows the OnlyMap runtime licence and installs the runtime ({size}, once per computer). This algorithm cannot do that itself - there is no way to show a licence during a batch run - so until then it stops immediately and says so. Every run after that works offline.</source>
-      <translation type="unfinished" />
+      <translation>将当前 QGIS 项目导出为可移植的 OnlyMap 网络地图。
+
+默认输出是一个 HTML 文件，其他人双击即可使用，无需 QGIS。导出的地图在加载时会向 NIKA 发送一次匿名使用报告，除此之外不发送任何内容——见 docs/privacy.md。
+
+无法精确转换的内容会记录在日志中，而不会被悄悄丢弃。如果项目的某部分完全无法读取（被阻止的项，例如数据源缺失的图层），导出会停止并列出问题，除非勾选了“即使部分项被阻止也导出”——此时地图会在缺少这些项的情况下写出，并将每一项记录为警告。如需完整的保真度报告，请使用“网络 → QGIS2WebMap by NIKA”。
+
+在该对话框中做出并随项目保存的选项——包含哪些图层、每个图层的弹窗、标注和聚合、底图以及“外观”标签页的其余设置——在这里同样适用。此处设置的标题或控件会替换已保存的设置；此窗口总会发送其控件的勾选状态，而省略某项的脚本或 qgis_process 运行会保留已保存的选项。
+
+&lt;b&gt;在新电脑上首次运行：&lt;/b&gt;打开“网络 → QGIS2WebMap by NIKA”并从那里导出一次。它会显示 OnlyMap 运行时许可证并安装运行时（{size}，每台电脑一次）。此算法无法自行完成这一步——批处理运行中无法显示许可证——因此在此之前它会立即停止并说明原因。之后的每次运行都可离线进行。</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="131" />
@@ -1033,7 +1049,7 @@ The choices made in that dialog and saved with the project - which layers to inc
     <message>
       <location filename="../processing/export_project.py" line="139" />
       <source>Map title (blank uses the saved map name, then the project title)</source>
-      <translation type="unfinished" />
+      <translation>地图标题（留空则使用已保存的地图名称，其次使用项目标题）</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="150" />
@@ -1072,7 +1088,7 @@ The choices made in that dialog and saved with the project - which layers to inc
       <location filename="../processing/export_project.py" line="163" />
       <location filename="../ui/main_dialog.py" line="2542" />
       <source>Measure tool</source>
-      <translation type="unfinished" />
+      <translation>测量工具</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="181" />
@@ -5371,7 +5387,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="656" />
       <source>Auto</source>
-      <translation type="unfinished" />
+      <translation>自动</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="778" />
@@ -5423,7 +5439,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="1143" />
       <source>Let readers switch basemap</source>
-      <translation type="unfinished" />
+      <translation>允许读者切换底图</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1165" />
@@ -5468,7 +5484,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="1380" />
       <source>Choose a basemap first.</source>
-      <translation type="unfinished" />
+      <translation>请先选择底图。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1581" />
@@ -5545,7 +5561,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2246" />
       <source>Filter by: none</source>
-      <translation type="unfinished" />
+      <translation>筛选依据：无</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2282" />
@@ -5960,12 +5976,12 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="1382" />
       <source>Not with a ground surface: relief replaces the basemap with imagery draped over it, which readers cannot switch.</source>
-      <translation type="unfinished" />
+      <translation>使用地表时不可用：地形会以覆盖在其上的影像取代底图，读者无法切换。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1391" />
       <source>Adds a panel to the map listing the other basemaps, so readers can pick one. Each loads its tiles from its own server, which the Fidelity tab names.</source>
-      <translation type="unfinished" />
+      <translation>在地图上添加一个面板，列出其他底图，供读者选择。每个底图都从各自的服务器加载瓦片，“保真度”标签页会列出这些服务器。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="1573" />
@@ -6061,12 +6077,12 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2656" />
       <source>Scales the legend, layer switcher, zoom controls, scale bar, measure tool and title together. The credit stays fixed so attribution cannot be shrunk out of legibility.</source>
-      <translation type="unfinished" />
+      <translation>同时缩放图例、图层切换器、缩放控件、比例尺、测量工具和标题。版权信息保持固定，以免署名缩小到无法辨认。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2667" />
       <source>Applies to the legend, layer switcher, zoom controls, scale bar and measure tool. Leave both unset to keep the map's own styling.</source>
-      <translation type="unfinished" />
+      <translation>应用于图例、图层切换器、缩放控件、比例尺和测量工具。两项都不设置则保留地图本身的样式。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2693" />
@@ -6198,7 +6214,7 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2238" />
       <source>Adds a panel to the map that filters this layer by the field: a slider for a number or a date, a tick box for each value of text (up to {limit} values). A filtered layer's points are not merged into count bubbles, because the filter cannot count them again.</source>
-      <translation type="unfinished" />
+      <translation>在地图上添加一个面板，按该字段筛选此图层：数字或日期用滑块，文本的每个值用一个复选框（最多 {limit} 个值）。经过筛选的图层的点不会合并为计数气泡，因为筛选无法重新计数。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2500" />
@@ -6213,22 +6229,22 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2731" />
       <source>Width in pixels, {low} to {high}. Auto is as wide as its contents. On a narrower map it is as wide as the map.</source>
-      <translation type="unfinished" />
+      <translation>宽度（像素），{low} 到 {high}。“自动”时面板与其内容同宽。地图更窄时，面板与地图同宽。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2737" />
       <source>Height in pixels, {low} to {high}; what does not fit scrolls inside it. Auto grows with its contents up to half the map. On a shorter map it is as tall as the map.</source>
-      <translation type="unfinished" />
+      <translation>高度（像素），{low} 到 {high}；放不下的内容在面板内滚动。“自动”时面板随内容增高，最多到地图的一半。地图更矮时，面板与地图同高。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2743" />
       <source>{control} width</source>
-      <translation type="unfinished" />
+      <translation>{control}宽度</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2744" />
       <source>{control} height</source>
-      <translation type="unfinished" />
+      <translation>{control}高度</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3806" />
@@ -6343,7 +6359,7 @@ Pick somewhere that exists, or create it first.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2250" />
       <source>Filter by: {field}</source>
-      <translation type="unfinished" />
+      <translation>筛选依据：{field}</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2491" />
