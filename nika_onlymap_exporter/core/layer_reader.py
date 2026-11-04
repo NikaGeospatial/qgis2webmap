@@ -2767,6 +2767,7 @@ def prepare_layer(
     scans: LayerScans | None = None,
     map_time: MapTime | None = None,
     filter_field: str | None = None,
+    map_crs: QgsCoordinateReferenceSystem | None = None,
 ) -> ExportLayer | PendingLayer | PendingRemoteRaster | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
@@ -2795,6 +2796,9 @@ def prepare_layer(
     `filter_field` is the dialog's "Filter by": the field the web map's filter
     panel filters this vector layer by, kept in the data whatever the popup
     shows. `None` is no filter.
+
+    `map_crs` is the CRS QGIS draws the layer in, which its line labels are
+    placed along (`translate_labeling`); `None` is the project's.
     """
     layer_id = layer.id()
     name = layer.name()
@@ -2846,7 +2850,9 @@ def prepare_layer(
     report_ground_sizes(renderer, icon_atlas is not None, kind, report, name, layer_id)
 
     labeling = (
-        translate_labeling(layer, report, scans) if with_labels else LabelingSpec()
+        translate_labeling(layer, report, scans, map_crs)
+        if with_labels
+        else LabelingSpec()
     )
     if (
         name_field

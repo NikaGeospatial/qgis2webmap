@@ -45,9 +45,13 @@ from .export_ir import (
     NumberFormat,
 )
 from .fidelity_report import FidelityReportBuilder
-from .label_points import apply_capitalization, to_plane
+from .label_points import apply_capitalization, crs_plane, to_plane
 from .render_units import to_pixels
-from .renderer_translator import reference_render_context, reference_scale
+from .renderer_translator import (
+    WEB_MERCATOR_AUTHIDS,
+    reference_render_context,
+    reference_scale,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsVectorLayer
@@ -259,10 +263,13 @@ def translate_labeling(
     layer: QgsVectorLayer,
     report: FidelityReportBuilder,
     scans: LayerScans | None = None,
+    map_crs: QgsCoordinateReferenceSystem | None = None,
 ) -> LabelingSpec:
     """Translate a layer's labelling, or record why it cannot be. `scans`
     (from a cartograph's `LiveFrameCache`) reuses the character set of an
-    earlier call while the label values are unchanged."""
+    earlier call while the label values are unchanged. `map_crs` is the CRS
+    QGIS draws the layer in, which a line is measured in: a cartograph frame's
+    own; `None` is the project's, the QGIS view's."""
     layer_id = layer.id()
     subject = f"Labels on '{layer.name()}'"
 
@@ -413,7 +420,7 @@ def translate_labeling(
     anchor, baseline = read_quadrant(settings)
     wrap_char = str(getattr(settings, "wrapChar", "") or "")
     auto_wrap = int(getattr(settings, "autoWrapLength", 0) or 0)
-    plane = measure_plane()
+    plane = measure_plane(map_crs)
     repeat = _line_repeat(layer, settings, plane, report, subject, layer_id)
 
     report.approximated(
@@ -456,11 +463,18 @@ def translate_labeling(
     )
 
 
-def measure_plane() -> str:
-    """The plane QGIS measures lines in for labelling: its map CRS's, which
-    for a geographic CRS is plain degrees (`label_points.MEASURE_PLANES`)."""
-    crs = QgsProject.instance().crs()
-    return "degrees" if crs.isValid() and crs.isGeographic() else "mercator"
+def measure_plane(crs: QgsCoordinateReferenceSystem | None = None) -> str:
+    """The plane QGIS measures lines in for labelling: that of the map CRS
+    `crs` (the project's when `None`), which for a geographic CRS is plain
+    degrees and for any projected one but Web Mercator its own
+    (`label_points.MEASURE_PLANES`)."""
+    if crs is None:
+        crs = QgsProject.instance().crs()
+    if not crs.isValid() or crs.authid() in WEB_MERCATOR_AUTHIDS:
+        return "mercator"
+    if crs.isGeographic():
+        return "degrees"
+    return crs_plane(crs.toWkt(Qgis.CrsWktVariant.Preferred))
 
 
 # The web map's own repeat for line labels where QGIS sets none: MapLibre's

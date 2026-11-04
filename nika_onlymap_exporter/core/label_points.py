@@ -13,7 +13,9 @@ Emitting label points as their own small collection keeps a labelled export from
 paying for its geometry twice, which on a polygon layer is the difference
 between a few kilobytes and a few megabytes.
 
-Pure Python: no PyQGIS, no Qt, so this is unit-testable without QGIS.
+Pure Python: no PyQGIS, no Qt, so this is unit-testable without QGIS - but for
+a line measured in a projected CRS other than Web Mercator, which QGIS projects
+(`crs_plane`).
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -24,7 +26,8 @@ from __future__ import annotations
 import bisect
 import itertools
 import math
-from collections.abc import Sequence
+import threading
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,8 +43,10 @@ LABEL_PROPERTY = "label"
 # exactly QGIS's in EPSG:3857, and "degrees" is longitude and latitude taken as
 # flat, which is QGIS's own measure in a geographic CRS such as EPSG:4326. The
 # two put the middle of a long north-south line apart by a few per cent of its
-# length.
+# length. Any other projected CRS is a plane of its own, named by `crs_plane`.
 MEASURE_PLANES = ("mercator", "degrees")
+
+_CRS_PLANE = "crs:"
 
 _EARTH_RADIUS = 6_378_137.0
 _MAX_MERCATOR_LATITUDE = 85.05112878
@@ -103,11 +108,66 @@ def _vertex_average(coordinates: Sequence[Sequence[float]]) -> tuple[float, floa
     return sum(xs) / len(xs), sum(ys) / len(ys)
 
 
+def crs_plane(wkt: str) -> str:
+    """The measuring plane of the projected CRS `wkt`, which QGIS projects."""
+    return _CRS_PLANE + wkt
+
+
+_Projection = tuple[
+    Callable[[float, float], tuple[float, float]],
+    Callable[[float, float], tuple[float, float]],
+]
+_PROJECTIONS = threading.local()
+
+
+def _projection(plane: str) -> _Projection:
+    """To and from the CRS a `crs_plane` names, through QGIS. One pair per
+    thread and plane: a `QgsCoordinateTransform` is not to be shared across
+    threads, and making one for every line would cost more than the line."""
+    cache: dict[str, _Projection] = getattr(_PROJECTIONS, "cache", None) or {}
+    _PROJECTIONS.cache = cache
+    if plane not in cache:
+        from qgis.core import (
+            QgsCoordinateReferenceSystem,
+            QgsCoordinateTransform,
+            QgsCoordinateTransformContext,
+            QgsPointXY,
+        )
+
+        transform = QgsCoordinateTransform(
+            QgsCoordinateReferenceSystem("EPSG:4326"),
+            QgsCoordinateReferenceSystem.fromWkt(plane[len(_CRS_PLANE) :]),
+            QgsCoordinateTransformContext(),
+        )
+        reverse = QgsCoordinateTransform.TransformDirection.ReverseTransform
+
+        def forward(lon: float, lat: float) -> tuple[float, float]:
+            point = transform.transform(QgsPointXY(lon, lat))
+            return point.x(), point.y()
+
+        def inverse(x: float, y: float) -> tuple[float, float]:
+            point = transform.transform(QgsPointXY(x, y), reverse)
+            return point.x(), point.y()
+
+        cache[plane] = (forward, inverse)
+    return cache[plane]
+
+
+def _mercator(lon: float, lat: float) -> tuple[float, float]:
+    """The "mercator" plane, for a point a CRS plane cannot project."""
+    return to_plane((lon, lat), "mercator")
+
+
 def to_plane(point: Sequence[float], plane: str) -> tuple[float, float]:
     """A longitude and latitude (Z dropped) in the measuring `plane`."""
     lon, lat = float(point[0]), float(point[1])
     if plane == "degrees":
         return lon, lat
+    if plane.startswith(_CRS_PLANE):
+        try:
+            return _projection(plane)[0](lon, lat)
+        except Exception:  # QgsCsException: outside the CRS's world
+            return _mercator(lon, lat)
     lat = max(-_MAX_MERCATOR_LATITUDE, min(_MAX_MERCATOR_LATITUDE, lat))
     # asinh(tan(lat)) is Mercator's ln(tan(pi/4 + lat/2)), in one call.
     return (
@@ -119,6 +179,8 @@ def to_plane(point: Sequence[float], plane: str) -> tuple[float, float]:
 def _from_plane(x: float, y: float, plane: str) -> tuple[float, float]:
     if plane == "degrees":
         return x, y
+    if plane.startswith(_CRS_PLANE):
+        return _projection(plane)[1](x, y)
     return (
         math.degrees(x / _EARTH_RADIUS),
         math.degrees(2 * math.atan(math.exp(y / _EARTH_RADIUS)) - math.pi / 2),
@@ -136,6 +198,13 @@ class _Line:
         # write it), about 1.5 s for 500,000 vertices.
         if plane == "degrees":
             self.points = self.vertices
+        elif plane.startswith(_CRS_PLANE):
+            forward = _projection(plane)[0]
+            try:
+                self.points = [forward(lon, lat) for lon, lat in self.vertices]
+            except Exception:  # QgsCsException: a vertex outside the CRS's world
+                self.plane = "mercator"
+                self.points = [_mercator(lon, lat) for lon, lat in self.vertices]
         else:
             scale = _EARTH_RADIUS * _RADIANS
             limit = _MAX_MERCATOR_LATITUDE

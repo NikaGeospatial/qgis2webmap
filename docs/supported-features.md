@@ -318,9 +318,9 @@ part — or once on every part when **Label every part of multi-part features**
 is ticked in the layer's label placement settings.
 
 **Lines** are labelled at half their length along them, measured as QGIS
-measures them: in degrees in a project whose CRS is geographic, and in Web
-Mercator otherwise, which is exact for an EPSG:3857 project and close for
-other projected ones. With **Repeat** set in the label placement, labels repeat
+measures them, in the CRS it draws them in: the project's, or a cartograph map
+frame's own - in degrees for a geographic CRS, and in its own units for a
+projected one. With **Repeat** set in the label placement, labels repeat
 where QGIS repeats them: the line is cut into equal pieces at least the repeat
 distance long — stretched to a whole multiple of it where the label is longer
 — and each piece is labelled at its middle. A distance in millimetres, points,

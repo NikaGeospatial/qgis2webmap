@@ -69,6 +69,7 @@ from pathlib import Path
 from typing import TypeVar, cast
 
 from qgis.core import (
+    Qgis,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsCoordinateTransformContext,
@@ -242,6 +243,9 @@ class LiveFrameSource:
     layer_dom_ids: tuple[tuple[str, str], ...] = ()
     hidden_layer_ids: tuple[str, ...] = ()
     plane: ProjectedPlane | None = None
+    # The map item's CRS as WKT, which QGIS draws the frame in: its line labels
+    # are placed along their lines as measured there.
+    crs: str = ""
 
 
 @dataclass(frozen=True)
@@ -1367,6 +1371,9 @@ def prepare_live_reads(
             layer_settings=layer_settings,
             settings=_LIVE_FRAME_SETTINGS,
             report_map_title=False,
+            map_crs=(
+                QgsCoordinateReferenceSystem.fromWkt(source.crs) if source.crs else None
+            ),
             scans=(
                 live_cache.scans(project, revisions[index])
                 if live_cache is not None
@@ -2366,6 +2373,7 @@ def _build_live_frame(
         layer_dom_ids=frame.layer_dom_ids,
         hidden_layer_ids=frame.hidden_layer_ids,
         plane=plane,
+        crs=crs.toWkt(Qgis.CrsWktVariant.Preferred) if crs.isValid() else "",
     )
     return frame_spec, source
 

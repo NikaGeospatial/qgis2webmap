@@ -389,6 +389,7 @@ def prepare_project(
     report_map_title: bool = True,
     scans: LayerScans | None = None,
     map_time: MapTime | None = None,
+    map_crs: QgsCoordinateReferenceSystem | None = None,
 ) -> PendingProject:
     """Read a whole project up to its features. **GUI thread only.**
 
@@ -419,6 +420,9 @@ def prepare_project(
     `scans`, from a cartograph's `LiveFrameCache`, reuses the label and Value
     Relation scans of an earlier call while what they read is unchanged;
     `None` scans every layer afresh.
+
+    `map_crs` is the CRS the layers are drawn in, a cartograph frame's own;
+    `None` is the project's.
     """
     settings = settings or ExportSettings()
     root = project.layerTreeRoot()
@@ -516,6 +520,7 @@ def prepare_project(
             # Not in a cartograph's frames (`layer_order`): a filter panel is a
             # control on the web map, and a frame is a map on a printed page.
             filter_field=per_layer.filter_field if layer_order is None else None,
+            map_crs=map_crs,
         )
         entries.append((map_layer.name(), prepared))
 

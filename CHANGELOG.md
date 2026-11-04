@@ -154,6 +154,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - A line's label sits at half its length along it, as QGIS places it. It was
   on the line's middle vertex, which on a line of two vertices is one of its
   ends.
+- A line's label is placed along it as measured in the CRS QGIS draws it in:
+  the project's, or a cartograph map frame's own. A frame in Web Mercator in a
+  project in degrees measured the line in degrees, and a project in any
+  projected CRS but Web Mercator in Web Mercator, which put the label of a
+  long north-south line degrees away from where QGIS draws it.
 - A point layer's **Names** showing a different field from its labels draws
   every accented or other non-ASCII letter of the names. Letters only the
   names field used drew blank.
