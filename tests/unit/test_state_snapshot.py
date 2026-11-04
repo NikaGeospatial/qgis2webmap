@@ -61,6 +61,7 @@ class TestSensitivity:
             ("show_zoom_controls", False),
             ("show_scale_bar", False),
             ("show_measure", False),
+            ("measure_units", "imperial"),
             ("popup_on_hover", True),
             ("show_title", False),
             ("show_abstract", True),

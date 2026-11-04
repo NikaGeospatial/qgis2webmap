@@ -550,10 +550,26 @@ class TestManifest:
     def test_the_measure_tool_is_on_by_default(self) -> None:
         markup = build_manifest(make_project())
         assert re.search(
-            r'<om-widget type="measure" order="\d+" position="bottom-left">'
-            r"</om-widget>",
+            r'<om-widget type="measure" units="metric" order="\d+" '
+            r'position="bottom-left"></om-widget>',
             markup,
         )
+
+    @pytest.mark.parametrize("units", ["imperial", "nautical"])
+    def test_the_measure_tool_measures_in_the_units_chosen(self, units) -> None:
+        markup = build_manifest(
+            make_project(settings=ExportSettings(measure_units=units))
+        )
+        assert f'<om-widget type="measure" units="{units}" ' in markup
+
+    def test_units_the_runtime_does_not_know_are_metric(self) -> None:
+        """The runtime would ignore them and show metric anyway; saying so
+        keeps the page honest about what it measures in."""
+        markup = build_manifest(
+            make_project(settings=ExportSettings(measure_units='x" onclick="y'))
+        )
+        assert '<om-widget type="measure" units="metric" ' in markup
+        assert "onclick" not in markup
 
     def test_the_measure_tool_can_be_switched_off(self) -> None:
         markup = build_manifest(

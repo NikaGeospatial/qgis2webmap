@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from .cartograph_ir import CARTOGRAPH_THEMES
 from .export_ir import (
+    MEASURE_UNITS,
     Color,
     ExportSettings,
     ExtentSource,
@@ -355,6 +356,12 @@ def _read_scale(raw: Any) -> float:
     return round(value, 2)
 
 
+def _read_measure_units(raw: Any) -> str:
+    """A persisted measure unit system; anything not one of `MEASURE_UNITS`
+    is metric, the runtime's own default."""
+    return raw if isinstance(raw, str) and raw in MEASURE_UNITS else "metric"
+
+
 # The Appearance tab's legend and layer switcher sizes, in CSS pixels. Below
 # 140 wide the runtime's own panels stop shrinking (their `min-width`), and
 # below 100 tall a panel shows its heading and little else; past 600 wide or
@@ -475,6 +482,7 @@ CHROME_FIELDS = (
     "show_zoom_controls",
     "show_scale_bar",
     "show_measure",
+    "measure_units",
     "show_title",
     "show_abstract",
     "title_corner",
@@ -519,6 +527,8 @@ class DialogState:
     show_zoom_controls: bool = True
     show_scale_bar: bool = True
     show_measure: bool = True
+    # One of `MEASURE_UNITS`, chosen beside the Measure tool switch.
+    measure_units: str = "metric"
     popup_on_hover: bool = False
     # On by default: a map that does not say what it is arrives with no context,
     # and testing found people expected the title without having to look for a
@@ -671,6 +681,7 @@ class DialogState:
             show_zoom_controls=self.show_zoom_controls,
             show_scale_bar=self.show_scale_bar,
             show_measure=self.show_measure,
+            measure_units=self.measure_units,
             popup_on_hover=self.popup_on_hover,
             show_title=self.show_title,
             show_abstract=self.show_abstract,
@@ -733,6 +744,9 @@ def load_state(project: QgsProject) -> DialogState:
             # Absent from a project saved before the measure tool existed, which
             # picks up the new default for the same reason `showTitle` does.
             state.show_measure = bool(widgets.get("measure", True))
+            # Absent from a project saved before the units could be chosen:
+            # metric, which is what its maps measured in.
+            state.measure_units = _read_measure_units(widgets.get("measureUnits"))
             state.popup_on_hover = bool(widgets.get("popupOnHover", False))
             # Defaults to on, matching `DialogState`. A project saved before the
             # caption existed has no `showTitle` key at all, and should pick up
@@ -879,6 +893,7 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "zoomControls": state.show_zoom_controls,
                 "scaleBar": state.show_scale_bar,
                 "measure": state.show_measure,
+                "measureUnits": state.measure_units,
                 "popupOnHover": state.popup_on_hover,
                 "showTitle": state.show_title,
                 "showAbstract": state.show_abstract,

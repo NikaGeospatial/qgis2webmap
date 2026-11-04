@@ -87,6 +87,30 @@ class TestSettingsPersistence:
         save_state(project, DialogState(show_measure=True))
         assert load_state(project).show_measure is True
 
+    @pytest.mark.parametrize("units", ["metric", "imperial", "nautical"])
+    def test_the_measure_units_round_trip(self, project, units) -> None:
+        save_state(project, DialogState(measure_units=units))
+        assert load_state(project).measure_units == units
+        assert load_state(project).to_export_settings().measure_units == units
+
+    @pytest.mark.parametrize("saved", [None, "furlongs", 3, ["imperial"]])
+    def test_missing_or_unknown_measure_units_are_metric(self, project, saved) -> None:
+        """Metric is what a map measured in before the choice existed, so a
+        project saved then - and a hand-edited value - opens as metric."""
+        import json
+
+        save_state(project, DialogState(measure_units="nautical", show_legend=False))
+        widgets = json.loads(project.readEntry("qgis2webmap", "widgets", "")[0])
+        if saved is None:
+            del widgets["measureUnits"]
+        else:
+            widgets["measureUnits"] = saved
+        project.writeEntry("qgis2webmap", "widgets", json.dumps(widgets))
+
+        state = load_state(project)
+        assert state.measure_units == "metric"
+        assert state.show_legend is False
+
     def test_a_project_saved_before_the_measure_tool_gets_it(self, project) -> None:
         """No `measure` key at all: the new default, as for the caption."""
         import json
@@ -436,6 +460,90 @@ class TestMeasureToolSwitch:
         dialog = TestTabCorner()._dialog(project, make_memory_layer)
         try:
             assert not dialog.widget_checks["measure"].isChecked()
+        finally:
+            dialog.close()
+
+
+class TestMeasureUnits:
+    """Metric, Imperial and Nautical beside the Measure tool switch, where the
+    panels have their size boxes."""
+
+    def test_they_show_only_while_the_tool_is_on(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            buttons = dialog.measure_unit_buttons
+            assert [b.text() for b in buttons.values()] == [
+                "Metric",
+                "Imperial",
+                "Nautical",
+            ]
+            assert buttons["metric"].isChecked()
+            assert not any(b.isHidden() for b in buttons.values())
+            dialog.widget_checks["measure"].setChecked(False)
+            assert all(b.isHidden() for b in buttons.values())
+            dialog.widget_checks["measure"].setChecked(True)
+            assert not any(b.isHidden() for b in buttons.values())
+        finally:
+            dialog.close()
+
+    def test_choosing_one_is_what_the_map_measures_in(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            dialog.measure_unit_buttons["imperial"].click()
+            assert dialog.state.measure_units == "imperial"
+            assert not dialog.measure_unit_buttons["metric"].isChecked()
+            assert dialog.state.to_export_settings().measure_units == "imperial"
+            dialog.measure_unit_buttons["nautical"].click()
+            assert dialog.state.to_export_settings().measure_units == "nautical"
+        finally:
+            dialog.close()
+
+    def test_it_opens_with_the_units_the_project_saved(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        save_state(project, DialogState(measure_units="nautical"))
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            assert dialog.measure_unit_buttons["nautical"].isChecked()
+            assert not dialog.measure_unit_buttons["metric"].isChecked()
+        finally:
+            dialog.close()
+
+    def test_they_start_in_the_size_boxes_column(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """Beside the switch, on its row, where the Legend's width box starts."""
+        from qgis.PyQt.QtCore import QPoint
+
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            dialog.show()
+            titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
+            dialog.tabs.setCurrentIndex(titles.index("Appearance"))
+            qgis_app.processEvents()
+            check = dialog.widget_checks["measure"]
+            group = check.parentWidget()
+            metric = dialog.measure_unit_buttons["metric"].mapTo(group, QPoint(0, 0))
+            check_at = check.mapTo(group, QPoint(0, 0))
+            width = dialog.widget_sizes["legend"][0].mapTo(group, QPoint(0, 0))
+            assert abs(metric.y() - check_at.y()) < check.height()
+            assert metric.x() == width.x()
+            # The switches keep their order down the group.
+            rows = [
+                dialog.widget_checks[key].mapTo(group, QPoint(0, 0)).y()
+                for key in (
+                    "legend",
+                    "layerSwitcher",
+                    "zoomControls",
+                    "scaleBar",
+                    "measure",
+                )
+            ]
+            assert rows == sorted(rows)
         finally:
             dialog.close()
 

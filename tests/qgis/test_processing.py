@@ -542,6 +542,7 @@ class TestSavedDialogChoices:
         state.for_layer(layers["Quiet"].id()).popup = False
         state.show_legend = False
         state.widget_background = "#40e0d0"
+        state.measure_units = "nautical"
         state.map_name = "Saved name"
         save_state(project, state)
         context = qgis_core.QgsProcessingContext()
@@ -599,6 +600,7 @@ class TestSavedDialogChoices:
         assert '<div class="om-popup-title">Quiet</div>' not in batch
         assert '<om-widget type="legend"' not in batch
         assert "--om-widget-bg: #40e0d0" in batch
+        assert '<om-widget type="measure" units="nautical" ' in batch
         assert "<title>Saved name</title>" in batch
 
     def test_a_parameter_that_is_passed_wins_over_the_saved_choice(

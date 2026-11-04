@@ -182,6 +182,7 @@ from .dialog_labels import BASEMAP_LABELS as BASEMAP_LABELS
 from .dialog_labels import CAPTION_CORNER_LABELS as CAPTION_CORNER_LABELS
 from .dialog_labels import CHROME_SCALE_LABELS as CHROME_SCALE_LABELS
 from .dialog_labels import EXTENT_LABELS as EXTENT_LABELS
+from .dialog_labels import MEASURE_UNIT_LABELS as MEASURE_UNIT_LABELS
 from .dialog_labels import MODE_LABELS as MODE_LABELS
 from .dialog_labels import POPUP_MODE_LABELS as POPUP_MODE_LABELS
 from .dialog_labels import TERRAIN_LABELS as TERRAIN_LABELS
@@ -576,6 +577,11 @@ def _info_button(text: str, parent: QWidget) -> QToolButton:
         )
     )
     return button
+
+
+def _next_row(grid: QGridLayout) -> int:
+    """The row after `grid`'s last: an empty grid still reports one row."""
+    return grid.rowCount() if grid.count() else 0
 
 
 def _help_label(text: str, parent: QWidget) -> QLabel:
@@ -2528,12 +2534,14 @@ class MainDialog(QDialog):
         chrome_layout = QVBoxLayout(chrome)
         self.widget_checks: dict[str, QCheckBox] = {}
         # Width and height boxes beside the two panels whose size is theirs to
-        # set; zoom controls, scale bar and measure tool have fixed sizes.
+        # set; zoom controls, scale bar and measure tool have fixed sizes. The
+        # measure tool has its units there instead.
         self.widget_sizes: dict[str, tuple[_PanelSizeBox, _PanelSizeBox]] = {}
-        # One grid for those two rows, so both rows' boxes start in one column
-        # whichever switch's label is the longer.
+        # One grid for the switches, so what is beside them starts in one
+        # column whichever switch's label is the longest.
         sizes_grid = QGridLayout()
         sizes_grid.setColumnStretch(4, 1)
+        chrome_layout.addLayout(sizes_grid)
         for key, label, current in (
             ("legend", tr("Legend"), self.state.show_legend),
             ("layerSwitcher", tr("Layer switcher"), self.state.show_layer_switcher),
@@ -2546,11 +2554,11 @@ class MainDialog(QDialog):
             check.toggled.connect(lambda v, k=key: self._on_widget_toggled(k, v))
             self.widget_checks[key] = check
             if key in _PANEL_SIZE_ATTRIBUTES:
-                if not sizes_grid.count():
-                    chrome_layout.addLayout(sizes_grid)
                 self._add_panel_size_row(sizes_grid, key, check, page)
+            elif key == "measure":
+                self._add_measure_units_row(sizes_grid, check, page)
             else:
-                chrome_layout.addWidget(check)
+                sizes_grid.addWidget(check, _next_row(sizes_grid), 0)
         layout.addWidget(chrome)
 
         layout.addWidget(self._build_caption_group(page))
@@ -2755,13 +2763,52 @@ class MainDialog(QDialog):
             )
         )
         times = QLabel("\N{MULTIPLICATION SIGN}", page)
-        row = grid.rowCount() if grid.count() else 0
+        row = _next_row(grid)
         grid.addWidget(check, row, 0)
         for column, widget in enumerate((width, times, height), start=1):
             grid.addWidget(widget, row, column)
             widget.setVisible(check.isChecked())
             check.toggled.connect(widget.setVisible)
         self.widget_sizes[key] = (width, height)
+
+    def _add_measure_units_row(
+        self, grid: QGridLayout, check: QCheckBox, page: QWidget
+    ) -> None:
+        """The Measure tool switch with its units beside it, shown while the
+        tool is on the map, as the next row of `grid`: where the panels have
+        their size boxes. The map's reader no longer picks the units."""
+        row = _next_row(grid)
+        grid.addWidget(check, row, 0)
+        units_row = QHBoxLayout()
+        self.measure_units_group = QButtonGroup(page)
+        self.measure_units_group.setExclusive(True)
+        self.measure_unit_buttons: dict[str, QRadioButton] = {}
+        for units, label in MEASURE_UNIT_LABELS.items():
+            button = QRadioButton(tr(label), page)
+            button.setChecked(units == self.state.measure_units)
+            button.setToolTip(
+                tr("The units the measure tool reads distances and areas in.")
+            )
+            button.setAccessibleName(
+                tr("{control} units: {units}").format(
+                    control=check.text(), units=button.text()
+                )
+            )
+
+            def chosen(on: bool, value: str = units) -> None:
+                if on:
+                    self.state.measure_units = value
+
+            button.toggled.connect(chosen)
+            button.setVisible(check.isChecked())
+            check.toggled.connect(button.setVisible)
+            self.measure_units_group.addButton(button)
+            units_row.addWidget(button)
+            self.measure_unit_buttons[units] = button
+        units_row.addStretch(1)
+        # Across the size boxes' columns and the stretch after them, so the
+        # radio buttons widen none of the columns the boxes are in.
+        grid.addLayout(units_row, row, 1, 1, 4)
 
     def _on_widget_toggled(self, key: str, value: bool) -> None:
         attribute = {

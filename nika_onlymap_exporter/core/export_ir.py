@@ -1339,6 +1339,12 @@ class ExportLayer:
         return data
 
 
+# The measure tool's unit systems, as the runtime's `units` attribute names
+# them (`UnitSystem` in OnlyMap's `units.d.ts`). Metric first: it is the
+# runtime's own default, and so what every map before the choice existed used.
+MEASURE_UNITS = ("metric", "imperial", "nautical")
+
+
 @dataclass(frozen=True)
 class ExportSettings:
     """Per-export choices the user made in the dialog.
@@ -1354,6 +1360,9 @@ class ExportSettings:
     show_zoom_controls: bool = True
     show_scale_bar: bool = True
     show_measure: bool = True
+    # One of `MEASURE_UNITS`: what the measure tool reads distances and areas
+    # in. The reader no longer picks it on the map.
+    measure_units: str = "metric"
     quantize_precision: int | None = None
     simplify_tolerance: float | None = None
     popup_on_hover: bool = False
@@ -1427,6 +1436,7 @@ class ExportSettings:
             "showZoomControls": self.show_zoom_controls,
             "showScaleBar": self.show_scale_bar,
             "showMeasure": self.show_measure,
+            "measureUnits": self.measure_units,
             "quantizePrecision": self.quantize_precision,
             "simplifyTolerance": self.simplify_tolerance,
             "popupOnHover": self.popup_on_hover,
