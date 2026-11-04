@@ -35,9 +35,10 @@ else.** That report can include the runtime version, feature and widget usage
 counts, and the hostname of the page the map is running from — never the
 map's data or who opened it. Aside from that one report, an exported file
 works with no internet connection, on a machine that has never had QGIS
-installed - unless you add a basemap, relief, live XYZ, WMS or WMTS layers
-(and their legend pictures), a Cloud Optimized GeoTIFF read from a web address,
-or popup links and web pictures, which need the reader to be online.
+installed - unless you add a basemap, relief, live XYZ, WMS, WMTS or vector
+tile layers (and their legend pictures or styles), a Cloud Optimized GeoTIFF or
+PMTiles archive read from a web address, or popup links and web pictures, which
+need the reader to be online.
 Publishing to NIKA hosting and AI-assisted enhancement are separate, explicit
 actions you start yourself — nothing is uploaded automatically.
 
@@ -129,7 +130,8 @@ Vector points, lines and polygons from GeoPackage, Shapefile, GeoJSON and CSV
 sources, with single-symbol, categorized, graduated and rule-based styling;
 layer order, groups, visibility, field aliases and hidden fields; labels from a
 field or an expression, popups with links and pictures, and data attribution;
-rasters from disk, and live XYZ, WMS and WMTS layers. Every map ships a legend,
+rasters from disk, PMTiles archives, live XYZ, WMS and WMTS layers, and vector
+tile layers in their publisher's style. Every map ships a legend,
 layer switcher, zoom controls, a scale bar and a measure tool.
 
 Anything that will not survive the trip is listed in the **Fidelity** tab

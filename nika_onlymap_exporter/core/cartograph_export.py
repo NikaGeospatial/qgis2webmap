@@ -1996,9 +1996,10 @@ def _draws_in_plane(
     the frame's fidelity row either way.
 
     The runtime projects vector rows into a plane and warps image tiles onto
-    it; tiles of anything else, and embedded rasters, are indexed in Web
-    Mercator and would draw in the wrong place (its validator says so for
-    tiles; a raster is not projected at all). One such layer keeps the whole
+    it; tiles of anything else, embedded rasters and vector tiles drawn in
+    their publisher's style are indexed in Web Mercator and would draw in the
+    wrong place (its validator says so for tiles; a raster is not projected at
+    all). One such layer keeps the whole
     frame in Web Mercator, which still draws every layer where it belongs.
     """
     blockers = [
@@ -2006,6 +2007,8 @@ def _draws_in_plane(
         for layer in export_project.exportable_layers
         if layer.raster is not None
         or (layer.tiles is not None and not is_image_tile_template(layer.tiles.url))
+        # A publisher's style is drawn in Web Mercator only.
+        or (layer.vector_tiles is not None and bool(layer.vector_tiles.style_url))
     ]
     if not blockers:
         report.preserved(
