@@ -14,6 +14,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -166,9 +167,11 @@ class TestEmbeddedOnly:
         assert "Value Map" in self._reason(project, layer)
 
     def test_a_virtual_field(self, project, services) -> None:
+        from qgis.PyQt.QtCore import QMetaType
+
         layer = _wfs(services)
         layer.addExpressionField(
-            "depth * 2", qgis_core.QgsField("twice", qgis_core.QMetaType.Type.Double)
+            "depth * 2", qgis_core.QgsField("twice", QMetaType.Type.Double)
         )
         assert "virtual or joined" in self._reason(project, layer)
 
@@ -189,7 +192,9 @@ class TestEmbeddedOnly:
     def test_a_rule_based_style(self, project, services) -> None:
         layer = _wfs(services)
         root = qgis_core.QgsRuleBasedRenderer.Rule(None)
-        for expression in ("\"kind\" = 'lake'", "\"kind\" = 'river'"):
+        # Rules that are not values of one field, so each feature's rule is
+        # worked out at export (rules on values become a categorized style).
+        for expression in ('"depth" > 3', '"depth" <= 3'):
             symbol = qgis_core.QgsSymbol.defaultSymbol(layer.geometryType())
             root.appendChild(
                 qgis_core.QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression)
@@ -234,8 +239,8 @@ class TestProcessing:
         )
         html = Path(results["OUTPUT"]).read_text(encoding="utf-8")
 
-        assert html.count('data-q2w-live="live-only"') == 1
-        assert html.count('data-q2w-live="live-first"') == 1
+        modes = re.findall(r'<om-layer[^>]*?data-q2w-live="([a-z-]+)"', html)
+        assert sorted(modes) == ["live-first", "live-only"]
         assert "/cors/ogc/collections/stations/items?f=json&amp;bbox={bbox-crs84}" in (
             html
         )

@@ -267,6 +267,11 @@ class _Handler(BaseHTTPRequestHandler):
         if rest == "":
             links = [
                 {
+                    "rel": "service-desc",
+                    "type": "application/vnd.oai.openapi+json;version=3.0",
+                    "href": f"{base}/api",
+                },
+                {
                     "rel": "conformance",
                     "type": "application/json",
                     "href": f"{base}/conformance",
@@ -278,6 +283,8 @@ class _Handler(BaseHTTPRequestHandler):
                 },
             ]
             self._json({"title": "Fake OGC API", "links": links})
+        elif rest == "api":
+            self._json({"openapi": "3.0.0", "info": {"title": "Fake"}, "paths": {}})
         elif rest == "conformance":
             core = "http://www.opengis.net/spec/ogcapi-features-1/1.0/conf/"
             self._json({"conformsTo": [core + c for c in ("core", "geojson", "oas30")]})
