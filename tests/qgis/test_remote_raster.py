@@ -56,6 +56,17 @@ def _cog(path, bands: int, epsg: int, compression: str = "DEFLATE") -> bytes:
     return path.read_bytes()
 
 
+def _vrt(folder, of: str) -> bytes:
+    """A VRT over the file `of` beside it, which GDAL reads relative to it."""
+    path = folder / (of + ".vrt")
+    gdal.BuildVRT(str(path), [str(folder / of)]).FlushCache()
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(str(folder / of), of).replace(
+        'relativeToVRT="0"', 'relativeToVRT="1"'
+    )
+    return text.encode("utf-8")
+
+
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     folder = tmp_path_factory.mktemp("remote-cog")
@@ -65,6 +76,9 @@ def server(tmp_path_factory):
         "/rgb4326.tif": _cog(folder / "rgb4326.tif", 3, 4326),
         "/rgb-lzw.tif": _cog(folder / "rgb-lzw.tif", 3, 3857, "LZW"),
     }
+    # A 3-band Web Mercator composite with no compression to read: only its
+    # format says the web map cannot draw it.
+    files["/rgb.vrt"] = _vrt(folder, "rgb.tif")
     with FakeCogServer(files) as running:
         yield running.base, running.requests
 
@@ -141,6 +155,7 @@ def test_a_web_raster_is_refused_once_without_a_read(
         ("grey.tif", "QGIS draws its colours from its values"),
         ("rgb4326.tif", "in EPSG:4326, and the web map draws"),
         ("rgb-lzw.tif", "is LZW-compressed, which the web map cannot decode yet"),
+        ("rgb.vrt", "it is not a GeoTIFF (VRT)"),
     ],
 )
 def test_each_refusal_says_why(qgis_app, server, name, reason) -> None:
@@ -218,3 +233,43 @@ def test_packaging_neither_converts_nor_carries_it(
     element = build_raster_layer_element(exported, exported.raster)
     assert f'src="{base}/rgb.tif"' in element
     assert 'type="COGLayer"' in element
+
+
+def test_the_gui_thread_never_fetches_the_header(qgis_app, server) -> None:
+    """Drawing the layer reads through GDAL's cache and can push its header
+    out; reading it again then contacts the server, which the GUI thread
+    must not wait on. The part the GUI thread does reads nothing, whatever
+    GDAL holds; the header is checked when the layer is finished, on the
+    worker in an export."""
+    from nika_onlymap_exporter.core.layer_reader import (
+        PendingRemoteRaster,
+        prepare_layer,
+    )
+
+    base, requests = server
+    layer = _read("/vsicurl/" + base + "/rgb.tif")
+    gdal.VSICurlClearCache()
+    before = len(requests)
+    report = FidelityReportBuilder()
+    prepared = prepare_layer(layer, report)
+    assert requests[before:] == [], "preparing the layer contacted the server"
+    assert isinstance(prepared, PendingRemoteRaster)
+
+    exported = prepared.finish(report)
+    assert exported is not None and exported.raster is not None
+    assert "live Cloud Optimized GeoTIFF" in _rows(report, FidelityStatus.APPROXIMATED)
+
+
+def test_a_header_that_cannot_be_read_again_is_refused(qgis_app, tmp_path) -> None:
+    """Not taken as a pass: a raster the export cannot check is not exported
+    as one the map may leave empty. Here the file is gone from the server
+    once QGIS has opened it."""
+    files = {"/gone.tif": _cog(tmp_path / "gone.tif", 3, 3857)}
+    with FakeCogServer(files) as running:
+        layer = _read("/vsicurl/" + running.base + "/gone.tif")
+        gdal.VSICurlClearCache()
+        del files["/gone.tif"]
+        report = FidelityReportBuilder()
+        assert read_layer(layer, report) is None
+    row = _only_row(report)
+    assert "could not read its header again" in row and "Export > Save As" in row

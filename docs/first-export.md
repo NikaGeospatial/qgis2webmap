@@ -118,9 +118,11 @@ with **Apply to all layers** to set them in bulk.
 
 One exception, and it is deliberate: a field the map *draws* with - the one a
 categorised or graduated style is based on, the one labels read their text from,
-or an extrusion height - stays in the file even when you hide it. Removing it
-would not conceal anything, since it is on the map either way; it would only
-break the drawing.
+an extrusion height, or the field a layer's *Filter by* panel filters by - stays
+in the file even when you hide it. Removing it would not conceal anything, since
+it is on the map either way; it would only break the drawing. A label from an
+expression, and a rule-based style, carry only their result - the text, or which
+rule draws each feature - not the fields they read.
 
 ## 5. Preview
 

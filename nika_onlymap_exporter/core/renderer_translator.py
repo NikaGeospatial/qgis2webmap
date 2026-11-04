@@ -1455,15 +1455,13 @@ def _translate_rule_tree(
     """
     rules = drawn_rules(renderer)
     if not rules:
-        report.unsupported(
-            subject,
-            "No rule draws a symbol: every rule is switched off or has none, so "
-            "QGIS draws nothing for this layer. The layer will use a default "
-            "style.",
-            layer_id,
-        )
+        # No class at all: no feature gets one, so the reader leaves every
+        # feature out, as QGIS draws none, and says so of the layer.
         return RendererSpec(
-            kind=RendererKind.UNSUPPORTED, unsupported_reason="no rule draws"
+            kind=RendererKind.CATEGORIZED,
+            field_name=_rule_field(layer.fields().names()),
+            unmatched_hidden=True,
+            field_generated=True,
         )
 
     categories = []

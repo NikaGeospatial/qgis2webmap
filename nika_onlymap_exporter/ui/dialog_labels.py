@@ -74,6 +74,14 @@ CHROME_SCALE_LABELS = {
     2.0: N_("Largest - for presentations and big screens"),
 }
 
+# Beside the Measure tool switch, in the order of the runtime's own Units row,
+# which this choice replaces on the map.
+MEASURE_UNIT_LABELS = {
+    "metric": N_("Metric"),
+    "imperial": N_("Imperial"),
+    "nautical": N_("Nautical"),
+}
+
 EXTENT_LABELS = {
     ExtentSource.DATA: N_("The data - every feature is visible"),
     ExtentSource.CANVAS: N_("The current QGIS view"),

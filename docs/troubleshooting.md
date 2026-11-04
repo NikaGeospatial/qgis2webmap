@@ -32,9 +32,10 @@ faq:
       under Help, About.
   - q: Why is the Export button greyed out?
     a: >-
-      The reason is printed beside the button. Either the project has no vector
-      layer to export, or every layer is unticked in the Include column on the
-      Layers tab, or the Fidelity tab has a Blocked item naming the layer and
+      The reason is printed at the foot of the dialog. Either the project has no
+      vector or raster layer to export, or every layer is unticked in the
+      Include column on the Layers tab. A Blocked item does not grey it out:
+      Export asks first, and the Fidelity tab names the layer and
       the reason.
   - q: Why is my exported map blank, or showing a message about JavaScript?
     a: >-
@@ -123,8 +124,10 @@ with its own licence, which is why it is fetched rather than bundled into this
 GPL plugin, and why you are shown the licence first.
 
 About 5.9 MB. After that, everything works offline, and exporting itself never
-touches the network. See [privacy](privacy.md) for what that request does and
-does not send.
+touches the network - except to read a layer QGIS itself reads from the web:
+a web service layer's features, or the header of a raster at a web address
+when GDAL no longer holds it. See [privacy](privacy.md) for what those requests
+do and do not send.
 
 ### The download fails
 
@@ -155,13 +158,16 @@ on.
 
 ### Export is greyed out
 
-The reason is printed beside the button. The three you will meet:
+The reason is printed at the foot of the dialog. It is one of two:
 
 | The reason says | What to do |
 |---|---|
 | *Add a vector or raster layer to the project to export.* | The project has no layer the web map can draw - for example only ArcGIS map services or attribute tables |
 | *Tick at least one layer to include.* | Everything is unticked in the **Include** column on the Layers tab |
-| Something else | Open the **Fidelity** tab. A **Blocked** item names the layer and the reason |
+
+Export and Preview also go dark while a job is running, and come back when it
+finishes. A **Blocked** item on the **Fidelity** tab does not grey Export out:
+pressing it asks first, naming what the map will be missing.
 
 ### Extruded polygons export flat
 
@@ -185,8 +191,8 @@ way.
 Note this is not the same as extruded polygons. Extrusion reads a height from an
 *attribute* and leaves the geometry flat, and those layers were never affected.
 
-Fixed in the next release. Until then, either switch labelling off for that
-layer, or give it flat geometry — **Processing Toolbox → Vector geometry → Drop
+Fixed in 0.2.0: update the plugin. If you cannot, either switch labelling off
+for that layer, or give it flat geometry — **Processing Toolbox → Vector geometry → Drop
 M/Z values**, which writes a new layer with the elevation removed. Dropping Z
 does not affect extrusion, because extrusion never reads the geometry's height.
 
@@ -307,8 +313,9 @@ not allow images from the service ([hosting](hosting.md#if-your-site-sets-a-cont
 It needs no CORS, so it can show while the layer's tiles stay empty. A
 service that gives QGIS neither a LegendURL for the layer's style nor a
 GetLegendGraphic request has no picture in QGIS either, and none is exported;
-nor is a picture whose address carries an access key (the Checks tab says
-so). The legend in a cartograph lists the layer by name in any case.
+nor is a picture whose address carries an access key or is not a web
+(`http` or `https`) address (the Fidelity tab says so). The legend in a
+cartograph lists the layer by name in any case, and its Checks tab says so.
 
 ### A raster read over the web (a COG) is empty in the map
 

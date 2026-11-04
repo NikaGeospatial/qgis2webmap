@@ -1,0 +1,283 @@
+    <!--
+      The measure tool, as the map's reader uses it. The panel is the runtime's
+      own `<om-widget type="measure">`; this changes how it behaves, and how
+      much room it takes, from the outside, through the runtime's public
+      surface - its `om-map-point` event and its `draw-*` actions - and leaves
+      the widget working as the runtime ships it wherever something here is
+      not found.
+
+      - A distance is one measurement of two points. After the second the
+        line and its total stay on the map, and the tool lets go of the map:
+        clicks open popups and drags pan again. Pressing Distance again starts
+        a new one.
+      - An area closes on Ctrl + click (Cmd + click on a Mac), which places
+        that point as its last; a double-click, a double-tap or Enter close it
+        as before. Closed, it lets go of the map too. A hint above the panel
+        says so while an area is being drawn.
+      - The units are the author's, set on the Appearance tab and written on
+        the widget as `units` (the scale bar's too), so the panel's own Units
+        row is removed. To keep the panel compact the mode buttons read
+        Distance and Area, named in full for a screen reader, and the Clear
+        button sits beside the readout, smaller.
+
+      The last point is placed the way the runtime closes a shape on a
+      double-click: `draw-commit` ends it at the pointer, which the runtime
+      follows on hover, so the commit is sent before the runtime sees the
+      click, and the tool lets go of the map before it does, which leaves the
+      click to the map. Only when the pointer had not been followed there yet
+      - a click made while still moving - does the click place the point
+      itself, and the shape ends at the next hover. Letting go is `draw-mode`
+      off for the runtime's own measuring target, not `measure-mode` off: that
+      one also wipes the finished measurement from the map. The panel's
+      styles are inside its shadow root, which a document rule cannot reach,
+      so the compact styles go in there too. A plain script after the map, so
+      file:// is the same.
+    -->
+    <script>
+      (function () {
+        var map = document.querySelector("om-map");
+        var widget = map && map.querySelector('om-widget[type="measure"]');
+        if (!widget) return;
+        // The runtime's drawing target for the measure tool
+        // (`measure-controller.d.ts`); `draw-*` actions take it by name.
+        var TARGET = "__onlymapjs-measure";
+        // The runtime's own double-tap: two taps this close in time and space
+        // close the shape rather than add a point (`draw-controller`).
+        var DOUBLE_TAP_MS = 350;
+        var SAME_SPOT_PX = 12;
+        // A double-click arrives as two clicks on one spot: one point.
+        var REPEAT_MS = 500;
+        var REPEAT_PX = 3;
+        // How far from a click the followed pointer may be and still be where
+        // the click was: a hover is picked a pixel or two coarser than a click.
+        var FOLLOWED_PX = 6;
+        // A touch has no hover to end the shape at: the points it placed do.
+        var NO_HOVER_MS = 400;
+        var NEEDED = { distance: 2, area: 3 };
+        var SHORT = { distance: "Distance", area: "Area" };
+        var mac = /Mac|iPhone|iPad|iPod/.test(
+          navigator.platform || navigator.userAgent || ""
+        );
+        var touchOnly =
+          typeof matchMedia === "function" &&
+          matchMedia("(hover: none) and (pointer: coarse)").matches;
+        var HINT = touchOnly
+          ? "Double-tap to place the last point"
+          : (mac ? "Cmd" : "Ctrl") + " + click to place the last point";
+        var STYLE =
+          // The runtime's own 200px minimum stays: it keeps the hint on one
+          // line and the readout on two beside Clear.
+          ".omni-measure { padding: 6px; font-size: 12px; }" +
+          ".omni-measure .row.modes { margin-bottom: 0; gap: 4px; flex-wrap: nowrap; }" +
+          ".omni-measure .row.modes button { padding: 4px 8px; }" +
+          ".q2w-measure-foot { display: flex; align-items: center; gap: 4px;" +
+          "  margin-top: 6px; width: 0; min-width: 100%; }" +
+          ".q2w-measure-foot .readout { flex: 1 1 auto; min-width: 0; margin: 0;" +
+          "  min-height: 0; line-height: 1.35; }" +
+          ".q2w-measure-foot .clear { flex: 0 0 auto; width: auto; padding: 2px 6px;" +
+          "  font-size: 11px; border-radius: 4px; }" +
+          ".q2w-measure-hint { position: relative; box-sizing: border-box; width: 0;" +
+          "  min-width: 100%; margin-bottom: 7px; padding: 4px 8px; border-radius: 6px;" +
+          "  background: var(--om-widget-fg, #111827); color: var(--om-widget-bg, #fff);" +
+          "  font: 500 11px/1.35 system-ui, -apple-system, sans-serif;" +
+          "  box-shadow: 0 2px 8px rgba(0,0,0,.18); }" +
+          ".q2w-measure-hint::after { content: ''; position: absolute; left: 14px;" +
+          "  top: 100%; border: 5px solid transparent;" +
+          "  border-top-color: var(--om-widget-fg, #111827); }" +
+          ".q2w-measure-hint[hidden] { display: none; }";
+
+        // The mode being measured, or null; the points placed in it; and a
+        // shape waiting for the pointer to be followed to its last point.
+        var armed = null;
+        var points = 0;
+        var counted = null;
+        var waiting = null;
+        var press = { modified: false, x: 0, y: 0, touch: false };
+        var hover = null;
+        var lastTap = null;
+        var hint = null;
+        var root = null;
+
+        var showHint = function () {
+          if (hint) hint.hidden = armed !== "area";
+        };
+        var reset = function () {
+          points = 0;
+          counted = null;
+          lastTap = null;
+          if (waiting) clearTimeout(waiting);
+          waiting = null;
+        };
+        // The pressed look is the widget's, on its mode button; it reads it
+        // back to decide whether the next press arms or disarms.
+        var release = function () {
+          if (!root) return;
+          var buttons = root.querySelectorAll("button[data-act='mode']");
+          for (var i = 0; i < buttons.length; i++) {
+            buttons[i].classList.remove("active");
+            buttons[i].setAttribute("aria-pressed", "false");
+          }
+        };
+        var finish = function (commit) {
+          if (!armed) return;
+          armed = null;
+          reset();
+          if (commit) map.emit("draw-commit", {});
+          map.emit("draw-mode", { target: TARGET, mode: "none" });
+          release();
+          showHint();
+        };
+        // Whether the runtime has followed the pointer to where it was pressed.
+        var followed = function () {
+          if (!hover || typeof map.project !== "function") return false;
+          var at = map.project(hover);
+          var box = map.getBoundingClientRect();
+          return (
+            !!at &&
+            Math.abs(box.left + at[0] - press.x) <= FOLLOWED_PX &&
+            Math.abs(box.top + at[1] - press.y) <= FOLLOWED_PX
+          );
+        };
+
+        var adopt = function () {
+          root = widget.shadowRoot;
+          var panel = root && root.querySelector(".omni-measure");
+          if (!panel) return false;
+          if (root.querySelector(".q2w-measure-hint")) return true;
+          var style = document.createElement("style");
+          style.textContent = STYLE;
+          root.appendChild(style);
+          var modes = panel.querySelectorAll("button[data-act='mode']");
+          for (var i = 0; i < modes.length; i++) {
+            var short = SHORT[modes[i].getAttribute("data-mode")];
+            if (!short) continue;
+            modes[i].setAttribute("aria-label", modes[i].textContent.trim());
+            modes[i].textContent = short;
+          }
+          var units = panel.querySelector(".units");
+          if (units && units.parentElement !== panel) units.parentElement.remove();
+          var readout = panel.querySelector(".readout");
+          var clear = panel.querySelector("button[data-act='clear']");
+          if (readout && clear) {
+            var foot = document.createElement("div");
+            foot.className = "q2w-measure-foot";
+            readout.parentElement.insertBefore(foot, readout);
+            foot.appendChild(readout);
+            foot.appendChild(clear);
+          }
+          hint = document.createElement("div");
+          hint.className = "q2w-measure-hint";
+          hint.setAttribute("role", "status");
+          hint.textContent = HINT;
+          panel.parentNode.insertBefore(hint, panel);
+          showHint();
+          // Ahead of the widget's own handler, which is on the panel.
+          root.addEventListener(
+            "click",
+            function (event) {
+              var button = event.target.closest && event.target.closest("button");
+              if (!button) return;
+              var act = button.getAttribute("data-act");
+              if (act === "mode") {
+                var arming = !button.classList.contains("active");
+                // A fresh measurement: what the last one left on the map goes.
+                if (arming) map.emit("measure-clear", {});
+                armed = arming ? button.getAttribute("data-mode") : null;
+                reset();
+                showHint();
+              } else if (act === "clear") {
+                reset();
+                // Nothing armed: back to the tool as it opened.
+                if (!armed) map.emit("measure-mode", { mode: "none" });
+              }
+            },
+            true
+          );
+          return true;
+        };
+        var tries = 0;
+        var wait = function () {
+          if (adopt() || ++tries > 600) return;
+          requestAnimationFrame(wait);
+        };
+        wait();
+
+        map.addEventListener(
+          "pointerdown",
+          function (event) {
+            press = {
+              modified: event.ctrlKey || event.metaKey,
+              x: event.clientX,
+              y: event.clientY,
+              touch: event.pointerType === "touch" || event.pointerType === "pen",
+            };
+          },
+          true
+        );
+        // Every listener of this runs before the runtime acts on the point.
+        map.addEventListener("om-map-point", function (event) {
+          var detail = event.detail;
+          if (!detail || !detail.coordinate) return;
+          if (detail.kind === "hover") {
+            hover = detail.coordinate;
+            // The shape ends here, once the runtime has followed the pointer.
+            if (waiting) Promise.resolve(true).then(finish);
+            return;
+          }
+          if (!armed || detail.kind !== "click") return;
+          if (waiting) {
+            // Ended before this click can place anything.
+            finish(true);
+            return;
+          }
+          var now = Date.now();
+          var near = function (spot, px) {
+            return Math.abs(spot.x - press.x) <= px && Math.abs(spot.y - press.y) <= px;
+          };
+          if (press.touch) {
+            var second =
+              lastTap && now - lastTap.at <= DOUBLE_TAP_MS && near(lastTap, SAME_SPOT_PX);
+            lastTap = second ? null : { x: press.x, y: press.y, at: now };
+            if (second) {
+              // The runtime closes the shape on this tap, if it has enough.
+              if (points >= NEEDED[armed]) setTimeout(finish, 0, false);
+              return;
+            }
+          }
+          var repeat = counted && now - counted.at <= REPEAT_MS && near(counted, REPEAT_PX);
+          counted = { x: press.x, y: press.y, at: now };
+          if (repeat) return;
+          var last =
+            armed === "distance"
+              ? points + 1 >= NEEDED.distance
+              : press.modified && points + 1 >= NEEDED.area;
+          if (!last) {
+            points += 1;
+            return;
+          }
+          if (!press.touch && followed()) {
+            finish(true);
+            return;
+          }
+          // This click places the point; the next hover, or for a touch the
+          // lack of one, ends the shape on it.
+          points += 1;
+          waiting = setTimeout(finish, NO_HOVER_MS, true);
+        });
+        // The runtime closes the shape on these with the pointer as its last
+        // point, so one point fewer is enough; let go once it has.
+        map.addEventListener("dblclick", function () {
+          if (armed === "area" && points + 1 >= NEEDED.area) {
+            setTimeout(finish, 0, false);
+          }
+        });
+        window.addEventListener("keydown", function (event) {
+          if (!armed) return;
+          if (event.key === "Escape") {
+            reset();
+          } else if (event.key === "Enter" && points + 1 >= NEEDED[armed]) {
+            setTimeout(finish, 0, false);
+          }
+        });
+      })();
+    </script>

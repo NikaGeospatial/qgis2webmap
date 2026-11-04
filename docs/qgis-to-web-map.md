@@ -62,7 +62,10 @@ An exported map is not a picture of your project. The recipient can:
 
 - pan and zoom, at any scale you allowed
 - switch layers on and off, in the order you set in the QGIS Layers panel
-- click a feature and read its attributes in a popup, with the fields you chose
+- click a feature and read its attributes in a popup, with the fields you chose,
+  their links and pictures included
+- measure a distance or an area, unless you turned the measure tool off
+- filter a layer by one of its fields, if you gave it a *Filter by*
 - tilt into 3D, if you enabled extrusion or the global relief ground surface
 
 They cannot edit your data, and they do not get your project file.
@@ -73,12 +76,16 @@ Not everything QGIS can draw has an equivalent in a browser, and the honest part
 of this is knowing which parts before you send the map rather than after.
 
 Vector points, lines and polygons are exported, along with layer order,
-groups and opacity. So are raster layers from a file on disk - a GeoTIFF
-travels as a Cloud-Optimized GeoTIFF, in the colours QGIS draws it - inside the
-single HTML file up to 100 MB of imagery, or beside the page in a Folder or
-Share ZIP export. Data in any CRS is
-reprojected to WGS84 on the way out. Scale-dependent visibility survives as the
-matching web zoom levels, and the Fidelity tab shows which zooms it became.
+groups and opacity, in single-symbol, categorized, graduated or rule-based
+styles (rule-based ones approximated: a feature two rules draw shows one
+symbol), and with labels from a field or an expression. So are raster layers
+from a file on disk - a GeoTIFF travels as a Cloud-Optimized GeoTIFF, in the
+colours QGIS draws it - inside the single HTML file up to 100 MB of imagery, or
+beside the page in a Folder or Share ZIP export. XYZ, WMS and WMTS layers, and
+a Cloud Optimized GeoTIFF QGIS reads from a web address, stay live and need a
+connection. Data in any CRS is reprojected to WGS84 on the way out.
+Scale-dependent visibility survives as the matching web zoom levels, and the
+Fidelity tab shows which zooms it became.
 
 Whatever cannot be translated exactly is listed on the plugin's **Fidelity** tab
 *before* the export runs, with a verdict per layer — kept, changed, rasterised,

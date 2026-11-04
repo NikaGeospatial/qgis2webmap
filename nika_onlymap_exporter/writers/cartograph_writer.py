@@ -78,7 +78,9 @@ from ..core.cartograph_ir import (
     ShapeSpec,
     TextSpec,
 )
-from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, gzip_base64
+from ..core.export_ir import PopupPicture
+from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, PICTURE_RESOLVER, gzip_base64
+from ..packaging.popup_pictures import build_picture_embed
 from ..packaging.raster_embed import build_raster_embed, has_cog_layer
 
 #: Shown instead of a live cartograph when the browser runs no JavaScript:
@@ -141,6 +143,8 @@ def write_cartograph_html(
     live_frame_markup: Mapping[str, str] | None = None,
     *,
     embedded_rasters: Sequence[tuple[str, bytes]] = (),
+    embedded_pictures: Sequence[PopupPicture] = (),
+    picture_fields: Sequence[str] = (),
 ) -> str:
     """Render `spec` into a complete, standalone HTML document string.
 
@@ -148,6 +152,9 @@ def write_cartograph_html(
     (`packaging/raster_staging.py`): the page carries them and answers the
     runtime's range requests for them itself, exactly as a single-file web
     map does (`packaging/raster_embed.py`), ahead of the runtime script.
+    `embedded_pictures` are their popups' pictures, carried once each as a
+    single-file web map carries them, and `picture_fields` the properties
+    that show them (`packaging/popup_pictures.py`).
     """
     markup_by_frame, has_shared_data = _share_repeated_data(live_frame_markup or {})
     has_live = any(
@@ -174,6 +181,7 @@ def write_cartograph_html(
         has_live=has_live,
         has_atlas_cameras=has_atlas_cameras,
         has_shared_data=has_shared_data,
+        has_pictures=has_live and bool(embedded_pictures),
     )
     if has_live:
         # Inert until the core loader is set (see the module docstring).
@@ -188,6 +196,9 @@ def write_cartograph_html(
         )
         if raster_embed:
             body += raster_embed + "\n"
+        picture_embed = build_picture_embed(embedded_pictures, picture_fields)
+        if picture_embed:
+            body += picture_embed + "\n"
     else:
         # No live frame, no loader to wait for: the sheet is in the page from
         # the start, so it reads with JavaScript off too - the runtime's
@@ -367,6 +378,7 @@ def _render_script(
     has_live: bool,
     has_atlas_cameras: bool = False,
     has_shared_data: bool = False,
+    has_pictures: bool = False,
 ) -> str:
     carto_gz = gzip_base64(runtime.cartograph_js)
     lines = [
@@ -428,6 +440,17 @@ def _render_script(
         "  block.replaceWith(json);",
         "}",
     ]
+    if has_pictures:
+        # The popup pictures' addresses, from the page's picture script
+        # (`packaging/popup_pictures.py`), into every frame's data - which
+        # that script cannot see inside the <template>, and some of which
+        # was only just inflated.
+        lines += [
+            "for (const block of fragment.querySelectorAll(",
+            "  'script[type=\"application/json\"]')) {",
+            f"  block.textContent = {PICTURE_RESOLVER}(block.textContent);",
+            "}",
+        ]
     if has_live:
         if runtime.core_js is None:  # guarded by write_cartograph_html
             raise ValueError("a live cartograph needs core_js")

@@ -63,12 +63,13 @@ import os
 import re
 import tempfile
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import TypeVar, cast
 
 from qgis.core import (
+    Qgis,
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
     QgsCoordinateTransformContext,
@@ -87,7 +88,7 @@ from qgis.core import (
     QgsRectangle,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import QDate, QDateTime, Qt, QTime
+from qgis.PyQt.QtCore import QDate, QDateTime, Qt, QTime, QVariant
 from qgis.PyQt.QtXml import QDomDocument
 
 from ..exporters.frame_raster import (
@@ -100,7 +101,7 @@ from ..packaging.dependency_scanner import (
     data_bytes_by_layer,
     report_remote_dependency,
 )
-from ..packaging.popup_pictures import embed_popup_pictures
+from ..packaging.popup_pictures import picture_fields
 from ..packaging.raster_staging import stage_rasters
 from ..packaging.runtime_manager import RuntimeBundle
 from ..translation import tr
@@ -132,6 +133,7 @@ from .export_ir import (
     Extent,
     FidelityItem,
     OutputMode,
+    PopupPicture,
     RasterSpec,
 )
 from .export_resolution import frame_pixel_size, frame_resolution
@@ -139,7 +141,12 @@ from .extent_math import extent_from_longitudes_latitudes
 from .fidelity_report import FidelityReportBuilder
 from .frame_layers import rendered_layers
 from .keyable_expressions import has_unkeyable_expression, is_unkeyable_expression
-from .layer_reader import LayerFeatures, PendingLayer, RelationTable
+from .layer_reader import (
+    LayerFeatures,
+    PendingLayer,
+    PendingRemoteRaster,
+    RelationTable,
+)
 from .layout_reader import (
     ATLAS_SUBJECT,
     AtlasRequirement,
@@ -157,6 +164,7 @@ from .license_policy import CapVerdict
 from .live_count import refresh_live_counts
 from .map_services import is_image_tile_template
 from .page_settings import apply_page_choice
+from .popup_media import picture_sources, popup_files_unchanged
 from .print_settings import PrintSettings, apply_to_spec
 from .project_reader import (
     PendingProject,
@@ -237,6 +245,9 @@ class LiveFrameSource:
     layer_dom_ids: tuple[tuple[str, str], ...] = ()
     hidden_layer_ids: tuple[str, ...] = ()
     plane: ProjectedPlane | None = None
+    # The map item's CRS as WKT, which QGIS draws the frame in: its line labels
+    # are placed along their lines as measured there.
+    crs: str = ""
 
 
 @dataclass(frozen=True)
@@ -797,6 +808,52 @@ def _add_layer_token(
     return True
 
 
+def expression_reuse_key(project: QgsProject, layer_ids: Iterable[str]) -> str | None:
+    """A digest of what the expressions of `layer_ids` read besides their own
+    data and settings, or None when one reads something no key can vouch for
+    (the clock, chance, another layer, a Python function: `keyable_expressions`).
+    **GUI thread only.**
+
+    For a read reused by something that already follows the layers' data and
+    styles itself - the dialog, whose layer watcher drops its read when one
+    changes - and not the project's expression variables: those are here, as
+    in `LiveFrameCache.key`, with each layer's own.
+    """
+    layers: list[tuple[str, object]] = []
+    for layer_id in sorted(layer_ids):
+        layer = project.mapLayer(layer_id)
+        if layer is None:
+            continue
+        document = QDomDocument("reuse-layer")
+        element = document.createElement("maplayer")
+        # Attached first, as for `_static_frame_key`.
+        document.appendChild(element)
+        layer.writeLayerXml(element, document, QgsReadWriteContext())
+        xml = document.toString()
+        if _UNKEYABLE_EXPRESSION_RE.search(xml) or has_unkeyable_expression(
+            xml,
+            functools.partial(_keyed_variables, project, layer),
+            layer.subsetString() if isinstance(layer, QgsVectorLayer) else "",
+        ):
+            return None
+        # The layer's own variables, a user's among them; not QGIS's hidden
+        # ones (`_fields_`, `_layer_crs`), which are the layer itself.
+        scope = QgsExpressionContextUtils.layerScope(layer)
+        layers.append(
+            (
+                layer_id,
+                tuple(
+                    (name, _plain_variable(scope.variable(name)))
+                    for name in scope.variableNames()
+                    if not name.startswith("_")
+                ),
+            )
+        )
+    return value_digest(
+        (_expression_variables(project), tuple(layers)), _qgis_values({})
+    )
+
+
 def _keyed_variables(project: QgsProject, *scoped: object) -> frozenset[str]:
     """The names of the expression variables a key holds the values of: the
     global and project ones (`_expression_variables`), and those of each of
@@ -864,21 +921,27 @@ def _expression_variables(project: QgsProject) -> tuple[tuple[str, object], ...]
     """The global and project expression variables, which a layer's virtual
     fields and filters may read, by name; a layer among them by its id."""
 
-    def plain(value: object) -> object:
-        if isinstance(value, QgsMapLayer):
-            return ("layer", value.id())
-        if isinstance(value, (list, tuple)):
-            return tuple(plain(item) for item in value)
-        return value
-
     return tuple(
-        (f"{scope.name()}:{name}", plain(scope.variable(name)))
+        (f"{scope.name()}:{name}", _plain_variable(scope.variable(name)))
         for scope in (
             QgsExpressionContextUtils.globalScope(),
             QgsExpressionContextUtils.projectScope(project),
         )
         for name in scope.variableNames()
     )
+
+
+def _plain_variable(value: object) -> object:
+    """An expression variable's value as a key holds it: a layer by its id,
+    and NULL - a null `QVariant` under PyQt5 (QGIS 3), such as an unsaved
+    project's `@project_home` - as None, which PyQt6 already gives."""
+    if isinstance(value, QgsMapLayer):
+        return ("layer", value.id())
+    if isinstance(value, QVariant):
+        return None if value.isNull() else _plain_variable(value.value())
+    if isinstance(value, (list, tuple)):
+        return tuple(_plain_variable(item) for item in value)
+    return value
 
 
 def _qgis_values(tokens: Mapping[str, object]) -> Special:
@@ -1222,7 +1285,9 @@ def fit_legends_to_layout(
     qgis_layer_ids: dict[str, dict[str, str]] = {}
     for source, pending in zip(prepared.live_frames, prepared.live_reads, strict=True):
         base_layers = [
-            entry.base if isinstance(entry, PendingLayer) else entry
+            entry.base
+            if isinstance(entry, (PendingLayer, PendingRemoteRaster))
+            else entry
             for _name, entry in pending.entries
             if entry is not None
         ]
@@ -1308,6 +1373,9 @@ def prepare_live_reads(
             layer_settings=layer_settings,
             settings=_LIVE_FRAME_SETTINGS,
             report_map_title=False,
+            map_crs=(
+                QgsCoordinateReferenceSystem.fromWkt(source.crs) if source.crs else None
+            ),
             scans=(
                 live_cache.scans(project, revisions[index])
                 if live_cache is not None
@@ -1551,6 +1619,9 @@ def finish_cartograph_full(
     # By file name, which carries the layer id: a raster drawn in two frames
     # is converted to the same bytes and carried once.
     embedded_rasters: dict[str, bytes] = {}
+    # By name, which is the picture's hash: carried once for every frame.
+    embedded_pictures: dict[str, PopupPicture] = {}
+    shown_in: set[str] = set()
     reported_remote: set[str] = set()
     measured: list[Mapping[str, int]] = []
     for index, source in enumerate(prepared.live_frames):
@@ -1583,7 +1654,9 @@ def finish_cartograph_full(
             embedded_rasters.setdefault(name, data)
         # A frame lives in the cartograph's own page, so its popup pictures
         # travel inside it, as a single-file web map's do.
-        export_project = embed_popup_pictures(export_project)
+        for name, picture in picture_sources(export_project.layers).items():
+            embedded_pictures.setdefault(name, picture)
+        shown_in.update(picture_fields(export_project.layers))
         requirement = prepared.atlas_requirement
         if requirement is not None and requirement.frame_id == source.frame_id:
             export_project = _with_atlas_order(export_project, requirement)
@@ -1633,6 +1706,8 @@ def finish_cartograph_full(
             prepared.bundle,
             live_markup,
             embedded_rasters=tuple(embedded_rasters.items()),
+            embedded_pictures=tuple(embedded_pictures.values()),
+            picture_fields=tuple(sorted(shown_in)),
         ),
         projects=tuple(projects),
     )
@@ -1652,6 +1727,10 @@ def _finish_live_read(
         return finish_project(pending, report), None
     slot = (prepared.spec.cartograph_id, prepared.live_frames[index].frame_id)
     held = cache.get(slot, key)
+    if held is not None and not popup_files_unchanged(held.project.layers):
+        # A popup picture replaced or deleted since: the key, taken before
+        # the read, cannot know which files the popups would look for.
+        held = None
     if held is None:
         before = len(report)
         cache.read_count += 1
@@ -2307,6 +2386,7 @@ def _build_live_frame(
         layer_dom_ids=frame.layer_dom_ids,
         hidden_layer_ids=frame.hidden_layer_ids,
         plane=plane,
+        crs=crs.toWkt(Qgis.CrsWktVariant.Preferred) if crs.isValid() else "",
     )
     return frame_spec, source
 

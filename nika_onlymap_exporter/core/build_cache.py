@@ -14,7 +14,8 @@ policy lives here:
   signals, for what a layer's values do not show (an edit that moves no
   extent and no count).
 - `ProjectFollower` empties a cache when a project it holds entries of is
-  cleared (closed, or another one opened).
+  cleared (closed, or another one opened) or deleted, and never keeps one
+  alive itself.
 - `value_digest` turns a plain-value snapshot into a key, and refuses
   (`None`) when part of it is something it cannot vouch for, so an unknown
   value means "do not cache", never "assume unchanged".
@@ -30,6 +31,7 @@ import dataclasses
 import enum
 import hashlib
 import threading
+import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Hashable, Mapping
 from pathlib import PurePath
@@ -151,26 +153,38 @@ class LayerGenerations:
 
 
 class ProjectFollower:
-    """Calls `on_cleared` once a project followed is cleared: what a cache
-    held for it is worth nothing to the next project, and may be large.
-    `stop` disconnects, so a cache that was emptied follows again only the
-    projects it takes new entries from. GUI thread only (signals)."""
+    """Calls `on_cleared` once a project followed is cleared or deleted: what
+    a cache held for it is worth nothing to the next project, and may be
+    large. `stop` disconnects, so a cache that was emptied follows again only
+    the projects it takes new entries from. GUI thread only (signals).
+
+    Projects are held weakly. A project a script made itself (`QgsProject()`,
+    exported through Processing) is Python's to delete, and a strong reference
+    here kept it alive until the interpreter shut down - after QGIS itself,
+    which crashed on the way out."""
 
     def __init__(self, on_cleared: Callable[[], None]) -> None:
         self._on_cleared = on_cleared
-        self._followed: dict[int, QgsProject] = {}
+        self._followed: dict[int, weakref.ref[QgsProject]] = {}
 
     def follow(self, project: QgsProject) -> None:
-        if id(project) in self._followed:
+        known = self._followed.get(id(project))
+        if known is not None and known() is project:
             return
         project.cleared.connect(self._cleared)
-        self._followed[id(project)] = project
+        project.destroyed.connect(self._cleared)
+        self._followed[id(project)] = weakref.ref(project)
 
     def stop(self) -> None:
-        for project in self._followed.values():
-            # A project already deleted took its connection with it.
+        for reference in self._followed.values():
+            project = reference()
+            if project is None:
+                continue
+            # A project already deleted took its connections with it.
             with contextlib.suppress(TypeError, RuntimeError):
                 project.cleared.disconnect(self._cleared)
+            with contextlib.suppress(TypeError, RuntimeError):
+                project.destroyed.disconnect(self._cleared)
         self._followed.clear()
 
     def _cleared(self) -> None:

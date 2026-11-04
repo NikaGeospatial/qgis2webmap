@@ -4,7 +4,7 @@ qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
 description=Export QGIS projects to interactive, portable HTML maps, and print layouts to printable HTML cartographs (Beta). Open locally, share as a zip, or put them on any static host.
 about=Documentation: https://qgis2webmap.nikaplanet.com/ — installation, your first export, every dialog option, hosting and troubleshooting. QGIS2WebMap by NIKA turns a finished QGIS project into an interactive web map that opens locally — no account, web server, or coding required. The default export is a single HTML file another person can double-click. New in Beta: turn a QGIS print layout - or the current map view - into a cartograph, one printable HTML page with live or pixel-exact map frames, grids, legends, scale bars and atlas pages, that prints at true page size from any Chromium-based browser. Built by NIKA, powered by OnlyMap. On first use the plugin downloads the OnlyMap runtime from npm (registry.npmjs.org); exporting works offline after that. This is an independent third-party plugin and is not endorsed by QGIS.org.
-version=0.3.1
+version=0.3.2
 author=NIKA
 email=support@nikaplanet.com
 
@@ -38,7 +38,23 @@ deprecated=False
 license=GPL-2.0-or-later
 hasProcessingProvider=yes
 
-changelog=0.3.1
+changelog=0.3.2
+    New
+    - Rule-based styles export: QGIS decides each feature's rule, the legend lists the rules
+    - Labels from expressions, labels on every part of multi-part features, labels repeated along long lines, and QGIS's Formatted numbers
+    - Popups show web addresses as links and Attachment pictures; pictures in the project folder travel with the map
+    - Map readers get a measure tool, an optional basemap switcher and per-layer Filter by panels
+    - Legend and layer switcher can be given a width and height (Appearance > Map controls)
+    - WMS and WMTS layers show the service's own legend picture
+    - Time-enabled WMS (as a snapshot) and Cloud Optimized GeoTIFFs read over the web export
+    - A guide to batch and headless exports; Processing now exports what the dialog would for the saved project
+    Fixed
+    - A WMS made of several sublayers stacked them in reverse
+    - The map opens showing all the data in the window it is opened in
+    - The legend lists the top layer first, as QGIS does
+    - Long popup values wrap; the page never scrolls at any control size; the credit no longer sits under the OnlyMap badge on narrow screens
+    - Map controls stay usable on phones at every size
+    0.3.1
     WMS layers export as live layers when the service offers Web Mercator,
     and so do WMTS layers on a Web Mercator grid and XYZ quadkey layers; they
     need an internet connection to draw. The Fidelity tab says what to do

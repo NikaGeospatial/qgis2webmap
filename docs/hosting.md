@@ -50,7 +50,10 @@ never anything identifying whoever opened it. That happens wherever the file is
 opened, including from your own disk and your own web server. See
 [privacy](privacy.md) for exactly what the report contains.
 
-Nothing else leaves the page.
+Nothing else leaves the page, unless the map has a basemap, relief, a live
+web layer (XYZ, WMS, WMTS or a Cloud Optimized GeoTIFF at a web address) or a
+popup picture that is a web address: the reader's browser fetches those from
+their own servers as the map is used.
 
 ## If your site sets a Content Security Policy
 
@@ -93,7 +96,9 @@ host too (here `https://maps.example.org`):
 Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data: https://maps.example.org
 ```
 
-Without it the legend lists the layer by name, with no picture.
+Without it the legend lists the layer by name, with no picture. A popup
+picture that is a web address is an image from its host in the same way, so
+the policy has to allow that host too for the picture to show.
 
 If your organisation cannot relax that policy, serve the map from its own page
 or subdomain with its own policy, and link or iframe it from the strict one.

@@ -18,8 +18,10 @@ What becomes what follows QGIS's own configuration:
   the widget does.
 * An Attachment field whose document viewer is Image shows pictures. A file on
   this computer, resolved the way QGIS resolves it (`PopupAttachment`), is
-  carried with the map, made smaller when it is large; a web address is loaded
-  live, so it needs an internet connection.
+  carried with the map, made smaller when it is large - when it is in the
+  project's folder or the widget's default path, even after following `..`
+  and links; anywhere else it is not read, and the popup shows its path. A
+  web address is loaded live, so it needs an internet connection.
 
 Only the values of features the map carries, in fields its popups show, are
 looked at, so no other file is ever read or carried.
@@ -32,12 +34,16 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import enum
 import functools
 import hashlib
 import html
+import os
 import re
+import threading
+from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence, Sized
 from pathlib import Path
 from typing import Any
@@ -89,16 +95,21 @@ class PictureProblem(enum.Enum):
     MISSING = "missing"
     UNREADABLE = "unreadable"
     TOO_LARGE = "too_large"
+    OUTSIDE = "outside"
+    OVER_BUDGET = "over_budget"
 
 
 @dataclasses.dataclass(frozen=True)
 class LoadedPicture:
-    """A picture ready to carry. `reduced` when it is not the file's own bytes."""
+    """A picture ready to carry. `reduced` when it is not the file's own bytes;
+    `version` the file's path, time and size when it was read, for
+    `_CARRIED`."""
 
     data: bytes
     media_type: str
     extension: str
     reduced: bool = False
+    version: tuple[str, int, int] | None = None
 
 
 PictureLoader = Callable[[Path], "LoadedPicture | PictureProblem"]
@@ -154,6 +165,50 @@ def local_path(value: str, field: PopupFieldSpec) -> Path | None:
     return Path(base) / path if base else None
 
 
+def is_inside(path: Path, roots: Iterable[str]) -> bool:
+    """Whether `path`, followed through `..` and links to where it really
+    leads, is in one of the folders `roots` (themselves followed the same
+    way)."""
+    real = _followed(str(path))
+    for root in roots:
+        folder = _followed(root)
+        # ValueError: on another drive.
+        with contextlib.suppress(ValueError):
+            if os.path.commonpath([real, folder]) == folder:
+                return True
+    return False
+
+
+def _followed(path: str) -> str:
+    """`path` through its links and `..`; by its name alone when it holds a
+    NUL, which no file name can, so the picture is reported as not found."""
+    try:
+        return os.path.realpath(path)
+    except (OSError, ValueError):
+        return os.path.normpath(os.path.abspath(path))
+
+
+def file_version(path: Path) -> tuple[str, int, int] | None:
+    """Where `path` leads and that file's time and size, or `None` when there
+    is no such file: what a picture read from it depends on."""
+    try:
+        stat = path.stat()
+    except (OSError, ValueError):
+        return None
+    return _followed(str(path)), stat.st_mtime_ns, stat.st_size
+
+
+def popup_files_unchanged(layers: Iterable[ExportLayer]) -> bool:
+    """Whether every file `layers`' popups looked for is as it was then: a
+    read kept for reuse that is not would carry a replaced picture's old
+    bytes, or a deleted one."""
+    return all(
+        file_version(Path(path)) == version
+        for layer in layers
+        for path, version in layer.popup_files
+    )
+
+
 def value_markup(
     value: object,
     field: PopupFieldSpec,
@@ -202,12 +257,48 @@ def _markup_property(name: str, taken: set[str]) -> str:
     return candidate
 
 
-@functools.lru_cache(maxsize=32)
-def _load_once(path: str, _mtime_ns: int, _size: int) -> LoadedPicture | PictureProblem:
-    """`load_picture` for one version of a file. Keyed on its time and size
-    as well, so an edited picture is read again; a cartograph re-reads its
-    frames on every save, and decoding the same photos each time would
-    stall it."""
+class _CarriedPictures:
+    """The pictures maps carried, by file, each while the file keeps the time
+    and size it was read at: a cartograph re-reads its frames on every save,
+    and decoding the same photos each time would stall it. Only pictures a
+    map carried (`keep_picture`), and no more bytes of them than one map may
+    carry, the least recently used let go first - so the bytes of a picture
+    that was turned down are let go as soon as it is. Any thread."""
+
+    def __init__(self, max_bytes: int) -> None:
+        self._max_bytes = max_bytes
+        self._lock = threading.Lock()
+        self._entries: OrderedDict[str, LoadedPicture] = OrderedDict()
+        self._bytes = 0
+
+    def get(self, version: tuple[str, int, int]) -> LoadedPicture | None:
+        with self._lock:
+            held = self._entries.get(version[0])
+            if held is None or held.version != version:
+                return None
+            self._entries.move_to_end(version[0])
+            return held
+
+    def put(self, picture: LoadedPicture) -> None:
+        if picture.version is None or len(picture.data) > self._max_bytes:
+            return
+        path = picture.version[0]
+        with self._lock:
+            old = self._entries.pop(path, None)
+            if old is not None:
+                self._bytes -= len(old.data)
+            self._entries[path] = picture
+            self._bytes += len(picture.data)
+            while self._bytes > self._max_bytes:
+                _path, dropped = self._entries.popitem(last=False)
+                self._bytes -= len(dropped.data)
+
+
+_CARRIED = _CarriedPictures(MAX_EXPORT_PICTURE_BYTES)
+
+
+def _read_picture(path: str, _size: int) -> LoadedPicture | PictureProblem:
+    """`load_picture` for a file of `_size` bytes, read afresh."""
     from qgis.PyQt.QtCore import QBuffer, QIODevice, Qt
     from qgis.PyQt.QtGui import QImageReader
 
@@ -256,22 +347,34 @@ def load_picture(path: Path) -> LoadedPicture | PictureProblem:
     (QImage, never QPixmap)."""
     try:
         stat = path.stat()
-    except OSError:
+    except (OSError, ValueError):
+        # ValueError: a value with a NUL in it, which no file can be named.
         return PictureProblem.MISSING
     if not path.is_file():
         return PictureProblem.MISSING
-    return _load_once(str(path), stat.st_mtime_ns, stat.st_size)
+    version = (str(path), stat.st_mtime_ns, stat.st_size)
+    kept = _CARRIED.get(version)
+    if kept is not None:
+        return kept
+    result = _read_picture(version[0], stat.st_size)
+    if isinstance(result, PictureProblem):
+        return result
+    return dataclasses.replace(result, version=version)
+
+
+def keep_picture(picture: LoadedPicture) -> None:
+    """Remember `picture`, which a map carries, for the next read of its file
+    (`load_picture`); a picture not read from a file is not remembered."""
+    _CARRIED.put(picture)
 
 
 @dataclasses.dataclass
 class _Budget:
-    """The map's pictures so far, by name, across every layer."""
+    """The map's pictures so far, by name, across every layer, and their
+    bytes all together."""
 
-    carried: dict[str, int] = dataclasses.field(default_factory=dict)
-
-    @property
-    def used(self) -> int:
-        return sum(self.carried.values())
+    carried: set[str] = dataclasses.field(default_factory=set)
+    used: int = 0
 
 
 @dataclasses.dataclass
@@ -284,7 +387,6 @@ class _Tally:
     reduced: set[str] = dataclasses.field(default_factory=set)
     problems: dict[PictureProblem, list[str]] = dataclasses.field(default_factory=dict)
     unplaced: list[str] = dataclasses.field(default_factory=list)
-    over_budget: list[str] = dataclasses.field(default_factory=list)
     local_files: set[str] = dataclasses.field(default_factory=set)
     picture_fields: set[str] = dataclasses.field(default_factory=set)
 
@@ -341,8 +443,35 @@ def _with_media(
     targets = {field.name: _markup_property(field.name, taken) for field in fields}
 
     tally = _Tally()
-    loaded: dict[Path, LoadedPicture | PictureProblem] = {}
+    # What became of each file: the name it is carried under, or why it is
+    # not. Never its bytes: those are kept only in `pictures`, for the ones
+    # carried, so a layer of thousands of photos holds no more than the map
+    # may carry.
+    outcomes: dict[Path, str | PictureProblem] = {}
+    versions: dict[str, tuple[str, int, int] | None] = {}
     pictures: dict[str, PopupPicture] = {}
+
+    def carry(path: Path, roots: Sequence[str]) -> str | PictureProblem:
+        if not is_inside(path, roots):
+            return PictureProblem.OUTSIDE
+        result = load(path)
+        if isinstance(result, PictureProblem):
+            return result
+        name = (
+            "popup-picture-"
+            f"{hashlib.sha256(result.data).hexdigest()[:16]}.{result.extension}"
+        )
+        if name not in budget.carried:
+            if budget.used + len(result.data) > MAX_EXPORT_PICTURE_BYTES:
+                return PictureProblem.OVER_BUDGET
+            budget.carried.add(name)
+            budget.used += len(result.data)
+            keep_picture(result)
+        pictures[name] = PopupPicture(name, result.data, result.media_type)
+        tally.carried[name] = len(result.data)
+        if result.reduced:
+            tally.reduced.add(name)
+        return name
 
     def picture_src(value: str, field: PopupFieldSpec) -> str | None:
         label = field.display_name
@@ -351,26 +480,16 @@ def _with_media(
         if path is None:
             tally.unplaced.append(value)
             return None
-        if path not in loaded:
-            loaded[path] = load(path)
-        result = loaded[path]
-        if isinstance(result, PictureProblem):
-            tally.problems.setdefault(result, []).append(value)
+        outcome = outcomes.get(path)
+        if outcome is None:
+            # Before the read, so a change made while it reads is a change.
+            versions[str(path)] = file_version(path)
+            roots = field.attachment.roots if field.attachment is not None else ()
+            outcome = outcomes[path] = carry(path, roots)
+        if isinstance(outcome, PictureProblem):
+            tally.problems.setdefault(outcome, []).append(value)
             return None
-        name = (
-            "popup-picture-"
-            f"{hashlib.sha256(result.data).hexdigest()[:16]}.{result.extension}"
-        )
-        if name not in budget.carried:
-            if budget.used + len(result.data) > MAX_EXPORT_PICTURE_BYTES:
-                tally.over_budget.append(value)
-                return None
-            budget.carried[name] = len(result.data)
-        pictures[name] = PopupPicture(name, result.data, result.media_type)
-        tally.carried[name] = len(result.data)
-        if result.reduced:
-            tally.reduced.add(name)
-        return name
+        return outcome
 
     rewritten = []
     for feature in features:
@@ -400,6 +519,8 @@ def _with_media(
             ),
         ),
         popup_pictures=tuple(pictures.values()),
+        popup_files=tuple(versions.items()),
+        popup_remote_pictures=tuple(sorted(tally.remote)),
     )
 
 
@@ -484,6 +605,18 @@ def _report(layer: ExportLayer, tally: _Tally, report: FidelityReportBuilder) ->
                 f"popup shows the path instead - for example '{values[0]}'.",
                 layer_id,
             )
+    outside = tally.problems.get(PictureProblem.OUTSIDE)
+    if outside:
+        report.unsupported(
+            subject,
+            f"{_count(set(outside), 'picture is', 'pictures are')} outside the "
+            "project's folder, so the map does not carry "
+            f"{'it' if len(set(outside)) == 1 else 'them'} and the popup shows "
+            f"the path instead - for example '{outside[0]}'. To carry a "
+            "picture, move it into the project's folder, or under the "
+            "Attachment widget's default path.",
+            layer_id,
+        )
     if tally.unplaced:
         report.unsupported(
             subject,
@@ -495,14 +628,15 @@ def _report(layer: ExportLayer, tally: _Tally, report: FidelityReportBuilder) ->
             "relative to the project, or set the default path.",
             layer_id,
         )
-    if tally.over_budget:
+    over_budget = tally.problems.get(PictureProblem.OVER_BUDGET)
+    if over_budget:
         report.unsupported(
             subject,
-            f"{_count(set(tally.over_budget), 'picture was', 'pictures were')} "
+            f"{_count(set(over_budget), 'picture was', 'pictures were')} "
             "left out because the map already carries "
             f"{format_bytes(MAX_EXPORT_PICTURE_BYTES)} of pictures, so the "
             "popup shows the path instead - for example "
-            f"'{tally.over_budget[0]}'.",
+            f"'{over_budget[0]}'.",
             layer_id,
         )
     if tally.local_files:
@@ -522,28 +656,3 @@ def picture_sources(layers: Iterable[ExportLayer]) -> dict[str, PopupPicture]:
     return {
         picture.name: picture for layer in layers for picture in layer.popup_pictures
     }
-
-
-def replace_picture_names(
-    layer: ExportLayer, sources: Mapping[str, str]
-) -> ExportLayer:
-    """`layer` with each picture's name in its popup markup replaced by
-    `sources[name]` - a `data:` URI for a page that carries its pictures
-    inside. Only the markup properties are touched, never a data value."""
-    if not layer.popup_pictures or layer.geojson is None:
-        return layer
-    targets = {f.name for f in layer.popup.fields if f.markup}
-    pattern = re.compile(r'src="(popup-picture-[0-9a-f]{16}\.[a-z]+)"')
-
-    def swap(match: re.Match[str]) -> str:
-        return f'src="{sources.get(match.group(1), match.group(1))}"'
-
-    features = []
-    for feature in layer.geojson.get("features") or ():
-        properties = dict(feature.get("properties") or {})
-        for name in targets:
-            value = properties.get(name)
-            if isinstance(value, str) and "popup-picture-" in value:
-                properties[name] = pattern.sub(swap, value)
-        features.append({**feature, "properties": properties})
-    return dataclasses.replace(layer, geojson={**layer.geojson, "features": features})

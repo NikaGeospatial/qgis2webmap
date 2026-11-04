@@ -13,13 +13,13 @@ lead_image:
 # Interactive or image frames
 
 Every map item on your print layout becomes a **frame** in the cartograph, and
-each frame is one of two kinds. You choose per map, under **In the HTML** on
+each frame is one of two kinds. You choose per map, in the choice box on
 the map's card in **Map frames** (on the cartograph's **Layout** tab).
 
 | | Interactive | Image |
 |---|---|---|
 | What the reader gets | A real map inside the page: pan, zoom, click a feature | A picture of the map, exactly as QGIS draws it |
-| Projection | The map's **own CRS** when it is a projected one (UTM, a national grid, an equal-area projection) and its layers are vectors or image tiles; **Web Mercator** (EPSG:3857) otherwise - see [below](#which-crs-an-interactive-frame-draws-in) | The map's **own CRS**, untouched |
+| Projection | The map's **own CRS** when it is a projected one (UTM, a national grid, an equal-area projection) or a geographic one such as EPSG:4326, and its layers are vectors or image tiles; **Web Mercator** (EPSG:3857) otherwise - see [below](#which-crs-an-interactive-frame-draws-in) | The map's **own CRS**, untouched |
 | Styling | Translated, with the web map's [fidelity](supported-features.md) - the Checks tab lists what changes | Pixel-exact: whatever QGIS can draw |
 | Data in the file | The features, and the attributes their popups show | Only the image |
 | Sharpness in print | Re-rendered at print resolution | Fixed at the DPI you chose (150, 200 or 300; 200 by default), or the saved export resolution when that is higher |

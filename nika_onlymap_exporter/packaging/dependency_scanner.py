@@ -23,6 +23,7 @@ from ..core.export_ir import (
 )
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.manifest_builder import FILE_OPENED_MODES, settings_network_hosts
+from ..core.popup_media import picture_sources
 
 # Past this, a single HTML file stops being a practical thing to email: Gmail
 # rejects attachments over 25 MB, and many corporate filters are stricter.
@@ -136,7 +137,9 @@ def _raster_layer_bytes(layer: ExportLayer) -> int:
 
 
 def data_bytes_by_layer(project: ExportProject) -> dict[str, int]:
-    """Each exported layer's share of `measure_data_bytes`, by layer id.
+    """Each exported layer's data, by layer id: its share of
+    `measure_data_bytes`, less the popup pictures, which layers can share and
+    are counted once for the map.
 
     The same measurement split per layer, so the Fidelity tab can say which
     layer the megabytes are in without a second serialisation of its own.
@@ -177,9 +180,14 @@ def measure_data_bytes(project: ExportProject) -> int:
     -- a megabyte of pixels weighs exactly as much as a megabyte of
     coordinates. While this counted GeoJSON only, a 400 MB orthophoto was
     invisible: `standalone_ineligible_reason` cheerfully approved a project
-    that could not be written into an openable file.
+    that could not be written into an openable file. Popup pictures count for
+    the same reason, each once, as the page carries them
+    (`packaging.popup_pictures`).
     """
-    return sum(data_bytes_by_layer(project).values())
+    pictures = picture_sources(project.exportable_layers)
+    return sum(data_bytes_by_layer(project).values()) + sum(
+        len(picture.data) for picture in pictures.values()
+    )
 
 
 def standalone_raster_reason(project: ExportProject) -> str | None:
@@ -348,6 +356,10 @@ def scan(
                 reason = dependency.note or f"'{dependency.identifier}' is missing."
                 blocking.append(reason)
                 report.blocked(f"Data source of '{layer.name}'", reason, layer.layer_id)
+
+        # A popup's web pictures are fetched each time it opens; the reader
+        # has already said so in the Fidelity tab.
+        remote.extend(layer.popup_remote_pictures)
 
         # A map service's legend pictures are fetched from it on every open,
         # like its tiles - but only when there is a legend to show them in.

@@ -195,10 +195,22 @@ DATA_INFLATE_TEMPLATE = """
       )) {{
         const json = document.createElement("script");
         json.type = "application/json";
-        json.textContent = await inflate(block.textContent);
+        json.textContent = {inflated};
         block.replaceWith(json);
       }}
 """
+
+# What a data block becomes; on a page carrying popup pictures inside, with
+# their addresses put in by the function the page's picture script defines
+# (`popup_pictures.build_picture_embed`).
+_INFLATED = "await inflate(block.textContent)"
+PICTURE_RESOLVER = "qgis2webmapPictures"
+
+
+def _data_inflate(pictures: bool) -> str:
+    inflated = f"{PICTURE_RESOLVER}({_INFLATED})" if pictures else _INFLATED
+    return DATA_INFLATE_TEMPLATE.format(gzip_type=GZIP_SCRIPT_TYPE, inflated=inflated)
+
 
 # Then the runtime, for the single-file tier that carries it gzipped inline.
 RUNTIME_INFLATE_TEMPLATE = """
@@ -219,15 +231,17 @@ def build_data_inflater(runtime_import: str) -> str:
     `DecompressionStream` is genuinely asynchronous, so a plain
     `import "./onlymap.js"` alongside it is a race the data loses.
     """
-    body = DATA_INFLATE_TEMPLATE.format(gzip_type=GZIP_SCRIPT_TYPE)
+    body = _data_inflate(pictures=False)
     return f'{body}\n      await import("./{runtime_import}");\n'
 
 
-def build_bootstrap(runtime_base64: str) -> str:
+def build_bootstrap(runtime_base64: str, pictures: bool = False) -> str:
     """The module body that inflates the payloads and starts the map.
 
     For the single-file tier, where the runtime travels gzipped in the page.
+    `pictures` when the page carries popup pictures inside it, whose
+    addresses go into the data as it is inflated.
     """
-    body = DATA_INFLATE_TEMPLATE.format(gzip_type=GZIP_SCRIPT_TYPE)
+    body = _data_inflate(pictures)
     body += RUNTIME_INFLATE_TEMPLATE.format()
     return f'      const RUNTIME_GZ = "{runtime_base64}";\n{body}'

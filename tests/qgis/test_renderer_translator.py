@@ -10,6 +10,7 @@ import bisect
 import re
 
 import pytest
+from rule_trees import qgis_made
 
 from nika_onlymap_exporter.core.export_ir import (
     ClassificationMethod,
@@ -359,10 +360,12 @@ def _rule_layer(rules, field_type: str = "string", values=None):
     values = values or ["Index", "Intermediate", "Other", None]
 
     def renderer():
-        root = qgis_core.QgsRuleBasedRenderer.Rule(None)
+        root = qgis_made(qgis_core.QgsRuleBasedRenderer.Rule(None))
         for number, (expression, colour, active, label) in enumerate(rules):
-            rule = qgis_core.QgsRuleBasedRenderer.Rule(
-                marker_symbol(colour, 2.0 + number), 0, 0, expression, label
+            rule = qgis_made(
+                qgis_core.QgsRuleBasedRenderer.Rule(
+                    marker_symbol(colour, 2.0 + number), 0, 0, expression, label
+                )
             )
             rule.setActive(active)
             root.appendChild(rule)
@@ -501,12 +504,14 @@ def _tree_layer(rules, extra_field: str | None = None):
                 if colour
                 else None
             )
-            rule = qgis_core.QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression, label)
+            rule = qgis_made(
+                qgis_core.QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression, label)
+            )
             rule.setActive(active)
             parent.appendChild(rule)
             append(rule, children)
 
-    root = qgis_core.QgsRuleBasedRenderer.Rule(None)
+    root = qgis_made(qgis_core.QgsRuleBasedRenderer.Rule(None))
     append(root, rules)
     layer.setRenderer(qgis_core.QgsRuleBasedRenderer(root))
     return layer
@@ -582,6 +587,17 @@ NO_FILTER = [
     ("Everything", "", RULE_GREEN, True, []),
     ("Never", "ELSE", RULE_BLUE, True, []),
 ]
+ALL_OFF = [
+    ("Off", "\"c\" = 'y'", RULE_GREEN, False, []),
+    (
+        "Group",
+        "\"c\" = 'x'",
+        None,
+        True,
+        [("Off under it", '"v" > 0', RULE_RED, False, [])],
+    ),
+    ("Rest", "ELSE", CYAN, False, []),
+]
 
 
 class TestRuleTree:
@@ -591,8 +607,15 @@ class TestRuleTree:
 
     @pytest.mark.parametrize(
         "rules",
-        [NESTED, PARENT_AND_CHILD, OVERLAPPING, SWITCHED_OFF, NO_FILTER],
-        ids=["nested-and-else", "parent-and-child", "overlapping", "off", "no-filter"],
+        [NESTED, PARENT_AND_CHILD, OVERLAPPING, SWITCHED_OFF, NO_FILTER, ALL_OFF],
+        ids=[
+            "nested-and-else",
+            "parent-and-child",
+            "overlapping",
+            "off",
+            "no-filter",
+            "all-off",
+        ],
     )
     def test_every_feature_gets_the_colour_qgis_draws_on_top(
         self, project, rules
@@ -631,6 +654,33 @@ class TestRuleTree:
             6: None,
             7: "Rest",
         }
+
+    def test_a_tree_where_nothing_draws_exports_nothing_and_says_so(
+        self, project
+    ) -> None:
+        """Not every feature in the default style: QGIS draws none of them."""
+        from nika_onlymap_exporter.core.export_ir import ExportProject, Extent
+        from nika_onlymap_exporter.core.manifest_builder import build_manifest
+
+        layer = _tree_layer(ALL_OFF)
+        assert set(_drawn_colours(layer).values()) == {None}
+        report = FidelityReportBuilder()
+        exported = read_layer(layer, report)
+
+        assert exported.geojson["features"] == []
+        (row,) = report.by_status(FidelityStatus.UNSUPPORTED)
+        assert "none is drawn, as in QGIS" in row.detail
+        assert "will show nothing" in row.detail
+        assert "default style" not in " ".join(i.detail for i in report.items)
+        # It still makes a map: the layer is there, with nothing to draw.
+        manifest = build_manifest(
+            ExportProject(
+                title="Off",
+                layers=(exported,),
+                extent=Extent(west=0, south=0, east=1, north=1),
+            )
+        )
+        assert f'id="{exported.layer_id}"' in manifest
 
     def test_the_legend_lists_the_rules_that_draw_by_their_labels(
         self, project

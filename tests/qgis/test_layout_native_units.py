@@ -87,8 +87,9 @@ def _marker_layer(project):
     layer.dataProvider().addFeatures([centre, other])
     layer.updateExtents()
     from qgis.core import QgsRuleBasedRenderer
+    from rule_trees import qgis_made
 
-    root = QgsRuleBasedRenderer.Rule(None)
+    root = qgis_made(QgsRuleBasedRenderer.Rule(None))
     for expression, colour, size in (
         ("$x = 5000", CENTRE_RED, "14"),
         ("$x = 2000", OFFSET_BLUE, "6"),
@@ -101,7 +102,9 @@ def _marker_layer(project):
                 "outline_style": "no",
             }
         )
-        root.appendChild(QgsRuleBasedRenderer.Rule(symbol, filterExp=expression))
+        root.appendChild(
+            qgis_made(QgsRuleBasedRenderer.Rule(symbol, filterExp=expression))
+        )
     layer.setRenderer(QgsRuleBasedRenderer(root))
     project.addMapLayer(layer)
     return layer

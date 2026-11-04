@@ -171,6 +171,20 @@ class TestWriter:
         assert "&amp;" in html
         assert "<Paths>" not in html
 
+    @pytest.mark.parametrize("on", [True, False])
+    def test_the_measure_tools_page_script_comes_with_the_tool(
+        self, tmp_path, on
+    ) -> None:
+        """After the map, so it finds the widget, and only on a map with one:
+        `tests/browser/test_measure_tool.py` drives what it does."""
+        result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
+            make_project(settings=ExportSettings(show_measure=on)), tmp_path
+        )
+        html = result.entry_path.read_text()
+        assert ("q2w-measure-hint" in html) is on
+        if on:
+            assert html.index("</om-map>") < html.index("q2w-measure-hint")
+
     def test_mode_is_recorded(self, tmp_path) -> None:
         result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
             make_project(), tmp_path, mode=OutputMode.STANDALONE_HTML
@@ -301,17 +315,23 @@ class TestCreditComponent:
         credit_css = markup.split(".om-credit {")[1].split("}")[0]
         assert "position: absolute" in credit_css
         assert "right: 12px" in credit_css
-        assert "bottom: 12px" in credit_css
+        # The corner, unless the bottom row is under it - then as high as the
+        # page measures it has to be.
+        assert "bottom: var(--om-credit-bottom, 12px)" in credit_css
 
         # The attribution is the thing that moves, lifted clear of the chip.
         # Two reservations: the chip is one line, or two once it carries a data
         # credit, and it grows upward from its anchor. Both are fallbacks for
         # the height measured in the page, which a wrapped credit exceeds.
         assert '[data-om-widget-slot="bottom-end"]' in markup
-        assert "12px + max(var(--om-credit-height, 36px), 36px) + 8px" in markup
+        lifted = (
+            "var(--om-credit-bottom, 12px) + max(var(--om-credit-height, {0}), {0})"
+        )
+        assert lifted.format("36px") + " + 8px" in markup
         assert "body:has(.om-credit-data)" in markup
-        assert "12px + max(var(--om-credit-height, 54px), 54px) + 8px" in markup
+        assert lifted.format("54px") + " + 8px" in markup
         assert 'setProperty("--om-credit-measured"' in markup
+        assert 'setProperty("--om-credit-lifted"' in markup
 
     def test_the_widget_stack_is_not_hand_offset(self) -> None:
         """The bottom-left corner is the runtime's flex slot to lay out.

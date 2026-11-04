@@ -16,6 +16,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import dataclasses
+import weakref
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -45,11 +46,12 @@ from nika_onlymap_exporter.core.popup_media import (
     value_markup,
 )
 from nika_onlymap_exporter.packaging.popup_pictures import (
-    embed_popup_pictures,
+    build_picture_embed,
+    picture_fields,
     place_popup_pictures,
 )
 
-PICTURE = PopupAttachment(picture=True, base_dir="/project")
+PICTURE = PopupAttachment(picture=True, base_dir="/project", roots=("/project",))
 HOSTILE = (
     "<script>alert(1)</script>",
     '"><img src=x onerror=alert(1)>',
@@ -372,6 +374,22 @@ class TestAttachPopupMedia:
         assert row.status is FidelityStatus.UNSUPPORTED
         assert words in row.detail and "'a.jpg'" in row.detail
 
+    def test_a_path_no_file_can_have_shows_as_text(self) -> None:
+        """A NUL cannot be in a file name, so the value names no file: the
+        popup shows it, and the export goes on, as for a missing picture."""
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=PICTURE)],
+            [{"photo": "photos/bad\x00.jpg"}],
+        )
+        report = FidelityReportBuilder()
+        # The real loader: it is the one that met the NUL.
+        [result] = attach_popup_media([layer], report)
+        assert _properties(result)[0]["photo_html"] == "photos/bad\x00.jpg"
+        assert result.popup_pictures == ()
+        [row] = report.items
+        assert row.status is FidelityStatus.UNSUPPORTED
+        assert "could not be found" in row.detail
+
     def test_the_maps_picture_budget_leaves_out_the_last_layers(self) -> None:
         big = MAX_EXPORT_PICTURE_BYTES // 2 + 1
         loader = FakeLoader(
@@ -445,6 +463,182 @@ class TestAttachPopupMedia:
         assert "{{note}}" in markup and "{{{note}}}" not in markup
 
 
+class TestNetworkDependencies:
+    """The export's list of what the map fetches names a popup's web
+    pictures, so a map with them is never called offline."""
+
+    def _scan(self, value: str):
+        from nika_onlymap_exporter.packaging.dependency_scanner import scan
+
+        picture = LoadedPicture(b"jpeg-bytes", "image/jpeg", "jpg")
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=PICTURE)], [{"photo": value}]
+        )
+        loader = FakeLoader({Path("/project/a.jpg"): picture})
+        [layer] = attach_popup_media([layer], FidelityReportBuilder(), loader)
+        project = ExportProject(title="t", layers=(layer,))
+        return scan(project, FidelityReportBuilder())
+
+    def test_a_web_picture_is_one(self) -> None:
+        result = self._scan("https://example.org/a.jpg")
+        assert result.remote_dependencies == ("https://example.org/a.jpg",)
+        assert not result.is_offline
+
+    def test_a_carried_picture_is_not(self) -> None:
+        result = self._scan("a.jpg")
+        assert result.remote_dependencies == ()
+        assert result.is_offline
+
+
+class TestPictureMemory:
+    """The pictures a map reads hold no more memory than the ones it carries."""
+
+    def test_a_picture_turned_down_is_let_go_at_once(self) -> None:
+        big = MAX_EXPORT_PICTURE_BYTES // 2 + 1
+        returned: list[weakref.ref] = []
+        alive_at_each_read: list[int] = []
+
+        def load(path: Path):
+            # Every picture handed out before is gone by the time the next is
+            # read: the one the map carries lives on only as its bytes, in the
+            # layer's pictures.
+            alive_at_each_read.append(sum(ref() is not None for ref in returned))
+            picture = LoadedPicture(
+                path.name.encode() * (big // 5), "image/jpeg", "jpg"
+            )
+            returned.append(weakref.ref(picture))
+            return picture
+
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=PICTURE)],
+            [{"photo": f"p{index}.jpg"} for index in range(5)],
+        )
+        report = FidelityReportBuilder()
+        [result] = attach_popup_media([layer], report, load)
+        assert len(result.popup_pictures) == 1
+        assert alive_at_each_read == [0, 0, 0, 0, 0]
+
+    def test_only_carried_pictures_are_kept_for_the_next_read(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """A cartograph reads its frames again on every save; it is spared
+        decoding what the map carried, and nothing else is held for it."""
+        reads: list[str] = []
+
+        def read(path: str, _size: int) -> LoadedPicture:
+            reads.append(Path(path).name)
+            return LoadedPicture(Path(path).name.encode() * 2, "image/jpeg", "jpg")
+
+        monkeypatch.setattr(popup_media, "_read_picture", read)
+        monkeypatch.setattr(popup_media, "MAX_EXPORT_PICTURE_BYTES", 30)
+        for name in ("kept.jpg", "dropped.jpg"):
+            (tmp_path / name).write_bytes(b"file")
+        attachment = PopupAttachment(
+            picture=True, base_dir=str(tmp_path), roots=(str(tmp_path),)
+        )
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=attachment)],
+            [{"photo": "kept.jpg"}, {"photo": "dropped.jpg"}],
+        )
+        for _ in range(2):
+            [result] = attach_popup_media([layer], FidelityReportBuilder())
+            assert len(result.popup_pictures) == 1
+        assert reads == ["kept.jpg", "dropped.jpg", "dropped.jpg"]
+
+    def test_what_is_kept_for_the_next_read_stays_within_one_maps_budget(
+        self,
+    ) -> None:
+        kept = popup_media._CarriedPictures(max_bytes=10)
+        pictures = [
+            LoadedPicture(b"1234", "image/jpeg", "jpg", version=(name, 1, 4))
+            for name in ("a", "b", "c")
+        ]
+        for picture in pictures:
+            kept.put(picture)
+        # The least recently used goes first, and an edited file is not found.
+        assert kept.get(("a", 1, 4)) is None
+        assert kept.get(("b", 1, 4)) is pictures[1]
+        assert kept.get(("c", 2, 4)) is None
+
+
+class TestOnlyFromTheProjectsFolder:
+    """A picture is carried only from the project's folder or the widget's
+    default path; a value leading anywhere else is shown as its path, the file
+    is never read, and the Fidelity tab names it and says how to carry it."""
+
+    def _attach(self, values, loader, attachment=PICTURE):
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=attachment)],
+            [{"photo": value} for value in values],
+        )
+        report = FidelityReportBuilder()
+        [result] = attach_popup_media([layer], report, loader)
+        return result, report
+
+    @pytest.mark.parametrize(
+        "value", ["../other-client/private.jpg", "/elsewhere/private.jpg"]
+    )
+    def test_a_path_out_of_it_is_not_read(self, value) -> None:
+        loader = FakeLoader({})
+        result, report = self._attach([value], loader)
+        assert loader.asked == []
+        assert result.popup_pictures == ()
+        assert _properties(result)[0]["photo_html"] == value
+        [row] = report.items
+        assert row.status is FidelityStatus.UNSUPPORTED
+        assert "outside the project's folder" in row.detail
+        assert f"'{value}'" in row.detail
+        assert "move it into the project's folder" in row.detail
+
+    def test_an_absolute_path_in_it_or_the_default_path_is_carried(self) -> None:
+        picture = LoadedPicture(b"jpeg-bytes", "image/jpeg", "jpg")
+        loader = FakeLoader(
+            {Path("/project/sub/a.jpg"): picture, Path("/pictures/b.jpg"): picture}
+        )
+        attachment = dataclasses.replace(PICTURE, roots=("/project", "/pictures"))
+        result, _report = self._attach(
+            ["/project/sub/a.jpg", "/pictures/b.jpg"], loader, attachment
+        )
+        assert len(result.popup_pictures) == 1
+        assert all(p["photo_html"].startswith("<img") for p in _properties(result))
+
+    def test_a_folder_beside_it_sharing_its_name_is_outside(self) -> None:
+        loader = FakeLoader({})
+        result, _report = self._attach(["/project-old/a.jpg"], loader)
+        assert loader.asked == [] and result.popup_pictures == ()
+
+    def test_a_link_is_followed_to_where_it_leads(self, tmp_path) -> None:
+        project = tmp_path / "project"
+        (project / "photos").mkdir(parents=True)
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "secret.jpg").write_bytes(b"secret")
+        (project / "photos" / "inside.jpg").write_bytes(b"inside")
+        (project / "photos" / "out.jpg").symlink_to(elsewhere / "secret.jpg")
+        (project / "photos" / "in.jpg").symlink_to(project / "photos" / "inside.jpg")
+        (project / "away").symlink_to(elsewhere)
+        picture = LoadedPicture(b"jpeg-bytes", "image/jpeg", "jpg")
+        loader = FakeLoader({project / "photos" / "in.jpg": picture})
+        attachment = PopupAttachment(
+            picture=True, base_dir=str(project), roots=(str(project),)
+        )
+        result, report = self._attach(
+            ["photos/out.jpg", "away/secret.jpg", "photos/in.jpg"], loader, attachment
+        )
+        assert loader.asked == [project / "photos" / "in.jpg"]
+        out, away, inside = (p["photo_html"] for p in _properties(result))
+        assert (out, away) == ("photos/out.jpg", "away/secret.jpg")
+        assert inside.startswith("<img")
+        [row] = [r for r in report.items if r.status is FidelityStatus.UNSUPPORTED]
+        assert row.detail.startswith("2 pictures are outside the project's folder")
+
+    def test_with_no_folder_to_carry_from_nothing_is_read(self) -> None:
+        loader = FakeLoader({})
+        attachment = PopupAttachment(picture=True)
+        result, _report = self._attach(["/photos/a.jpg"], loader, attachment)
+        assert loader.asked == [] and result.popup_pictures == ()
+
+
 class TestCarryingPictures:
     def _project(self) -> ExportProject:
         loader = FakeLoader(
@@ -456,31 +650,53 @@ class TestCarryingPictures:
         )
         layer = _layer(
             [PopupFieldSpec("photo", attachment=PICTURE), PopupFieldSpec("note")],
-            [{"photo": "a.jpg", "note": 'src="popup-picture-0000000000000000.jpg"'}],
+            [{"photo": "a.jpg", "note": 'src="popup-picture-0000000000000000.jpg"'}]
+            * 3,
         )
         [layer] = attach_popup_media([layer], FidelityReportBuilder(), loader)
         return ExportProject(title="t", layers=(layer,))
 
-    def test_a_single_file_carries_the_picture_inside(self) -> None:
-        project = embed_popup_pictures(self._project())
-        [properties] = _properties(project.layers[0])
-        assert 'src="data:image/jpeg;base64,/9hqcGVn"' in properties["photo_html"]
+    def test_a_single_file_carries_each_picture_inside_once(self, tmp_path) -> None:
+        project = self._project()
+        inside, files = place_popup_pictures(
+            project, tmp_path, OutputMode.STANDALONE_HTML
+        )
+        assert files == () and list(tmp_path.iterdir()) == []
+        [picture] = inside
+        embed = build_picture_embed(inside, picture_fields(project.layers))
+        # Once, however many features show it; the data keeps naming it.
+        assert embed.count("/9hqcGVn") == 1
+        assert f'data-src="{picture.name}" data-type="image/jpeg"' in embed
+        assert all(
+            picture.name in p["photo_html"] for p in _properties(project.layers[0])
+        )
 
-    def test_only_markup_is_rewritten_never_a_value(self) -> None:
-        project = embed_popup_pictures(self._project())
-        [properties] = _properties(project.layers[0])
+    def test_no_picture_adds_nothing_to_the_page(self) -> None:
+        assert build_picture_embed((), ()) == ""
+
+    def test_values_are_never_rewritten(self, tmp_path) -> None:
+        project = self._project()
+        place_popup_pictures(project, tmp_path, OutputMode.STANDALONE_HTML)
+        [properties, *_] = _properties(project.layers[0])
         assert properties["note"] == 'src="popup-picture-0000000000000000.jpg"'
 
     @pytest.mark.parametrize("mode", [OutputMode.FOLDER, OutputMode.SHARE_ZIP])
     def test_a_folder_carries_it_beside_the_page(self, mode, tmp_path) -> None:
         project = self._project()
-        placed, files = place_popup_pictures(project, tmp_path, mode)
+        inside, files = place_popup_pictures(project, tmp_path, mode)
         [path] = files
+        assert inside == ()
         assert path.parent == tmp_path and path.read_bytes() == b"\xff\xd8jpeg"
-        assert path.name in _properties(placed.layers[0])[0]["photo_html"]
+        assert path.name in _properties(project.layers[0])[0]["photo_html"]
 
-    def test_a_single_file_writes_no_file(self, tmp_path) -> None:
-        _placed, files = place_popup_pictures(
-            self._project(), tmp_path, OutputMode.STANDALONE_HTML
+    def test_the_maps_size_counts_each_picture_once(self) -> None:
+        """What the size warnings and the gzip choice read: three features
+        sharing one picture carry its bytes once, as the page does."""
+        from nika_onlymap_exporter.packaging.dependency_scanner import (
+            data_bytes_by_layer,
+            measure_data_bytes,
         )
-        assert files == () and list(tmp_path.iterdir()) == []
+
+        project = self._project()
+        data = sum(data_bytes_by_layer(project).values())
+        assert measure_data_bytes(project) == data + len(b"\xff\xd8jpeg")

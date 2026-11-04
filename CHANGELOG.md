@@ -4,37 +4,47 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.2] - Unreleased
 
 ### Added
 - **Rule-based styling exports.** Any rule-based layer is drawn with one
   class per rule that draws a symbol, and the legend lists the rules by their
   label. QGIS itself works out which rule draws each feature when you export
-  - nested rules, ELSE rules and switched-off rules behave as in QGIS - and
-  the answer travels in the data as a `Style` property that popups do not
+  - nested rules, ELSE rules and switched-off rules behave as in QGIS, and a
+  layer whose rules are all switched off draws nothing - and the answer
+  travels in the data as a `Style` property that popups do not
   show. Reported in the Fidelity tab where the web map differs: a feature two
   rules draw shows only the symbol on top, scale ranges on rules are not
   kept, filters that read the map view (such as `@map_scale`) are worked out
   once at export, and symbol levels are not kept. Rule-based layers used to
   be refused unless every rule picked values of one field.
 - **A measure tool on exported maps**: whoever opens the map can measure a
-  distance or an area on it, in metric, imperial or nautical units, measured
-  on the ground whatever CRS the project uses. On by default, like the other
-  map controls; untick **Measure tool** on the Appearance tab, or the
-  Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
-  the zoom controls, bottom left, and is not drawn in a cartograph's
-  interactive frames.
+  distance or an area on it, measured on the ground whatever CRS the project
+  uses. On by default, like the other map controls; untick **Measure tool**
+  on the Appearance tab, or the Processing algorithm's *Measure tool*
+  parameter, to leave it off. Its units - **Metric**, **Imperial** or
+  **Nautical** - are chosen beside that switch and saved with the project,
+  and the scale bar reads in them too; the map has no units control of its
+  own. A distance is two points: the second ends it, and clicks go back to
+  the map (popups, panning) until **Distance** is pressed again. An area
+  closes on **Ctrl + click** (**Cmd + click** on a Mac) at its last point, as
+  well as on a double-click, a double-tap or Enter, and a hint above the tool
+  says so while one is being drawn. The panel is compact: its buttons read
+  **Distance** and **Area**, and Clear sits beside the readout. It sits
+  bottom left, just above the licence notice, and is not drawn in a
+  cartograph's interactive frames.
 - **Filter by**, a new choice on a vector layer's *This layer only* row in
   the Layers tab: the web map gets a panel, top left, that filters the layer
   by that field - a slider for a number or a date, a tick box per value for
   text of up to 50 values (a field with more is refused and the Fidelity tab
-  says so). Headed by the field's alias. The Fidelity tab also says what it
+  says so); clearing every tick box hides every feature, as no category
+  ticked does in QGIS. Headed by the field's alias. The Fidelity tab also says what it
   cannot do: features with no value in the field are hidden while the filter
   is there, a filtered layer's points are not merged into count bubbles, and
   its labels are not filtered.
 - **Let readers switch basemap**, a new switch under the basemap on the Map
-  tab, off by default: the map carries a Basemap panel, top left under the
-  layer switcher, listing the keyless basemaps with the map's own ticked. In a
+  tab, off by default: the map carries a Basemap panel, bottom left with the
+  zoom controls, scale bar and measure tool, listing the keyless basemaps with the map's own ticked. In a
   Standalone HTML or Share ZIP map it leaves out OpenStreetMap, whose servers
   refuse maps opened from a file. The Fidelity tab and the export's list of
   network dependencies name every provider the panel can reach. Not available
@@ -52,10 +62,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   other schemes stay text. A field whose QGIS widget is **Attachment** with
   its document viewer set to **Image** shows its pictures, fitted to the
   popup: a picture on this computer is carried with the map (inside a
-  Standalone HTML file, beside `index.html` in Folder and Share ZIP), scaled
+  Standalone HTML file, beside `index.html` in Folder and Share ZIP, once
+  however many features show it, and counted in the map's size), scaled
   down to 1280 pixels across when larger, up to 1 MB each and 20 MB per map;
-  a picture that is a web address loads live. Links and web pictures need an
-  internet connection when the map is viewed; carried pictures work offline.
+  a picture that is a web address loads live. Only pictures in the project's
+  folder or under the widget's default path are carried, wherever the path
+  leads (`..`, an absolute path, a link): a picture anywhere else shows its
+  path, and the Fidelity tab names it. Links and web pictures need an
+  internet connection when the map is viewed, and the export's list of
+  network dependencies names the web pictures; carried pictures work offline.
   The Fidelity tab says what was carried, made smaller or left out, and no
   attribute value can add markup to the page. qgis2web users report broken
   attribute links ([qgis2web#1126](https://github.com/qgis2web/qgis2web/issues/1126))
@@ -67,7 +82,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   the file holds it, compressed with DEFLATE, JPEG, WEBP or nothing; the
   server must allow web pages to read the file (CORS) and to ask for parts of
   it (Range requests). LZW, ZSTD and LERC files are refused until the runtime
-  decodes them. Works in a map opened from a file too.
+  decodes them, and so is a file that is not a GeoTIFF (such as a VRT) or
+  whose header cannot be read. The header is read off the QGIS window's
+  thread, from the copy GDAL kept when QGIS opened the layer, or from the
+  server again if GDAL let it go. Works in a map opened from a file too.
 - **Time-enabled WMS (WMS-T) layers that follow QGIS's time** export as a
   fixed snapshot: the map asks the service for the time QGIS draws at export
   (from the temporal controller, or the layer's predefined date) and has no
@@ -89,7 +107,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   layer, one for each sublayer of a layer made of several. The browser loads
   it from the service when the map opens, so it needs an internet
   connection; offline the legend lists the layer by name. An address that
-  carries an access key is left out. A cartograph's legend still lists the
+  carries an access key, or that is not a web (`http` or `https`) address, is
+  left out. A cartograph's legend still lists the
   layer by name; the Checks tab says so.
 
 ### Changed
@@ -99,7 +118,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   clustering and point names, the map name, the basemap and the rest of the
   Appearance tab - where it used to export every layer with the defaults. A
   title or map control passed to the algorithm still replaces the saved one,
-  and a project never opened in the dialog exports as before. *Export print
+  and a project never opened in the dialog exports as before. A project
+  saved with **Export only the features in this view** is refused, with a
+  message, since a Processing run has no QGIS view to clip to: it used to
+  export every feature. *Export print
   layout to cartograph (Beta)* likewise uses the layout's saved Map frames
   choices and resolutions, the Layers section's popup and label choices,
   Print settings and Browser appearance fields; *Frames* and *Image frame
@@ -130,7 +152,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - At Appearance > Size **Largest**, a long legend or layer list no longer
   makes the page scroll: on Auto each panel stops at half the map's height at
   every Size, where the larger Sizes grew it past the half and, at Largest,
-  past the map's foot.
+  past the map's foot. A legend with a picture swatch or a raster or web
+  layer in it, which Size does not grow, reaches half the map at every Size
+  too, where it stopped at a quarter of it at Largest.
 - The Fidelity tab and the export's list of network dependencies name
   cartocdn.com, the domain the Dark Matter and Voyager basemaps really load
   from. They named carto.com, which the map never contacts.
@@ -143,6 +167,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - A line's label sits at half its length along it, as QGIS places it. It was
   on the line's middle vertex, which on a line of two vertices is one of its
   ends.
+- A line's label is placed along it as measured in the CRS QGIS draws it in:
+  the project's, or a cartograph map frame's own. A frame in Web Mercator in a
+  project in degrees measured the line in degrees, and a project in any
+  projected CRS but Web Mercator in Web Mercator, which put the label of a
+  long north-south line degrees away from where QGIS draws it.
 - A point layer's **Names** showing a different field from its labels draws
   every accented or other non-ASCII letter of the names. Letters only the
   names field used drew blank.
@@ -159,6 +188,37 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - OGC API Features and SensorThings layers are described as web services in
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
+- The map opens showing the whole data extent, top to bottom and side to
+  side, in the window it is opened in. The opening zoom only fitted the
+  extent's width into a nominal 512px, so tall data opened cropped top and
+  bottom and a phone cut the sides off wide data. A map whose extent already
+  fits opens as before; a map opened with a saved camera (the Preview keeps
+  one) or with its `center` or `zoom` edited by hand opens on that.
+- On a narrow screen the OnlyMap licence badge, bottom left, no longer
+  covers the data credit, bottom right - on a relief map, whose imagery
+  credit is long, from about 540px wide down. The credit moves up clear of
+  the badge and of whatever else is in the bottom row, and back down when
+  there is room.
+- The bottom-left corner narrows upward, the widest control at the bottom:
+  the measure tool, then the basemap panel, the scale bar and the zoom
+  controls, all above the licence notice. Its controls are scaled by **Size**
+  so that the corner stacks them at their scaled size, and on a window too
+  short for them they fold into their drawer, as on a narrow one, rather than
+  reach the top-left corner's panels.
+- At a Size above Normal on the Appearance tab, the map controls fold into
+  their drawers in time: at Largest the measure tool reached under the
+  legend and past the edge of a phone's screen. A bigger size folds them at
+  a proportionally wider map, and in a drawer every control is at its Normal
+  size, which the drawer has room for - a scaled control overflowed it, and
+  the measure tool could not be reached at all.
+- The legend lists the top layer first, as QGIS's Layers panel does, with a
+  layer's labels right under it. It listed them bottom first, in the order
+  the map draws them. The layer switcher's order is still OnlyMap's.
+- An export after a preview carries the labels and rule classes of now when
+  their expressions read a project or layer variable that has changed since,
+  and reads again whenever one reads the clock, chance or another layer
+  (`now()`, `rand()`, `aggregate()` and the like). The preview's read was
+  reused, with the variable's old value and the preview's time.
 
 ## [0.3.1] - 2026-11-03
 

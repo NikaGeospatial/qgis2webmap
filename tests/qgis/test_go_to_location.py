@@ -1527,12 +1527,15 @@ class TestWhatLayerStylingHides:
         self, canyon
     ) -> None:
         from qgis.core import QgsMarkerSymbol, QgsRuleBasedRenderer
+        from rule_trees import qgis_made
 
         world = canyon.world
-        root = QgsRuleBasedRenderer.Rule(None)
+        root = qgis_made(QgsRuleBasedRenderer.Rule(None))
         root.appendChild(
-            QgsRuleBasedRenderer.Rule(
-                QgsMarkerSymbol.createSimple({}), 0, 0, "\"kind\" = 'shown'"
+            qgis_made(
+                QgsRuleBasedRenderer.Rule(
+                    QgsMarkerSymbol.createSimple({}), 0, 0, "\"kind\" = 'shown'"
+                )
             )
         )
         world.elsewhere.setRenderer(QgsRuleBasedRenderer(root))

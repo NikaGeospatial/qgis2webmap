@@ -58,6 +58,7 @@ from .layer_reader import (
     WGS84,
     MapTime,
     PendingLayer,
+    PendingRemoteRaster,
     follows_map_time,
     prepare_layer,
 )
@@ -388,6 +389,7 @@ def prepare_project(
     report_map_title: bool = True,
     scans: LayerScans | None = None,
     map_time: MapTime | None = None,
+    map_crs: QgsCoordinateReferenceSystem | None = None,
 ) -> PendingProject:
     """Read a whole project up to its features. **GUI thread only.**
 
@@ -418,6 +420,9 @@ def prepare_project(
     `scans`, from a cartograph's `LiveFrameCache`, reuses the label and Value
     Relation scans of an earlier call while what they read is unchanged;
     `None` scans every layer afresh.
+
+    `map_crs` is the CRS the layers are drawn in, a cartograph frame's own;
+    `None` is the project's.
     """
     settings = settings or ExportSettings()
     root = project.layerTreeRoot()
@@ -468,7 +473,9 @@ def prepare_project(
             tree_layers.sort(key=lambda node: -rank.get(node.layerId(), len(rank)))
         effective_selected_ids = selected_layer_ids
 
-    entries: list[tuple[str, ExportLayer | PendingLayer | None]] = []
+    entries: list[
+        tuple[str, ExportLayer | PendingLayer | PendingRemoteRaster | None]
+    ] = []
     # Named, not counted: "1 layer(s) could not be loaded" left the user to
     # find which one, and the Fidelity tab groups a named row under its layer.
     skipped_invalid: list[tuple[str, str]] = []
@@ -513,6 +520,7 @@ def prepare_project(
             # Not in a cartograph's frames (`layer_order`): a filter panel is a
             # control on the web map, and a frame is a map on a printed page.
             filter_field=per_layer.filter_field if layer_order is None else None,
+            map_crs=map_crs,
         )
         entries.append((map_layer.name(), prepared))
 
@@ -586,7 +594,9 @@ class PendingProject:
     project, and nothing `finish_project` reaches does.
     """
 
-    entries: tuple[tuple[str, ExportLayer | PendingLayer | None], ...]
+    entries: tuple[
+        tuple[str, ExportLayer | PendingLayer | PendingRemoteRaster | None], ...
+    ]
     skipped_invalid: tuple[tuple[str, str], ...]
     settings: ExportSettings
     canvas_extent: Extent | None
@@ -622,7 +632,7 @@ def finish_project(
     for done, (name, prepared) in enumerate(pending.entries):
         if progress is not None:
             progress(done, total, name)
-        if isinstance(prepared, PendingLayer):
+        if isinstance(prepared, (PendingLayer, PendingRemoteRaster)):
             prepared = prepared.finish(report)
         if prepared is not None:
             layers.append(prepared)

@@ -8,6 +8,12 @@ a projected CRS. So these tests click two points on the map and read the
 distance the reader is shown. The projects are real QGIS ones, built by
 `measure_fixture_builder.py`.
 
+What the page adds to the runtime's widget is measured the same way: the
+units the dialog chose and no Units row of the panel's own, a distance that
+ends at its second point and gives the map back, an area that Ctrl + click
+closes with a hint above the panel while it is being drawn, and a panel
+smaller than the runtime's.
+
 The known distance is worked out here, from the coordinates, rather than read
 off the scale bar - the scale bar is the one piece of the runtime known to be
 wrong (by a factor of two, upstream), and a test anchored to it would agree
@@ -55,6 +61,11 @@ FEATURE = (0.1, 51.1)
 
 MEASURE = 'om-widget[type="measure"]'
 READOUT = f"{MEASURE} .readout"
+DISTANCE = f'{MEASURE} button[data-mode="distance"]'
+AREA = f'{MEASURE} button[data-mode="area"]'
+HINT = f"{MEASURE} .q2w-measure-hint"
+# Three corners of an area, clear of FEATURE and of each other.
+CORNERS = ((0.6, 51.6), (-0.4, 51.6), (0.0, 51.25))
 
 
 def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -168,11 +179,17 @@ def _screen_point(page, lon_lat: tuple[float, float]) -> tuple[float, float]:
     return box["x"] + x, box["y"] + y
 
 
-def _click_at(page, lon_lat: tuple[float, float]) -> None:
-    """Move there the way a hand does, then click."""
+def _click_at(page, lon_lat: tuple[float, float], modifier: str | None = None) -> None:
+    """Move there the way a hand does, come to rest, then click - holding
+    `modifier` down for it if given."""
     x, y = _screen_point(page, lon_lat)
     page.mouse.move(x, y, steps=15)
+    page.wait_for_timeout(150)
+    if modifier:
+        page.keyboard.down(modifier)
     page.mouse.click(x, y)
+    if modifier:
+        page.keyboard.up(modifier)
     page.wait_for_timeout(150)
 
 
@@ -194,15 +211,41 @@ def _kilometres(readout: str) -> float:
 
 
 def _measure(page) -> str:
-    """Measure START to END and return what the reader is shown."""
-    page.locator(f'{MEASURE} button[data-mode="distance"]').click(timeout=10_000)
+    """Measure START to END and return what the reader is shown. The second
+    point ends the line; until then the total follows the pointer - the
+    runtime's live preview."""
+    page.locator(DISTANCE).click(timeout=10_000)
     _click_at(page, START)
     _click_at(page, END)
-    # Enter finishes the line where it is. Until then the total follows the
-    # pointer to wherever it goes next - the runtime's live preview.
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(150)
     return page.locator(READOUT).inner_text(timeout=10_000)
+
+
+def _popup_opens(page) -> None:
+    page.wait_for_function(
+        """() => [...document.querySelectorAll('om-overlay')].some(o =>
+             !o.id.startsWith('__') && getComputedStyle(o).visibility !== 'hidden'
+             && o.getBoundingClientRect().width > 0)""",
+        timeout=10_000,
+    )
+
+
+def _pressed(page, button: str) -> str | None:
+    return page.locator(button).get_attribute("aria-pressed", timeout=10_000)
+
+
+def _scale_label(page) -> str:
+    return page.locator('om-widget[type="scale-bar"] .label').inner_text(timeout=10_000)
+
+
+def _hint_shown(page) -> bool:
+    return page.locator(HINT).is_visible()
+
+
+def _open(page, result) -> None:
+    page.set_viewport_size({"width": 1000, "height": 800})
+    open_map(page, result.entry_path)
+    require_webgl(page)
+    wait_until_drawn(page)
 
 
 @pytest.mark.parametrize(
@@ -256,19 +299,14 @@ class TestTheToolOnTheMap:
         require_webgl(page)
         wait_until_drawn(page)
 
-        page.locator(f'{MEASURE} button[data-mode="distance"]').click(timeout=10_000)
+        page.locator(DISTANCE).click(timeout=10_000)
         _click_at(page, FEATURE)
         assert _visible_popups(page) == []
 
         # The same button again leaves measuring.
-        page.locator(f'{MEASURE} button[data-mode="distance"]').click(timeout=10_000)
+        page.locator(DISTANCE).click(timeout=10_000)
         _click_at(page, FEATURE)
-        page.wait_for_function(
-            """() => [...document.querySelectorAll('om-overlay')].some(o =>
-                 !o.id.startsWith('__') && getComputedStyle(o).visibility !== 'hidden'
-                 && o.getBoundingClientRect().width > 0)""",
-            timeout=10_000,
-        )
+        _popup_opens(page)
 
     def test_it_covers_no_other_control(self, page, measure_map) -> None:
         page.set_viewport_size({"width": 1000, "height": 800})
@@ -300,9 +338,10 @@ class TestTheToolOnTheMap:
     def test_bigger_controls_do_not_grow_into_it(
         self, page, runtime, tmp_path, scale
     ) -> None:
-        """Size scales each control from its corner with a transform, which
+        """Size scaled each control from its corner with a transform, which
         moves nothing out of the way: unlifted, the zoom controls grew up
-        through the measure tool's readout at the largest size."""
+        through the measure tool's readout at the largest size. The corner now
+        narrows upward, the zoom controls above the measure tool."""
         result = OnlyMapWriter(runtime_provider=runtime).write(
             _project(ExportSettings(chrome_scale=scale)), tmp_path
         )
@@ -314,7 +353,7 @@ class TestTheToolOnTheMap:
         tool = page.locator(MEASURE).bounding_box()
         zoom = page.locator('om-widget[type="zoom-controls"]').bounding_box()
         assert tool is not None and zoom is not None
-        assert tool["y"] + tool["height"] <= zoom["y"], (
+        assert zoom["y"] + zoom["height"] <= tool["y"], (
             f"at size {scale} the zoom controls reach into the measure tool"
         )
 
@@ -328,3 +367,234 @@ class TestTheToolOnTheMap:
 
         assert page.locator(MEASURE).count() == 0
         assert page.get_by_text("Measure distance").count() == 0
+
+
+class TestTheUnits:
+    @pytest.mark.parametrize(
+        ("units", "unit", "metres"),
+        [("imperial", "mi", 1609.344), ("nautical", "nmi", 1852.0)],
+    )
+    def test_the_readout_is_in_the_units_chosen_in_the_dialog(
+        self, page, runtime, tmp_path, units, unit, metres
+    ) -> None:
+        _open(
+            page,
+            OnlyMapWriter(runtime_provider=runtime).write(
+                _project(ExportSettings(measure_units=units)), tmp_path
+            ),
+        )
+
+        readout = _measure(page)
+
+        match = re.search(rf"Total:\s*([\d.,]+)\s*{unit}\b", readout)
+        assert match, f"no distance in {unit} in the readout: {readout!r}"
+        expected = _haversine_km(START, END) * 1000 / metres
+        assert float(match.group(1).replace(",", "")) == pytest.approx(
+            expected, rel=0.02
+        )
+        # The scale bar reads in the same units.
+        assert re.fullmatch(rf"[\d.,]+\s*(ft|{unit})", _scale_label(page))
+
+    @pytest.mark.parametrize(
+        ("units", "pattern"),
+        [("metric", r"m|km"), ("imperial", r"ft|mi"), ("nautical", r"nmi")],
+    )
+    def test_the_scale_bar_reads_in_them_without_the_measure_tool(
+        self, page, runtime, tmp_path, units, pattern
+    ) -> None:
+        _open(
+            page,
+            OnlyMapWriter(runtime_provider=runtime).write(
+                _project(ExportSettings(show_measure=False, measure_units=units)),
+                tmp_path,
+            ),
+        )
+
+        label = _scale_label(page)
+        assert re.fullmatch(rf"[\d.,]+\s*({pattern})", label), label
+
+    def test_the_panel_has_no_units_of_its_own(self, page, measure_map) -> None:
+        _open(page, measure_map)
+
+        panel = page.locator(MEASURE)
+        assert panel.locator("button[data-act='units']").count() == 0
+        for word in ("Units", "metric", "imperial", "nautical"):
+            assert panel.get_by_text(word, exact=True).count() == 0, word
+        # Metric, as a map exported before the choice existed measured.
+        assert re.search(r"Total:\s*[\d.,]+\s*km\b", _measure(page))
+
+
+class TestOneDistanceAtATime:
+    def test_the_second_point_ends_it_and_gives_the_map_back(
+        self, page, measure_map
+    ) -> None:
+        _open(page, measure_map)
+
+        finished = _measure(page)
+
+        assert re.search(r"·\s*1 segment\b", finished), finished
+        assert _pressed(page, DISTANCE) == "false"
+        # A third click places nothing: the line and its total stay.
+        _click_at(page, (0.0, 51.7))
+        assert page.locator(READOUT).inner_text() == finished
+        # The map's own clicks are back: a feature opens its popup ...
+        _click_at(page, FEATURE)
+        _popup_opens(page)
+        assert page.locator(READOUT).inner_text() == finished
+        # ... and a drag pans.
+        before = page.evaluate("() => document.querySelector('om-map').getCamera()")
+        page.mouse.move(500, 650, steps=5)
+        page.mouse.down()
+        page.mouse.move(650, 600, steps=15)
+        page.mouse.up()
+        page.wait_for_timeout(300)
+        after = page.evaluate("() => document.querySelector('om-map').getCamera()")
+        assert after["longitude"] != pytest.approx(before["longitude"], abs=1e-4)
+        assert page.locator(READOUT).inner_text() == finished
+
+    def test_pressing_distance_again_starts_a_new_one(self, page, measure_map) -> None:
+        _open(page, measure_map)
+        first = _kilometres(_measure(page))
+
+        page.locator(DISTANCE).click(timeout=10_000)
+        assert _pressed(page, DISTANCE) == "true"
+        assert "Total" not in page.locator(READOUT).inner_text()
+        _click_at(page, START)
+        _click_at(page, (0.1, 51.5))
+
+        second = _kilometres(page.locator(READOUT).inner_text())
+        assert second == pytest.approx(first / 2, rel=0.05)
+        assert _pressed(page, DISTANCE) == "false"
+
+
+class TestClosingAnArea:
+    @staticmethod
+    def _perimeter_km() -> float:
+        ring = (*CORNERS, CORNERS[0])
+        return sum(_haversine_km(a, b) for a, b in zip(ring, ring[1:], strict=False))
+
+    @staticmethod
+    def _readout_perimeter(page) -> float:
+        readout = page.locator(READOUT).inner_text(timeout=10_000)
+        match = re.search(r"Area:.*Perimeter:\s*([\d.,]+)\s*km\b", readout, re.S)
+        assert match, f"no closed area in the readout: {readout!r}"
+        return float(match.group(1).replace(",", ""))
+
+    @pytest.mark.parametrize("modifier", ["Control", "Meta"])
+    def test_ctrl_click_places_the_last_point_and_closes_it(
+        self, page, measure_map, modifier
+    ) -> None:
+        _open(page, measure_map)
+        page.locator(AREA).click(timeout=10_000)
+        assert _hint_shown(page)
+        assert "click to place the last point" in page.locator(HINT).inner_text()
+
+        _click_at(page, CORNERS[0])
+        _click_at(page, CORNERS[1])
+        _click_at(page, CORNERS[2], modifier)
+
+        # Three corners, the last the one clicked: its perimeter.
+        assert self._readout_perimeter(page) == pytest.approx(
+            self._perimeter_km(), rel=0.03
+        )
+        closed = page.locator(READOUT).inner_text()
+        assert not _hint_shown(page)
+        assert _pressed(page, AREA) == "false"
+        # Closed, it gives the map back: another click adds no corner.
+        _click_at(page, (0.4, 51.8))
+        assert page.locator(READOUT).inner_text() == closed
+        _click_at(page, FEATURE)
+        _popup_opens(page)
+
+    def test_a_double_click_still_closes_it(self, page, measure_map) -> None:
+        _open(page, measure_map)
+        page.locator(AREA).click(timeout=10_000)
+        _click_at(page, CORNERS[0])
+        _click_at(page, CORNERS[1])
+        x, y = _screen_point(page, CORNERS[2])
+        page.mouse.move(x, y, steps=15)
+        page.wait_for_timeout(150)
+        page.mouse.dblclick(x, y)
+        page.wait_for_timeout(300)
+
+        assert self._readout_perimeter(page) == pytest.approx(
+            self._perimeter_km(), rel=0.03
+        )
+        assert not _hint_shown(page)
+        assert _pressed(page, AREA) == "false"
+
+    def test_the_hint_shows_only_while_an_area_is_being_drawn(
+        self, page, measure_map
+    ) -> None:
+        _open(page, measure_map)
+        assert not _hint_shown(page)
+        page.locator(DISTANCE).click(timeout=10_000)
+        assert not _hint_shown(page)
+        page.locator(AREA).click(timeout=10_000)
+        assert _hint_shown(page)
+        _click_at(page, CORNERS[0])
+        assert _hint_shown(page)
+        # Turned off unfinished.
+        page.locator(AREA).click(timeout=10_000)
+        assert not _hint_shown(page)
+
+    def test_a_double_tap_still_closes_it_on_a_touch_screen(
+        self, browser, measure_map
+    ) -> None:
+        context = browser.new_context(
+            viewport={"width": 1000, "height": 800}, has_touch=True, is_mobile=True
+        )
+        page = context.new_page()
+        try:
+            open_map(page, measure_map.entry_path)
+            require_webgl(page)
+            wait_until_drawn(page)
+            page.locator(AREA).tap(timeout=10_000)
+            assert _hint_shown(page)
+            for corner in CORNERS[:2]:
+                page.touchscreen.tap(*_screen_point(page, corner))
+                page.wait_for_timeout(500)
+            x, y = _screen_point(page, CORNERS[2])
+            page.touchscreen.tap(x, y)
+            page.wait_for_timeout(80)
+            page.touchscreen.tap(x, y)
+            page.wait_for_timeout(600)
+
+            assert self._readout_perimeter(page) == pytest.approx(
+                self._perimeter_km(), rel=0.03
+            )
+            assert not _hint_shown(page)
+            assert _pressed(page, AREA) == "false"
+        finally:
+            context.close()
+
+
+class TestACompactPanel:
+    def test_it_is_smaller_than_the_runtimes_own(self, page, measure_map) -> None:
+        """The runtime's panel measured 279x146 at Normal size, its Units row
+        and a full-width Clear button under the readout; this one 214x76."""
+        _open(page, measure_map)
+
+        box = page.locator(MEASURE).bounding_box()
+        assert box is not None
+        assert box["width"] <= 220 and box["height"] <= 80, box
+        # Short names on the buttons, the full ones for a screen reader.
+        for button, text, name in (
+            (DISTANCE, "Distance", "Measure distance"),
+            (AREA, "Area", "Measure area"),
+        ):
+            assert page.locator(button).inner_text() == text
+            assert page.get_by_role("button", name=name, exact=True).count() == 1
+        # Clear is still a button of its own, beside the readout, big enough
+        # to hit and reached by the keyboard.
+        clear = page.locator(f"{MEASURE} button[data-act='clear']")
+        readout = page.locator(READOUT).bounding_box()
+        clear_box = clear.bounding_box()
+        assert readout is not None and clear_box is not None
+        assert clear_box["x"] >= readout["x"] + readout["width"] - 1
+        assert clear_box["y"] < readout["y"] + readout["height"]
+        assert clear_box["height"] >= 18
+        page.locator(DISTANCE).focus()
+        page.keyboard.press("Tab")
+        page.keyboard.press("Tab")
+        assert clear.evaluate("b => b.getRootNode().activeElement === b")

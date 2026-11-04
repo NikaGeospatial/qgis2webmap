@@ -141,7 +141,8 @@ basemap when you pick it for those types; choose **Liberty** instead - the same
 OpenStreetMap data, drawn a little differently - or export as a Folder.
 
 **Let readers switch basemap**, off by default, puts a Basemap panel in the
-map's top-left corner, under the layer switcher, listing every basemap above
+map's bottom-left corner, with the zoom controls, scale bar and measure tool,
+listing every basemap above
 but None, with the map's own ticked; a reader picks another to switch to it.
 In a Standalone HTML or Share ZIP export it leaves out OpenStreetMap, which
 refuses maps opened from a file - unless OpenStreetMap is the basemap you
@@ -281,12 +282,28 @@ Five switches — **Legend**, **Layer switcher**, **Zoom controls**, **Scale bar
 **Measure tool**. Untick one to leave that control off the exported map.
 
 The **measure tool** lets whoever opens the map measure on it. They pick
-**Measure distance** or **Measure area**, click points on the map, and read the
-total in metric, imperial or nautical units; **Enter** finishes the line or
-shape, **Clear** removes it, and clicking the same button again ends measuring.
-While it is measuring, a click places a point rather than opening a popup.
-Distances and areas are measured on the ground, whatever CRS the project uses.
-It sits above the zoom controls in the bottom-left corner.
+**Distance** or **Area**, click points on the map, and read the
+total. A distance is two points: the second click ends it, the line and its
+total stay on the map, and clicks go back to the map - popups, panning - until
+**Distance** is pressed again for a new one. An area takes as many
+points as needed and closes on **Ctrl + click** (**Cmd + click** on a Mac),
+which places its last point; a double-click, a double-tap on a touch screen or
+**Enter** close it too. While an area is being drawn a small hint above the
+tool says so. **Clear** removes the measurement, and clicking a pressed button
+again ends measuring. While it is measuring, a click places a point rather
+than opening a popup. Distances and areas are measured on the ground, whatever
+CRS the project uses.
+It sits in the bottom-left corner, which narrows upward like a pyramid: the
+widest control at the bottom, just above OnlyMap's licence notice - the measure
+tool, then the basemap panel, the scale bar and the zoom controls on top. On a
+window too short for the corner its controls fold into a drawer, as they do on
+a narrow one, rather than reach the panels in the top-left corner.
+
+Beside **Measure tool**, while it or **Scale bar** is ticked, **Metric**,
+**Imperial** and **Nautical** choose the units both read in (with Nautical,
+measured areas stay metric). Metric is the default. The choice is saved with
+the project, and the exported map has no units control of its own: it
+measures, and its scale bar reads, in what you chose.
 
 Beside **Legend** and **Layer switcher**, while each is ticked, two boxes set
 that panel's width and height in pixels — width 140 to 600, height 100 to
@@ -316,8 +333,8 @@ worse than a missing one.
 - **Project description** draws the abstract from
   **Project Properties → Metadata**. Nothing appears if the project has none.
 - **Position** places the caption. All four corners already hold controls —
-  switcher top left, legend top right, zoom, scale and measure tool bottom
-  left, credit bottom right — so the two centre positions are the only
+  switcher top left, legend top right, zoom, scale, measure tool and basemap
+  panel bottom left, credit bottom right — so the two centre positions are the only
   genuinely clear space, and they are listed first.
 
 ### Control colours
@@ -328,7 +345,10 @@ leave them that way and a default export is unchanged.
 
 **Size** scales the legend, layer switcher, zoom controls, scale bar, measure
 tool and title together — Small through to *Largest, for presentations and big screens*. The
-credit stays fixed, so attribution cannot be shrunk out of legibility.
+credit stays fixed, so attribution cannot be shrunk out of legibility. On a
+narrow screen the controls fold into drawers; above Normal they fold on a
+proportionally wider map, so they keep the room they have at Normal, and in a
+drawer they are at their Normal size.
 
 ### Behaviour
 
@@ -483,30 +503,30 @@ opens the menu:
 | Row | What it does |
 |---|---|
 | **Copy file path** | Puts the map file's path on the clipboard |
-| **Show in file manager** | Opens the folder the map file is in |
+| **Show in file manager** (**Reveal in Finder** on macOS, **Show in Explorer** on Windows) | Opens the folder the map file is in |
 | **NIKA hosting: Join NIKA hosting waitlist ↗** | Hosting is not live yet; this opens a short waitlist form in your browser. It does not publish the map |
 | **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
 **Copy file path and Show in file manager need a Save to path.** A new map
 has one from the start; if you clear the field on the Map tab they are greyed
 out, and each says so if you hover it. The other rows are always available.
-The two NIKA rows also need a map file, and say so if there is no Save to path;
-like Show in file manager, they write the map first when it is missing or out
-of date.
 
-**Show in file manager writes the map first** when it is missing or out of
-date, so it never points at something stale. Copy file path only copies the
-path, so it never waits for a write.
+**Neither writes the map.** Copy file path only copies the path, and Show in
+file manager opens the folder straight away - the folder the map will be
+written to, if it is not written yet. Export first if the project has moved
+on since the last export.
 
-Preview, Export and Share's file rows are greyed out when the map cannot be produced correctly,
-with the reason in the bar at the foot of the dialog rather than a silent
-refusal:
+Preview, Export and Share's file rows are greyed out when there is no map to
+produce, with the reason in the bar at the foot of the dialog rather than a
+silent refusal:
 
 | The reason says | Fix |
 |---|---|
 | *Add a vector or raster layer to the project to export.* | The project has no exportable layer |
 | *Tick at least one layer to include.* | Everything is unticked on the Layers tab |
-| A blocked item | Open the Fidelity tab; it names the layer and why |
+
+A **Blocked** item does not grey them out: Export asks first, naming what the
+map will be missing, and the Fidelity tab says why.
 
 ### Progress and Cancel
 

@@ -479,6 +479,33 @@ class TestLegend:
         )
         assert "SENTINEL" not in repr(exported.snapshot()) + repr(report.items)
 
+    @pytest.mark.parametrize(
+        "address",
+        [
+            "file:///home/someone/secret.png",
+            "data:image/png;base64,iVBORw0KGgo=",
+            "javascript:alert(1)",
+            "legends/outlined.png",
+        ],
+    )
+    def test_only_a_web_address_reaches_the_legend(self, qgis_app, address) -> None:
+        """The capabilities name the address, and nothing makes it a web one:
+        only http and https reach the legend, whose `<img src>` it becomes."""
+        from nika_onlymap_exporter.core.layer_reader import _service_legend
+
+        report = FidelityReportBuilder()
+        web = "https://maps.example.org/legend.png"
+        images = _service_legend(
+            "WMS", [("Target", web), ("Other", address)], report, "wms"
+        )
+
+        assert [image.url for image in images] == [web]
+        (row,) = report.items
+        assert row.status is FidelityStatus.UNSUPPORTED
+        assert row.subject == "Legend picture of 'WMS'"
+        assert "not a web address" in row.detail
+        assert address not in row.detail
+
     def test_a_contextual_legend_is_known(self, qgis_app, services) -> None:
         on = _wms(
             services.url("cors/wms"), crs="EPSG:3857", extra="&contextualWMSLegend=1"
@@ -757,6 +784,7 @@ class TestTimeInTheReadCache:
         dialog._cached_signature = dialog.state.data_snapshot()
         dialog._cached_canvas_extent = dialog._canvas_extent()
         dialog._cached_map_time = dialog._canvas_time()
+        dialog._cached_expressions = dialog._expression_key()
 
         reads: list[str] = []
         dialog._start_job = lambda *a, **k: reads.append("read") or False

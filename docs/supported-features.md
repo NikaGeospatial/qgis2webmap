@@ -28,9 +28,9 @@ Where that line falls differently from the established plugin's is set out in
 | Rasters from a file on disk (GeoTIFF) | Yes - inside a single HTML file up to 100 MB of imagery, or in Folder and Share ZIP. Colours are drawn in as QGIS shows them |
 | Vector layers from a web service (WFS, OGC API Features, SensorThings, ArcGIS feature services) | Yes - the features are downloaded once and embedded, so the map does not call the service. It is a snapshot, not a live feed |
 | XYZ tile layers (`{z}/{x}/{y}`, and `{q}` quadkeys) | Yes - as live layers that need an internet connection. An address carrying an access key is refused rather than published |
-| WMS layers | Yes, when the service offers Web Mercator (EPSG:3857) - as live layers the map asks for Web Mercator tiles, whatever CRS the project uses; a layer made of several sublayers stacks them as QGIS does. They need an internet connection, and the service must allow web pages to load its images (CORS), or the layer stays empty. Whether it offers EPSG:3857 is read from what QGIS stored when it loaded the layer; exporting never contacts the service. A time-enabled (WMS-T) layer that follows QGIS's time is exported as a fixed snapshot of the time QGIS draws at export - the map has no time slider; move QGIS's temporal controller and export again for another time. Its legend shows the picture the service draws for it, as QGIS's legend does - the style's LegendURL or a GetLegendGraphic request, one picture for each sublayer of a layer made of several (QGIS's legend shows only one of them: the top one's on QGIS 4, the bottom one's on 3.44) - loaded live like the tiles, so it needs an internet connection; offline the legend lists the layer by name. A contextual WMS legend is shown whole, not just what is in view. Not exported: a service without EPSG:3857, a layer that needs a login, a WMS-T layer exported without a QGIS map view (Processing, a cartograph frame) or whose temporal matching is not to the start or end of the range, and one with a reference time |
+| WMS layers | Yes, when the service offers Web Mercator (EPSG:3857) - as live layers the map asks for Web Mercator tiles, whatever CRS the project uses; a layer made of several sublayers stacks them as QGIS does. They need an internet connection, and the service must allow web pages to load its images (CORS), or the layer stays empty. Whether it offers EPSG:3857 is read from what QGIS stored when it loaded the layer; exporting never contacts the service. A time-enabled (WMS-T) layer that follows QGIS's time is exported as a fixed snapshot of the time QGIS draws at export - the map has no time slider; move QGIS's temporal controller and export again for another time. Its legend shows the picture the service draws for it, as QGIS's legend does - the style's LegendURL or a GetLegendGraphic request, one picture for each sublayer of a layer made of several (QGIS's legend shows only one of them: the top one's on QGIS 4, the bottom one's on 3.44) - loaded live like the tiles, so it needs an internet connection; offline the legend lists the layer by name. A contextual WMS legend is shown whole, not just what is in view. Not exported: a service without EPSG:3857, a layer that needs a login, a WMS-T layer that follows QGIS's time exported without a QGIS map view (Processing, a cartograph frame) or whose temporal matching is not to the start or end of the range, and one with a reference time |
 | WMTS layers | Yes, on a Web Mercator tile grid (such as GoogleMapsCompatible) - as live layers, with the same internet and CORS conditions as WMS. The legend shows the style's LegendURL picture when the service gives one, live as for WMS. A layer on another grid is not exported; add it again on a Web Mercator grid if the service offers one |
-| Rasters QGIS reads over the web (a COG at `/vsicurl/https://...` or an `https://` address) | Yes, when it is a 3-band colour composite in Web Mercator (EPSG:3857) that QGIS draws as the file holds it, compressed with DEFLATE, JPEG, WEBP or nothing - as a live layer the map reads straight from the address, carrying nothing. It needs an internet connection, and the server must allow web pages to read the file (CORS) and to ask for parts of it (Range requests), or the layer stays empty. The export never downloads the raster: everything is read from what QGIS already holds. Not exported: another CRS, a style QGIS draws from the values (a colour ramp, palette, grey stretch, transparency or colour adjustment), LZW, ZSTD or LERC compression (which the map cannot decode yet), an address carrying an access key, and a cloud store such as `/vsis3/`. For those, save a local copy (right-click the layer, Export > Save As...) and add the file, and it is carried inside the map |
+| Rasters QGIS reads over the web (a COG at `/vsicurl/https://...` or an `https://` address) | Yes, when it is a 3-band colour composite in Web Mercator (EPSG:3857) that QGIS draws as the file holds it, compressed with DEFLATE, JPEG, WEBP or nothing - as a live layer the map reads straight from the address, carrying nothing. It needs an internet connection, and the server must allow web pages to read the file (CORS) and to ask for parts of it (Range requests), or the layer stays empty. The export never downloads the raster: besides what QGIS knows of the layer, it reads only the file's header, for its format and compression - from the copy GDAL kept when QGIS opened the layer, or from the server again if GDAL has let it go. Not exported: a file that is not a GeoTIFF (such as a VRT), one whose header cannot be read, another CRS, a style QGIS draws from the values (a colour ramp, palette, grey stretch, transparency or colour adjustment), LZW, ZSTD or LERC compression (which the map cannot decode yet), an address carrying an access key, and a cloud store such as `/vsis3/`. For those, save a local copy (right-click the layer, Export > Save As...) and add the file, and it is carried inside the map |
 | WCS and ArcGIS map services | Not exported. Add the service's WMS, WMTS or XYZ address if it has one, or save the layer as a GeoTIFF (Export > Save As...) |
 | Attribute-only tables | Not exported - nothing to draw |
 
@@ -318,9 +318,9 @@ part — or once on every part when **Label every part of multi-part features**
 is ticked in the layer's label placement settings.
 
 **Lines** are labelled at half their length along them, measured as QGIS
-measures them: in degrees in a project whose CRS is geographic, and in Web
-Mercator otherwise, which is exact for an EPSG:3857 project and close for
-other projected ones. With **Repeat** set in the label placement, labels repeat
+measures them, in the CRS it draws them in: the project's, or a cartograph map
+frame's own - in degrees for a geographic CRS, and in its own units for a
+projected one. With **Repeat** set in the label placement, labels repeat
 where QGIS repeats them: the line is cut into equal pieces at least the repeat
 distance long — stretched to a whole multiple of it where the label is longer
 — and each piece is labelled at its middle. A distance in millimetres, points,
@@ -430,16 +430,22 @@ popup's width:
 - **A picture on this computer is carried with the map** - inside the file
   for Standalone HTML, beside `index.html` for Folder and Share ZIP - so it
   shows without an internet connection. A relative path is found where QGIS
-  finds it: beside the project file, or under the widget's default path. A
-  picture over 1280 pixels across is scaled down to that, and one over 1 MB
-  is saved again as JPEG (PNG when transparent); your files are not changed.
+  finds it: beside the project file, or under the widget's default path.
+  Only a picture in the project's folder (or its home folder) or under the
+  widget's default path is carried, wherever its path leads - through `..`,
+  an absolute path or a link; one anywhere else is not read, its popup shows
+  its path, and the Fidelity tab names it: move it into the project's folder
+  to carry it. A picture over 1280 pixels across is scaled down to that, and
+  one over 1 MB is saved again as JPEG (PNG when transparent); your files are
+  not changed.
   One picture can be up to 1 MB after that, and one map carries up to 20 MB
-  of pictures.
+  of pictures. A picture several features show is carried once, and counts
+  once toward the map's size.
 - **A picture that is a web address is not carried.** It loads each time
   the popup opens, so it shows only with an internet connection.
 
-A picture that cannot be carried - not found, not a picture, or over a
-limit - shows its path instead, and the Fidelity tab lists what was carried,
+A picture that cannot be carried - not found, not a picture, outside the
+project's folder, or over a limit - shows its path instead, and the Fidelity tab lists what was carried,
 made smaller or left out. An Attachment field that shows its path as a link
 without the full path shows the link by its file name, as QGIS does. A path in
 a field without the Attachment widget stays text.
@@ -492,8 +498,9 @@ everything else is unaffected.
 
 A credit set on a layer — in **Layer Properties → QGIS Server → Attribution**,
 or as metadata rights — is shown in the map's credit component, in the
-bottom-right corner. Credits from several layers are combined, and duplicates
-appear once.
+bottom-right corner - or just above it, on a screen narrow enough that the
+OnlyMap badge or the controls in the bottom-left corner reach across under
+it. Credits from several layers are combined, and duplicates appear once.
 
 They sit outside the collapsing part of that component, so they stay visible on
 a phone: attribution hidden behind a click does not discharge a licence
@@ -507,12 +514,19 @@ one, so if your source requires attribution, set it in QGIS before exporting.
 Legend, layer switcher, zoom controls, a scale bar and a measure tool are **on
 by default**. The layer switcher is left out of maps that have only one layer
 to switch, since it would hold a single ticked box; labels count as an entry of
-their own, so a labelled layer is enough to bring it back.
+their own, so a labelled layer is enough to bring it back. The legend lists the
+top layer first, as QGIS does; the layer switcher lists them in the order the
+map draws them, bottom first.
 
-The measure tool measures distances and areas on the ground, in metric,
-imperial or nautical units, whatever CRS the project uses. It works in a map
-opened from a file, served from a website and in the Preview. It is not drawn
-in a cartograph's interactive frames, which are maps on a printed page.
+The measure tool measures distances and areas on the ground, whatever CRS
+the project uses, in the units chosen beside its switch on the Appearance tab:
+metric, imperial or nautical (nautical areas are in metric). The scale bar
+reads in the same units, and the reader does not pick them. A distance ends at its second point and hands clicks back
+to the map; an area closes on Ctrl + click (Cmd + click on a Mac), a
+double-click, a double-tap or Enter, with a hint above the tool while it is
+being drawn. It works in a map opened from a file, served from a website and
+in the Preview. It is not drawn in a cartograph's interactive frames, which
+are maps on a printed page.
 
 A WMS or WMTS layer's legend entry carries the picture the service draws for
 its legend, under the layer's name, as in QGIS. The reader's browser loads it
@@ -529,8 +543,8 @@ On the **Appearance** tab you can also:
   of your choosing. The description is the abstract from
   *Project Properties → Metadata*; nothing appears if the project has none.
   Corners are shared with the map controls — the layer switcher is top left,
-  the legend top right, the zoom, scale and measure tool bottom left, and the
-  OnlyMap credit bottom right.
+  the legend top right, the zoom, scale, measure tool and basemap panel bottom
+  left, and the OnlyMap credit bottom right.
 - **Set the size of the legend and the layer switcher**, a width and a height
   in pixels for each. Left on Auto, a panel is as wide as its contents and at
   most half the map tall, at every Size; set, it is that size, but never
@@ -549,9 +563,10 @@ On the **Appearance** tab you can also:
 Each of the last two, plus coordinate precision, can also be set for a single
 layer — see *Settings for one layer only* above.
 
-The starting view comes from your data's extent. Data crossing the 180th
-meridian - Alaska, Fiji, Chukotka - is handled correctly rather than opening
-zoomed out to the whole world.
+The starting view comes from your data's extent: the map opens showing all
+of it, in whatever window it is opened in. It zooms out as far as a phone or
+tall data needs; data that already fits opens as it always did. Data crossing the 180th meridian - Alaska, Fiji, Chukotka - is handled
+correctly rather than opening zoomed out to the whole world.
 
 On the **Map** tab you can open the map on **the current QGIS view** instead.
 That is a plain rectangle, so a view spanning the 180th meridian falls back to
@@ -587,7 +602,8 @@ The Fidelity tab names the provider you are depending on whenever a basemap is
 set.
 
 **Readers can switch basemap** if you tick *Let readers switch basemap* under
-the basemap. The map then carries a Basemap panel listing every basemap above,
+the basemap. The map then carries a Basemap panel, bottom left, listing every
+basemap above,
 the one you chose ticked, and switching to another fetches that one's tiles
 from its own provider - so the Fidelity tab names every provider the panel can
 reach. A Standalone HTML or Share ZIP map leaves OpenStreetMap out of the list,

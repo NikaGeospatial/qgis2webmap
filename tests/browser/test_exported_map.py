@@ -1443,6 +1443,24 @@ def _rects_overlap(a: dict, b: dict) -> bool:
     )
 
 
+# The Sizes whose controls do not fit a laptop window, by the window's height:
+# `TestTallControls`' crowded map. The layer list takes half the map, and the
+# bottom-left stack (measure tool, scale bar, zoom, on the licence badge) grows
+# with the Size: at Large it is about 335px tall, so with the corners' insets
+# and gaps it meets the list on a map under 734px. Largest also folds on any
+# window up to 1280px wide (`_fold_rules`).
+LAPTOP_FOLDS = {700: (1.25, 1.5, 2.0), 800: (1.5, 2.0)}
+# The smallest common window each Size's controls fit in unfolded, so the
+# panels are still cut short at half the map.
+ROOMY_WINDOWS = {
+    0.85: (1280, 700),
+    1.0: (1280, 700),
+    1.25: (1280, 900),
+    1.5: (1280, 900),
+    2.0: (1920, 1200),
+}
+
+
 class TestTallControls:
     """A legend or layer list longer than the map scrolls inside its panel.
 
@@ -1451,8 +1469,8 @@ class TestTallControls:
 
     PANELS = ('om-widget[type="legend"]', 'om-widget[type="layer-switcher"]')
 
-    def _open(self, page, crowded_controls_map):
-        page.set_viewport_size({"width": 1280, "height": 700})
+    def _open(self, page, crowded_controls_map, size=(1280, 700)):
+        page.set_viewport_size({"width": size[0], "height": size[1]})
         open_map(page, crowded_controls_map)
         for selector in self.PANELS:
             page.wait_for_function(
@@ -1461,6 +1479,8 @@ class TestTallControls:
                 arg=selector,
                 timeout=30_000,
             )
+        # The short-window fold runs on the frame after the controls arrive.
+        next_frames(page)
         return page
 
     def test_the_page_never_scrolls(self, page, crowded_controls_map) -> None:
@@ -1487,19 +1507,40 @@ class TestTallControls:
             )
             assert overflow > 100, (selector, overflow)
 
+    def _assert_nothing_scrolls_or_overlaps(self, page) -> None:
+        sizes = page.evaluate(
+            """() => [document.documentElement.scrollHeight, innerHeight,
+                      document.documentElement.scrollWidth, innerWidth]"""
+        )
+        assert sizes[0] <= sizes[1] and sizes[2] <= sizes[3], sizes
+        boxes = page.evaluate(
+            """() => [...document.querySelectorAll(
+                  'om-widget, .om-credit, [data-om-badge], [data-om-fold-toggle]')]
+                .filter((e) => !e.closest('[data-om-fold-panel]'))
+                .map((e) => { const r = e.getBoundingClientRect();
+                  return {name: e.getAttribute('type') || e.className
+                                || e.getAttribute('data-om-fold-toggle') || 'badge',
+                          x: r.x, y: r.y, width: r.width, height: r.height}; })
+                .filter((r) => r.width > 0 && r.height > 0)"""
+        )
+        for place, box in enumerate(boxes):
+            for other in boxes[place + 1 :]:
+                assert not _rects_overlap(box, other), (box["name"], other["name"])
+
     @pytest.mark.parametrize("scale", sorted(CHROME_SCALE_LABELS))
     def test_at_every_size_each_panel_takes_at_most_half_the_map(
         self, page, crowded_controls_map_at, scale
     ) -> None:
         """Appearance > Size grows each panel with a transform, after layout:
         at Largest the half-the-map corners reached past the map's foot by
-        their 12px inset, and the page scrolled."""
-        self._open(page, crowded_controls_map_at(scale))
-        sizes = page.evaluate(
-            """() => [document.documentElement.scrollHeight, innerHeight,
-                      document.documentElement.scrollWidth, innerWidth]"""
-        )
-        assert sizes[0] <= sizes[1] and sizes[2] <= sizes[3], sizes
+        their 12px inset, and the page scrolled.
+
+        Each in a window with room for its controls in their corners (a
+        shorter one folds the bigger sizes - see
+        `test_on_a_laptop_window_only_what_cannot_fit_folds`)."""
+        self._open(page, crowded_controls_map_at(scale), ROOMY_WINDOWS[scale])
+        assert page.locator("[data-om-fold-toggle]").count() == 0
+        self._assert_nothing_scrolls_or_overlaps(page)
         map_box = page.locator("om-map").bounding_box()
         assert map_box is not None
         for selector in self.PANELS:
@@ -1513,6 +1554,46 @@ class TestTallControls:
                 "el => el.scrollHeight - el.clientHeight"
             )
             assert overflow > 0, (selector, overflow)
+
+    @pytest.mark.parametrize("height", sorted(LAPTOP_FOLDS))
+    @pytest.mark.parametrize("scale", sorted(CHROME_SCALE_LABELS))
+    def test_on_a_laptop_window_only_what_cannot_fit_folds(
+        self, page, crowded_controls_map_at, scale, height
+    ) -> None:
+        """The panels stay in their corners while the controls fit around
+        them, and fold into the drawer only when the bottom-left stack would
+        reach the layer list; opened, the drawer shows both panels, and
+        neither way does the page scroll or a control cover another."""
+        self._open(page, crowded_controls_map_at(scale), (1280, height))
+        self._assert_nothing_scrolls_or_overlaps(page)
+        map_box = page.locator("om-map").bounding_box()
+        assert map_box is not None
+        if scale not in LAPTOP_FOLDS[height]:
+            assert page.locator("[data-om-fold-toggle]").count() == 0
+            for selector in self.PANELS:
+                box = page.locator(selector).bounding_box()
+                assert box is not None, selector
+                assert box["height"] <= map_box["height"] / 2 + 1, selector
+            return
+
+        _controls_toggle(page).click(timeout=10_000)
+        drawer = page.locator('[data-om-fold-panel="top"]')
+        drawer.wait_for(state="visible", timeout=10_000)
+        self._assert_nothing_scrolls_or_overlaps(page)
+        drawer_box = drawer.bounding_box()
+        assert drawer_box is not None
+        assert drawer_box["y"] >= map_box["y"]
+        assert (
+            drawer_box["y"] + drawer_box["height"] <= map_box["y"] + map_box["height"]
+        )
+        for selector in self.PANELS:
+            panel = drawer.locator(selector)
+            # In the drawer, which scrolls to each of them.
+            panel.scroll_into_view_if_needed(timeout=10_000)
+            box = panel.bounding_box()
+            assert box is not None, selector
+            assert box["y"] < drawer_box["y"] + drawer_box["height"], selector
+            assert box["y"] + box["height"] > drawer_box["y"], selector
 
     def test_the_wheel_scrolls_the_legend_not_the_map(
         self, page, crowded_controls_map
@@ -1533,11 +1614,13 @@ class TestTallControls:
                  .scrollTop > 0""",
             timeout=5_000,
         )
-        # The last layer's row can be scrolled into the panel's view.
+        # The legend's last row - the lowest, now the bottom layer, as the
+        # legend reads top layer first - can be scrolled into the panel's view.
         last = legend.evaluate(
             """el => {
-                const rows = [...el.shadowRoot.querySelectorAll('.omni-row')];
-                const row = rows[rows.length - 1].getBoundingClientRect();
+                const rows = [...el.shadowRoot.querySelectorAll('.omni-row')]
+                  .map(r => r.getBoundingClientRect());
+                const row = rows.reduce((a, b) => (b.bottom > a.bottom ? b : a));
                 const panel = el.getBoundingClientRect();
                 return row.bottom <= panel.bottom + 1 && row.top >= panel.top;
             }"""

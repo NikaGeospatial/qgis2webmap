@@ -72,10 +72,12 @@ The toolbox's own window always sends all five, as its tick boxes show. `MODE`
 and `OUTPUT` are always the run's own: the dialog's **Export as** and map file
 are not used.
 
-Two dialog choices follow the QGIS view, which a Processing run does not have:
-**Open the map on** *the current QGIS view*, and **Export only the features in
-this view**. A run opens such a map on its data and exports every feature, and
-says so in the log.
+Two dialog choices follow the QGIS view, which a Processing run does not have.
+A map set to **Open the map on** *the current QGIS view* opens on its data
+instead, and the log says so. A map set to **Export only the features in this
+view** is not exported at all: the run stops with a message rather than export
+every feature, the ones outside the view included. Untick that box in the dialog
+and save the project to export such a project in a batch.
 
 The Fidelity report goes to the Processing log instead of a tab, one line per
 item.

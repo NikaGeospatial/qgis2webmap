@@ -25,6 +25,7 @@ def test_a_reused_read_carries_the_settings_of_now(
     dialog = _dialog(project, make_memory_layer)
     dialog._cached_export, dialog._cached_report = dialog._read_current_project()
     dialog._cached_signature = dialog.state.data_snapshot()
+    dialog._cached_expressions = dialog._expression_key()
     dialog.state.widget_background = "#40e0d0"
 
     seen = []
@@ -409,3 +410,74 @@ class TestJobCommit:
             return "complete but unwanted"
 
         assert self._run(qgis_app, work) == ["cancelled"]
+
+
+# ---- what expressions read beside the layer -------------------------------
+
+
+def _labels_through_dialog(dialog, qgis_app) -> tuple[list[object], bool]:
+    """The label texts the export carries, and whether it read afresh."""
+
+    seen: list = []
+    reads: list = []
+    original = dialog._read_current_project
+
+    def counting(*args):
+        reads.append(1)
+        return original(*args)
+
+    dialog._read_current_project = counting
+    assert dialog._ensure_export(lambda export, _report: seen.append(export), "x")
+    _wait_for(qgis_app, lambda: seen and dialog._job is None)
+    dialog._read_current_project = original
+    (layer,) = seen[0].layers
+    field = layer.labeling.field_name
+    texts = [f["properties"].get(field) for f in layer.geojson["features"]]
+    return texts, bool(reads)
+
+
+def _labelled_by(layer, expression: str) -> None:
+    from qgis.core import QgsPalLayerSettings, QgsVectorLayerSimpleLabeling
+
+    settings = QgsPalLayerSettings()
+    settings.fieldName = expression
+    settings.isExpression = True
+    layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
+    layer.setLabelsEnabled(True)
+
+
+def test_a_project_variable_an_expression_reads_is_followed(
+    qgis_app, project, make_memory_layer
+) -> None:
+    """Preview, change the variable a label reads, export: the old labels
+    were reused, as nothing the layer watcher follows had changed."""
+    from qgis.core import QgsExpressionContextUtils
+
+    dialog, layer, _canvas = _live_dialog(project, make_memory_layer, qgis_app)
+    QgsExpressionContextUtils.setProjectVariable(project, "region", "North")
+    _labelled_by(layer, "@region || ' ' || \"name\"")
+
+    texts, _ = _labels_through_dialog(dialog, qgis_app)
+    assert sorted(texts) == ["North a", "North b", "North c"]
+    _texts, rebuilt = _labels_through_dialog(dialog, qgis_app)
+    assert not rebuilt  # nothing it reads has changed
+
+    QgsExpressionContextUtils.setProjectVariable(project, "region", "South")
+    texts, rebuilt = _labels_through_dialog(dialog, qgis_app)
+    assert rebuilt
+    assert sorted(texts) == ["South a", "South b", "South c"]
+    dialog.close()
+
+
+def test_a_read_of_the_clock_is_never_reused(
+    qgis_app, project, make_memory_layer
+) -> None:
+    """A label by `now()` carries the time of the export, not of the preview."""
+    dialog, layer, _canvas = _live_dialog(project, make_memory_layer, qgis_app)
+    _labelled_by(layer, "format_date(now(), 'hh:mm:ss.zzz')")
+
+    first, _ = _labels_through_dialog(dialog, qgis_app)
+    second, rebuilt = _labels_through_dialog(dialog, qgis_app)
+    assert rebuilt
+    assert first != second
+    dialog.close()

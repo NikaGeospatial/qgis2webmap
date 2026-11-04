@@ -25,15 +25,18 @@ from ..core.export_ir import (
     ExportProject,
     ExportSettings,
     FidelityItem,
+    FilterKind,
     OutputMode,
     OverlayCorner,
+    PopupPicture,
 )
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
     build_manifest,
     collect_attributions,
-    switcher_basemaps,
+    needs_static_legend,
+    opening_view_data,
     texture_credit,
 )
 from ..core.widget_colors import resolve_widget_colors
@@ -44,7 +47,11 @@ from ..packaging.asset_embedder import (
     should_compress_data,
 )
 from ..packaging.dependency_scanner import ScanResult, scan
-from ..packaging.popup_pictures import place_popup_pictures
+from ..packaging.popup_pictures import (
+    build_picture_embed,
+    picture_fields,
+    place_popup_pictures,
+)
 from ..packaging.raster_cog import CancelCheck, ProgressCallback
 from ..packaging.raster_embed import build_raster_embed, has_cog_layer
 from ..packaging.raster_staging import RasterStagingResult, stage_rasters
@@ -55,6 +62,8 @@ from ..packaging.runtime_manager import (
 )
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
+# The measure tool's page script and styles, on a map that has the tool.
+MEASURE_TOOL_PATH = TEMPLATE_PATH.with_name("measure-tool.html")
 METADATA_PATH = Path(__file__).resolve().parent.parent / "metadata.txt"
 
 
@@ -195,10 +204,21 @@ class OnlyMapWriter:
         preview_hook: str = "",
         runtime_file: str | None = None,
         embedded_rasters: tuple[tuple[str, bytes], ...] = (),
+        embedded_pictures: tuple[PopupPicture, ...] = (),
     ) -> str:
-        """Fill the artifact template. No string-built HTML beyond the manifest."""
+        """Fill the artifact template. No string-built HTML beyond the manifest.
+
+        `embedded_pictures` are the popup pictures a page with no folder
+        carries inside it (`packaging.popup_pictures`)."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
         manifest = build_manifest(project, verdict, compress_data=compress_data)
+        if any(
+            layer.filter is not None and layer.filter.kind is FilterKind.TEXT
+            for layer in project.exportable_layers
+        ):
+            manifest += "\n" + _NO_TICKS_HOOK
+        if project.settings.show_measure:
+            manifest += "\n" + MEASURE_TOOL_PATH.read_text(encoding="utf-8").rstrip()
 
         if runtime_file:
             # An import rather than a `src=` attribute, so the template's single
@@ -219,7 +239,9 @@ class OnlyMapWriter:
         elif compress:
             # Gzipped base64 plus a bootstrap that inflates it. Roughly a third
             # of the raw size, and nobody edits minified runtime code anyway.
-            script_body = build_bootstrap(gzip_base64(runtime.javascript))
+            script_body = build_bootstrap(
+                gzip_base64(runtime.javascript), pictures=bool(embedded_pictures)
+            )
         else:
             script_body = runtime.javascript.decode("utf-8")
 
@@ -231,6 +253,7 @@ class OnlyMapWriter:
             "@MANIFEST@": manifest,
             "@ATTRIBUTION@": _attribution_block(project),
             "@CAPTION@": _caption_block(project),
+            "@OPENING_VIEW@": opening_view_data(project),
             "@WIDGET_COLORS@": _widget_color_block(project),
             # Never compressed: the fallback's CSS gate must work without JS.
             "@RUNTIME_CSS@": runtime.css.decode("utf-8"),
@@ -238,6 +261,9 @@ class OnlyMapWriter:
             "@PREVIEW_HOOK@": preview_hook,
             "@RASTER_EMBED@": build_raster_embed(
                 embedded_rasters, cog_layer=has_cog_layer(manifest)
+            ),
+            "@PICTURE_EMBED@": build_picture_embed(
+                embedded_pictures, picture_fields(project.layers)
             ),
         }
 
@@ -361,7 +387,9 @@ class OnlyMapWriter:
         )
         # Popup pictures beside the page or inside it, as the tier carries
         # everything else; the reader already chose them and said so.
-        project, picture_files = place_popup_pictures(project, destination, mode)
+        embedded_pictures, picture_files = place_popup_pictures(
+            project, destination, mode
+        )
         written.extend(
             ArtifactFile(path, path.stat().st_size) for path in picture_files
         )
@@ -385,6 +413,7 @@ class OnlyMapWriter:
                 preview_hook,
                 runtime_file,
                 staging.embedded,
+                embedded_pictures,
             ),
             encoding="utf-8",
         )
@@ -503,14 +532,18 @@ def _widget_color_block(project: ExportProject) -> str:
     if declarations:
         blocks.append("\n".join(["      :root {", *declarations, "      }"]))
 
-    scale_block = _chrome_scale_block(settings.chrome_scale, settings)
+    # Our own static legend has no type, so the scale's transform never
+    # reaches it (`_WIDGET_ORIGINS`), and the caps it sits under are not
+    # divided by the scale either.
+    legend_scaled = not needs_static_legend(project)
+    scale_block = _chrome_scale_block(settings.chrome_scale, legend_scaled)
     if scale_block:
         blocks.append(scale_block)
         stack_block = _top_left_stack_block(project)
         if stack_block:
             blocks.append(stack_block)
 
-    size_block = _panel_size_block(settings)
+    size_block = _panel_size_block(settings, legend_scaled)
     if size_block:
         blocks.append(size_block)
 
@@ -531,7 +564,7 @@ _SIZED_PANELS = {
 }
 
 
-def _panel_size_block(settings: ExportSettings) -> str:
+def _panel_size_block(settings: ExportSettings, legend_scaled: bool = True) -> str:
     """The legend's and layer switcher's set sizes, never bigger than the map.
 
     Empty when neither has one, so an Auto map is byte-identical to one built
@@ -542,10 +575,12 @@ def _panel_size_block(settings: ExportSettings) -> str:
     map less the 12px inset at each edge, and the panel yields to the slot, so
     whatever was typed the page never scrolls; on a map narrower than the
     width, the width yields the same way. Both caps are divided by
-    `chrome_scale`, because its transform grows the panel after layout. A
+    `chrome_scale`, because its transform grows the panel after layout -
+    except for a legend it does not grow (`legend_scaled` off). A
     height the contents do not fill is the panel's own colour, which the host
     wears, rather than a transparent gap under it. Print is left alone, as the
-    half-the-map cap is.
+    half-the-map cap is. A sized panel can reach the bottom corners, so it is
+    marked as one the page's short-window fold does not count (`map.html`).
     """
     sizes = {
         "legend": (
@@ -560,18 +595,21 @@ def _panel_size_block(settings: ExportSettings) -> str:
         ),
     }
     scale = settings.chrome_scale
-    cap = (
-        "calc(100% - 24px)"
-        if abs(scale - 1.0) < 0.01
-        else f"calc((100% - 24px) / {round(scale, 3)})"
-    )
     rules: list[str] = []
     for panel, (shown, width, height) in sizes.items():
         if not shown or (width is None and height is None):
             continue
+        scaled = panel != "legend" or legend_scaled
+        cap = (
+            f"calc((100% - 24px) / {round(scale, 3)})"
+            if scaled and abs(scale - 1.0) >= 0.01
+            else "calc(100% - 24px)"
+        )
         selectors, slot = _SIZED_PANELS[panel]
         slot_rules = []
-        panel_rules = []
+        # Marks the panel for `map.html`'s short-window fold, which leaves a
+        # panel this size was asked of out of what the corner must clear.
+        panel_rules = ["          --q2w-sized: 1;"]
         if width is not None:
             slot_rules.append(f"          max-width: {cap};")
             panel_rules.extend(
@@ -600,21 +638,49 @@ def _panel_size_block(settings: ExportSettings) -> str:
     return "\n".join(["      @media not print {", *rules, "      }"])
 
 
+# A filter panel's tick boxes all cleared ask the runtime for no value at all,
+# and OnlyMap 0.13.3 reads an empty list as no filter: every feature came back,
+# and the panel lost the ticks it had. A value no feature has asks for none, as
+# no category ticked does in QGIS, and the panel shows every box cleared. After
+# the layers, so it finds them; a plain script, so file:// is the same.
+_NO_TICKS_HOOK = """    <script>
+      (function () {
+        var none = JSON.stringify(["\\u0000"]);
+        var layers = document.querySelectorAll("om-layer[filter-category]");
+        layers.forEach(function (layer) {
+          new MutationObserver(function () {
+            if (layer.getAttribute("filter-categories") === "[]") {
+              layer.setAttribute("filter-categories", none);
+            }
+          }).observe(layer, {
+            attributes: true,
+            attributeFilter: ["filter-categories"],
+          });
+        });
+      })();
+    </script>"""
+
+
 # Which corner each widget is pinned to, so a scale transform grows it *into*
 # the map rather than off the edge. Mirrors `WIDGET_POSITIONS` in the manifest
-# builder; kept here because it is a CSS concern, not a manifest one.
+# builder; kept here because it is a CSS concern, not a manifest one. The
+# bottom-left corner is not here: see `_BOTTOM_LEFT_WIDGETS`.
 _WIDGET_ORIGINS = {
     "legend": "top right",
     "layer-switcher": "top left",
-    "basemap-switcher": "top left",
     "filter": "top left",
-    "zoom-controls": "bottom left",
-    "scale-bar": "bottom left",
-    "measure": "bottom left",
 }
 
+# The bottom-left corner stacks four controls and the runtime's licence badge
+# in one slot, which lays them out one above the other by their size. They are
+# scaled with `zoom`, which the slot lays out, rather than a transform, which
+# it does not: transformed, each one grew over its neighbour and had to be
+# lifted by hand-measured offsets, which could not follow a measure tool
+# whose readout grows as it measures.
+_BOTTOM_LEFT_WIDGETS = ("basemap-switcher", "zoom-controls", "scale-bar", "measure")
 
-def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
+
+def _chrome_scale_block(scale: float, legend_scaled: bool = True) -> str:
     """Scale the map chrome with a transform, not a font size.
 
     **The runtime exposes no size property.** Its theming surface is six custom
@@ -630,11 +696,17 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
     `transform: scale()` scales the rendered box and everything in it, which is
     what "make the map controls bigger" has to mean. `transform-origin` is set
     per widget so each one grows into the map from the corner it is pinned to,
-    instead of sliding off the edge.
+    instead of sliding off the edge. The bottom-left corner's controls take
+    `zoom` instead, so its slot stacks them at their scaled size
+    (`_BOTTOM_LEFT_WIDGETS`).
 
     The credit component is deliberately absent. Attribution carries licence
     obligations, and a control that can shrink it towards illegibility is a
     control for quietly failing to attribute.
+
+    A narrow map folds the controls into the runtime's drawers, and both the
+    width it folds at and the controls in a drawer follow the size - see
+    `_fold_rules`.
     """
     if abs(scale - 1.0) < 0.01:
         return ""
@@ -649,49 +721,30 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
                 "      }",
             ]
         )
-
-    # `map.html` stacks these two in the bottom-left corner with fixed offsets,
-    # to clear the runtime's licence notice. Those offsets are in unscaled
-    # pixels, so a scaled widget grows straight through its neighbour - measured
-    # at scale 2, where the scale bar landed on top of the zoom controls. The
-    # gaps have to scale with the things they are separating.
     rules.extend(
         [
-            '      om-widget[type="zoom-controls"] {',
-            f"        bottom: {round(58.0 * scale, 1)}px !important;",
-            "      }",
-            '      om-widget[type="scale-bar"] {',
-            f"        bottom: {round(30.0 * scale, 1)}px !important;",
+            ",\n".join(
+                f'      om-widget[type="{widget}"]' for widget in _BOTTOM_LEFT_WIDGETS
+            )
+            + " {",
+            f"        zoom: {scale};",
             "      }",
         ]
     )
-
-    # The measure tool sits above those two in the same corner, and nothing
-    # moves it out of their way: a transform leaves the layout as it was, so
-    # the zoom controls, lifted and grown by the rules above, reached up into
-    # its readout - measured at scale 2. It is lifted by their lift plus their
-    # growth, so the gap between them scales like the others. The zoom
-    # controls are two `--om-widget-size` buttons (30px unless the page raises
-    # it for touch), and 8px is the runtime's gap between stacked widgets.
-    lift = _measure_lift(scale, settings)
-    if lift:
-        rules.extend(
-            [
-                '      om-widget[type="measure"] {',
-                f"        bottom: {lift} !important;",
-                "      }",
-            ]
-        )
 
     # `map.html` caps each top corner at half the map, and the transform
     # grows the panel in it after layout: at 2x a crowded legend reached past
     # the map's foot by the corner's inset and the page scrolled. The cap is
     # divided by the scale, so the panel is at most half the map at any size.
+    # Not the legend's corner when it holds our static legend, which the
+    # transform does not grow: divided, it stopped at a quarter of the map.
+    slots = ['[data-om-widget-slot="top-start"]']
+    if legend_scaled:
+        slots.append('[data-om-widget-slot="top-end"]')
     rules.extend(
         [
             "      @media not print {",
-            '        [data-om-widget-slot="top-start"],',
-            '        [data-om-widget-slot="top-end"] {',
+            ",\n".join(f"        {slot}" for slot in slots) + " {",
             f"          max-height: calc(50% / {round(scale, 3)});",
             "        }",
             "      }",
@@ -710,7 +763,45 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
             "      }",
         ]
     )
+
+    rules.extend(_fold_rules(scale))
     return "\n".join(rules)
+
+
+def _fold_rules(scale: float) -> list[str]:
+    """Fold the controls in time for their size, and keep them whole folded.
+
+    The runtime folds the controls into a drawer per side at 640px - a width
+    set for controls at their own size. Scaled up, they ran out of room long
+    before it: at Largest the 558px measure tool reached under the legend on
+    a phone, and past the edge of the map. So a bigger size folds at a
+    proportionally wider map, which leaves each control the room it had at
+    Normal. A smaller one keeps the runtime's width.
+
+    A drawer is the runtime's own panel, no wider than 360px, nor 80% of the
+    screen, and it scrolls what it cannot show. A transform moves nothing out
+    of the way, so a scaled control overflowed it, out of reach of the
+    scroll: the measure tool grew up past the top of the screen. In a drawer
+    the controls are therefore at their own size.
+    """
+    rules: list[str] = []
+    if scale > 1.0:
+        rules.extend(
+            [
+                "      :root {",
+                f"        --om-widget-fold-breakpoint: {round(640 * scale)}px;",
+                "      }",
+            ]
+        )
+    rules.extend(
+        [
+            "      [data-om-fold-panel] > om-widget {",
+            "        transform: none !important;",
+            "        zoom: 1 !important;",
+            "      }",
+        ]
+    )
+    return rules
 
 
 def _top_left_stack_block(project: ExportProject) -> str:
@@ -718,16 +809,14 @@ def _top_left_stack_block(project: ExportProject) -> str:
 
     A transform moves nothing out of the way, so each panel scaled on its own
     grew down over the one under it. The layer switcher was alone up there
-    until the basemap switcher and the filter panels joined it; with company,
-    the corner's slot is scaled from its corner instead, and the panels in it
-    are not scaled again.
+    until the filter panels joined it; with company, the corner's slot is
+    scaled from its corner instead, and the panels in it are not scaled
+    again.
     A narrow map that folds them into a drawer takes them out of the slot,
-    where each keeps its own scale. Empty for a corner with the switcher alone,
-    which keeps the rules it always had.
+    where each is at its own size (`_fold_rules`). Empty for a corner with the
+    switcher alone, which keeps the rules it always had.
     """
-    if not switcher_basemaps(project.settings) and not any(
-        layer.filter is not None for layer in project.exportable_layers
-    ):
+    if not any(layer.filter is not None for layer in project.exportable_layers):
         return ""
     scale = project.settings.chrome_scale
     return "\n".join(
@@ -741,25 +830,6 @@ def _top_left_stack_block(project: ExportProject) -> str:
             "      }",
         ]
     )
-
-
-def _measure_lift(scale: float, settings: ExportSettings) -> str:
-    """How far a scaled measure tool rises to clear what is stacked under it.
-
-    Empty when it is not on the map, or when nothing is under it to grow into.
-    """
-    if not settings.show_measure:
-        return ""
-    growth = round(scale - 1.0, 3)
-    if settings.show_zoom_controls:
-        return (
-            f"calc({round(58.0 * scale, 1)}px + {growth} * "
-            "(var(--om-widget-size, 30px) * 2 + 8px))"
-        )
-    if settings.show_scale_bar:
-        # The scale bar measured 27px tall, its padding included.
-        return f"{round(30.0 * scale + growth * (27.0 + 8.0), 1)}px"
-    return ""
 
 
 def _attribution_block(project: ExportProject) -> str:
