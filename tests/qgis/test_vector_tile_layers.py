@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from urllib.parse import quote
 
 import pytest
 from fake_cog_server import FakeCogServer
@@ -255,11 +254,21 @@ def service():
         yield host
 
 
+def _service_source(tiles: str, style: str = "", zmax: int = 5) -> str:
+    """A vector tile layer's source string, as QGIS writes it for a
+    connection (`QgsDataSourceUri.encodedUri`)."""
+    uri = qgis_core.QgsDataSourceUri()
+    uri.setParam("type", "xyz")
+    uri.setParam("url", tiles)
+    uri.setParam("zmin", "0")
+    uri.setParam("zmax", str(zmax))
+    if style:
+        uri.setParam("styleUrl", style)
+    return bytes(uri.encodedUri()).decode()
+
+
 def _service_layer(host: FakeCogServer, style: str = "/style.json", load=True):
-    source = (
-        f"styleUrl={quote(host.url(style), safe='')}&type=xyz"
-        f"&url={quote(host.url('/t/{z}/{x}/{y}.pbf'), safe='')}&zmax=5&zmin=0"
-    )
+    source = _service_source(host.url("/t/{z}/{x}/{y}.pbf"), host.url(style))
     layer = qgis_core.QgsVectorTileLayer(source, "Base")
     assert layer.isValid()
     if load:
@@ -336,10 +345,7 @@ class TestVectorTileService:
     def test_a_layer_without_a_style_address_is_left_out(
         self, qgis_app, service
     ) -> None:
-        source = (
-            f"type=xyz&url={quote(service.url('/t/{z}/{x}/{y}.pbf'), safe='')}"
-            "&zmax=5&zmin=0"
-        )
+        source = _service_source(service.url("/t/{z}/{x}/{y}.pbf"))
         exported, report = _read(qgis_core.QgsVectorTileLayer(source, "Bare"))
         assert exported is None
         assert "has none on the web" in _rows(report, FidelityStatus.UNSUPPORTED)
@@ -362,9 +368,8 @@ def test_a_government_style_reads_as_unchanged(qgis_app) -> None:
         files["/styles/style.json"] = text.encode()
         moved = json.loads(text)
         base = moved["sources"]["base_v1.0.0"]["url"].rsplit("/", 1)[0]
-        source = (
-            f"styleUrl={quote(host.url('/styles/style.json'), safe='')}&type=xyz"
-            f"&url={quote(base + '/{z}/{x}/{y}.pbf', safe='')}&zmax=14&zmin=0"
+        source = _service_source(
+            base + "/{z}/{x}/{y}.pbf", host.url("/styles/style.json"), zmax=14
         )
         layer = qgis_core.QgsVectorTileLayer(source, "swisstopo")
         _message, loaded = layer.loadDefaultStyle()

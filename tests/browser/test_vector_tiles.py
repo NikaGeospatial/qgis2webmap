@@ -15,6 +15,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import time
 from pathlib import Path
@@ -33,6 +34,7 @@ from nika_onlymap_exporter.core.export_ir import (
     Extent,
     GeometryKind,
     OutputMode,
+    PopupFieldSpec,
     PopupSpec,
     RendererKind,
     RendererSpec,
@@ -330,3 +332,36 @@ def test_a_service_draws_in_its_publishers_style(
         with FakeCogServer({"/index.html": entry.read_bytes()}) as site:
             _open(page, site.url("index.html"))
             check()
+
+
+def test_a_click_on_an_archive_feature_opens_its_popup(
+    page, runtime, tile_host, tmp_path
+) -> None:
+    """The archive's features carry their fields, so a click shows them."""
+    layer = _water_layer(
+        VectorTileSpec(
+            url=tile_host.url("/lakes.pmtiles"), source_layer="water", max_zoom=10
+        ),
+        remote=True,
+    )
+    layer = dataclasses.replace(
+        layer, popup=PopupSpec(enabled=True, fields=(PopupFieldSpec("kind"),))
+    )
+    entry = _write(runtime, tmp_path, layer).entry_path
+    _open(page, entry.as_uri())
+    _sample_until(page, [LAKE], lambda s: _close(s[0], WATER_FILL))
+    for place, kind in ((LAKE, "lake"), (RIVER, "river")):
+        x, y = page.evaluate(
+            "(p) => { const el = document.querySelector('om-map');"
+            " const box = el.getBoundingClientRect(); const [x, y] = el.project(p);"
+            " return [box.left + x, box.top + y]; }",
+            list(place),
+        )
+        page.mouse.click(x, y)
+        page.wait_for_function(
+            """(kind) => [...document.querySelectorAll('om-overlay')].some((o) =>
+                 o.shadowRoot && [...o.shadowRoot.querySelectorAll('.om-popup-value')]
+                   .some((v) => v.textContent.trim() === kind))""",
+            arg=kind,
+            timeout=10_000,
+        )
