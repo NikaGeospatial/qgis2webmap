@@ -1830,9 +1830,9 @@ def _wms_snapshot_time(
     from . import map_services
 
     retry = (
-        "set the layer's Static WMS-T Temporal Range to Server default or a "
-        "predefined date in its properties, and export again. The layer is "
-        "omitted from the map."
+        "untick Dynamic Temporal Control on the layer's Temporal properties, "
+        "set its Static WMS-T Temporal Range to Server default or a "
+        "predefined date, and export again. The layer is omitted from the map."
     )
     properties = layer.temporalProperties()
     requested = QgsDateTimeRange(QDateTime(), QDateTime())
