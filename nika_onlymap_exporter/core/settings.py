@@ -249,6 +249,10 @@ class LayerSettings:
     # beside it, always, with a halo - the names without clicking for a popup.
     cluster: bool = True
     name_field: str | None = None
+    # Any vector layer: the field the web map's filter panel filters it by.
+    # `None` is no filter. A filtered layer does not cluster (see
+    # `project_reader._unclustered_for_its_filter`).
+    filter_field: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -269,6 +273,8 @@ class LayerSettings:
             data["cluster"] = False
         if self.name_field:
             data["nameField"] = self.name_field
+        if self.filter_field:
+            data["filterField"] = self.filter_field
         return data
 
     @classmethod
@@ -285,6 +291,9 @@ class LayerSettings:
             quantize_precision=_read_layer_precision(data.get("quantizePrecision")),
             cluster=bool(data.get("cluster", True)),
             name_field=str(data["nameField"]) if data.get("nameField") else None,
+            filter_field=(
+                str(data["filterField"]) if data.get("filterField") else None
+            ),
         )
 
     def resolved_hover(self, map_wide: bool) -> bool:
@@ -344,6 +353,33 @@ def _read_scale(raw: Any) -> float:
     if not MIN_CHROME_SCALE <= value <= MAX_CHROME_SCALE:
         return 1.0
     return round(value, 2)
+
+
+# The Appearance tab's legend and layer switcher sizes, in CSS pixels. Below
+# 140 wide the runtime's own panels stop shrinking (their `min-width`), and
+# below 100 tall a panel shows its heading and little else; past 600 wide or
+# 1000 tall a panel is most of a laptop's map. However big, the exported page
+# caps the panel at the map (`writers/onlymap_writer._panel_size_block`).
+MIN_PANEL_WIDTH = 140
+MAX_PANEL_WIDTH = 600
+MIN_PANEL_HEIGHT = 100
+MAX_PANEL_HEIGHT = 1000
+
+
+def _read_panel_size(raw: Any, low: int, high: int) -> int | None:
+    """A persisted panel width or height, or None for Auto.
+
+    Out of range is clamped into it, as the spin box clamps what is typed;
+    anything unreadable is Auto, which is how the panel looked before sizes
+    could be set.
+    """
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return max(low, min(high, value))
 
 
 def _read_precision(raw: Any) -> int | None:
@@ -413,6 +449,9 @@ DATA_FIELDS = (
     "map_name",
     "popup_on_hover",
     "basemap",
+    # It changes the Basemap rows `read_project` writes: they name every host
+    # the switcher can send a reader to.
+    "basemap_switcher",
     "terrain",
     "highlight_color",
     "quantize_precision",
@@ -440,6 +479,10 @@ CHROME_FIELDS = (
     "show_abstract",
     "title_corner",
     "chrome_scale",
+    "legend_width",
+    "legend_height",
+    "layer_switcher_width",
+    "layer_switcher_height",
     "widget_background",
     "widget_foreground",
 )
@@ -487,11 +530,20 @@ class DialogState:
     # streamed - but it ends the "opens offline, contacts nobody" guarantee, so
     # it has to be chosen rather than inherited.
     basemap: str = "none"
+    # Off by default: each basemap it offers is another third party a reader's
+    # browser can be sent to, which the author should choose rather than get.
+    basemap_switcher: bool = False
     # Off by default for the same reason as the basemap, plus one of its own: it
     # tilts the map, which changes what the recipient sees first.
     terrain: str = "none"
     # A multiplier on the size of the map's chrome. 1.0 is the runtime default.
     chrome_scale: float = 1.0
+    # The legend's and layer switcher's size in pixels; None is Auto - as wide
+    # as their contents, as tall as them up to half the map.
+    legend_width: int | None = None
+    legend_height: int | None = None
+    layer_switcher_width: int | None = None
+    layer_switcher_height: int | None = None
     widget_background: str = ""
     widget_foreground: str = ""
     highlight_color: str = ""
@@ -624,8 +676,13 @@ class DialogState:
             show_abstract=self.show_abstract,
             title_corner=self.title_corner,
             basemap=self.basemap,
+            basemap_switcher=self.basemap_switcher,
             terrain=self.terrain,
             chrome_scale=self.chrome_scale,
+            legend_width=self.legend_width,
+            legend_height=self.legend_height,
+            layer_switcher_width=self.layer_switcher_width,
+            layer_switcher_height=self.layer_switcher_height,
             widget_background=parse_hex_color(self.widget_background),
             widget_foreground=parse_hex_color(self.widget_foreground),
             highlight_color=parse_hex_color(self.highlight_color),
@@ -683,8 +740,22 @@ def load_state(project: QgsProject) -> DialogState:
             state.show_title = bool(widgets.get("showTitle", True))
             state.show_abstract = bool(widgets.get("showAbstract", False))
             state.basemap = str(widgets.get("basemap", "none") or "none")
+            state.basemap_switcher = bool(widgets.get("basemapSwitcher", False))
             state.terrain = str(widgets.get("terrain", "none") or "none")
             state.chrome_scale = _read_scale(widgets.get("chromeScale"))
+            # Absent from a project saved before sizes could be set: Auto.
+            state.legend_width = _read_panel_size(
+                widgets.get("legendWidth"), MIN_PANEL_WIDTH, MAX_PANEL_WIDTH
+            )
+            state.legend_height = _read_panel_size(
+                widgets.get("legendHeight"), MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT
+            )
+            state.layer_switcher_width = _read_panel_size(
+                widgets.get("layerSwitcherWidth"), MIN_PANEL_WIDTH, MAX_PANEL_WIDTH
+            )
+            state.layer_switcher_height = _read_panel_size(
+                widgets.get("layerSwitcherHeight"), MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT
+            )
             state.widget_background = str(widgets.get("widgetBackground", "") or "")
             state.widget_foreground = str(widgets.get("widgetForeground", "") or "")
             state.highlight_color = str(widgets.get("highlightColor", "") or "")
@@ -813,8 +884,13 @@ def save_state(project: QgsProject, state: DialogState) -> None:
                 "showAbstract": state.show_abstract,
                 "titleCorner": state.title_corner.value,
                 "basemap": state.basemap,
+                "basemapSwitcher": state.basemap_switcher,
                 "terrain": state.terrain,
                 "chromeScale": state.chrome_scale,
+                "legendWidth": state.legend_width,
+                "legendHeight": state.legend_height,
+                "layerSwitcherWidth": state.layer_switcher_width,
+                "layerSwitcherHeight": state.layer_switcher_height,
                 "widgetBackground": state.widget_background,
                 "widgetForeground": state.widget_foreground,
                 "highlightColor": state.highlight_color,

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -37,7 +38,9 @@ from .export_ir import (
     ExportLayer,
     ExportProject,
     ExportSettings,
+    FilterKind,
     GeometryKind,
+    LayerFilterSpec,
     OutputMode,
     PopupFieldMode,
     PopupFieldSpec,
@@ -356,8 +359,10 @@ def settings_network_hosts(settings: ExportSettings) -> tuple[str, ...]:
     projected map draws no basemap or terrain, a preset the runtime does not
     know is replaced by none, and while terrain is on the runtime swaps the
     basemap for its raster twin, so a vector basemap is not fetched at all.
-    This is the same set of hosts `basemap_note` and `terrain_note` name to the
-    author, so the dependency scan and the Fidelity report cannot disagree.
+    A basemap switcher adds the host of every basemap it offers, since a
+    reader can pick any of them. This is the same set of hosts `basemap_note`
+    and `terrain_note` name to the author, so the dependency scan and the
+    Fidelity report cannot disagree.
 
     Telemetry is left out on purpose: the runtime's anonymous usage report is
     not something the map needs to draw, so it is no dependency, and the map
@@ -372,8 +377,37 @@ def settings_network_hosts(settings: ExportSettings) -> tuple[str, ...]:
         hosts.append("unpkg.com")
         return tuple(dict.fromkeys(hosts))
     if settings.basemap in BASEMAP_PRESETS and settings.basemap != BASEMAP:
-        return (BASEMAP_HOSTS[settings.basemap],)
+        offered = switcher_basemaps(settings) or (settings.basemap,)
+        return tuple(dict.fromkeys(BASEMAP_HOSTS[preset] for preset in offered))
     return ()
+
+
+def switcher_basemaps(settings: ExportSettings) -> tuple[str, ...]:
+    """The basemaps the map's basemap switcher offers, or `()` for none.
+
+    Only on a map that has a basemap to switch from, is not projected (a
+    projected map draws none) and has no relief (which replaces the basemap
+    with a draped picture of it, so switching would not show). It offers the
+    keyless presets in `BASEMAP_PRESETS` order, the chosen one included, less
+    OpenStreetMap in the output types opened from a file, whose readers its
+    servers refuse (`OSM_FILE_NOTE`) - unless it is the chosen one, which the
+    author was already warned about and the switcher has to be able to show.
+    """
+    if not settings.basemap_switcher or settings.map_crs is not None:
+        return ()
+    if settings.basemap not in BASEMAP_PRESETS or settings.basemap == BASEMAP:
+        return ()
+    if settings.terrain != "none" and settings.terrain in TERRAIN_PRESETS:
+        return ()
+    return tuple(
+        preset
+        for preset in BASEMAP_PRESETS
+        if preset != BASEMAP
+        and (
+            preset == settings.basemap
+            or not osm_from_file(preset, settings.output_mode)
+        )
+    )
 
 
 # The output types a recipient opens straight from disk. OpenStreetMap's tile
@@ -398,19 +432,64 @@ def osm_from_file(basemap: str, mode: OutputMode) -> bool:
     return basemap == "osm" and mode in FILE_OPENED_MODES
 
 
-def basemap_note(basemap: str) -> str | None:
+def basemap_note(basemap: str, offered: Sequence[str] = ()) -> str | None:
     """What choosing this basemap costs the recipient, in plain terms.
 
-    `None` when there is nothing to say, which is the default case.
+    `offered` is what a basemap switcher offers (`switcher_basemaps`), whose
+    hosts a reader's browser contacts too when they switch. `None` when there
+    is nothing to say, which is the default case.
     """
     if not basemap or basemap == "none":
         return None
     host = BASEMAP_HOSTS.get(basemap, "a third-party tile server")
+    others = [
+        other
+        for other in dict.fromkeys(BASEMAP_HOSTS[preset] for preset in offered)
+        if other != host
+    ]
+    if not offered:
+        switch = ""
+    elif others:
+        switch = (
+            " Its basemap switcher lets readers change it, and switching can "
+            f"also contact {_or_list(others)}."
+        )
+    else:
+        switch = (
+            " Its basemap switcher lets readers change it, to basemaps from "
+            "the same server."
+        )
     return (
         f"The map loads basemap tiles from {host} every time it is opened. "
         "It will not work offline, and each recipient's browser will contact "
-        f"{host} directly. The exported file itself is no larger."
+        f"{host} directly.{switch} The exported file itself is no larger."
     )
+
+
+def _or_list(items: Sequence[str]) -> str:
+    """`a`, `a or b`, `a, b or c`."""
+    if len(items) <= 1:
+        return "".join(items)
+    return f"{', '.join(items[:-1])} or {items[-1]}"
+
+
+def basemap_notes(settings: ExportSettings) -> tuple[str, ...]:
+    """The Fidelity report's Basemap rows for `settings`, in order.
+
+    OpenStreetMap from a file earns `OSM_FILE_NOTE` in place of the general
+    note; with a switcher the general note follows it, because it is the one
+    that names the other servers the switcher can reach.
+    """
+    offered = switcher_basemaps(settings)
+    notes: list[str] = []
+    if osm_from_file(settings.basemap, settings.output_mode):
+        notes.append(OSM_FILE_NOTE)
+        if not offered:
+            return tuple(notes)
+    note = basemap_note(settings.basemap, offered)
+    if note is not None:
+        notes.append(note)
+    return tuple(notes)
 
 
 def escape_attr(value: str) -> str:
@@ -1238,6 +1317,9 @@ def build_layer_element(
         )
         attributes.append(("get-cluster-radius", cluster_radius_expression(layer)))
 
+    if layer.filter is not None:
+        attributes.extend(_filter_attributes(layer.filter))
+
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))
 
@@ -1774,6 +1856,10 @@ def _popup_behavior(
 WIDGET_POSITIONS = {
     "legend": "top-right",
     "layer-switcher": "top-left",
+    # Under the layer switcher: the other list of what the map shows.
+    "basemap-switcher": "top-left",
+    # Under both: each narrows one layer the switcher lists.
+    "filter": "top-left",
     "zoom-controls": "bottom-left",
     "scale-bar": "bottom-left",
     "measure": "bottom-left",
@@ -1854,12 +1940,32 @@ LEGEND_STYLES = """:host { font-family: system-ui, sans-serif; font-size: 12px; 
 .omni-legend-graphic img { display: block; max-width: 100%; background: #fff; }"""
 
 
-def _legend_style_element(indent: str) -> list[str]:
+def _legend_style_element(indent: str, settings: ExportSettings) -> list[str]:
     return [
         f"{indent}  <style>",
         *(f"{indent}    {line}" if line else "" for line in LEGEND_STYLES.splitlines()),
+        *(f"{indent}    {line}" for line in _legend_graphic_size(settings)),
         f"{indent}  </style>",
     ]
+
+
+def _legend_graphic_size(settings: ExportSettings) -> list[str]:
+    """A service's legend pictures sized by a legend whose size is set.
+
+    Their own 240px caps keep an Auto legend from growing to a wide picture;
+    a legend given a size has one, so a picture takes the panel's width and
+    the panel, not the picture, scrolls. A narrower legend already scales a
+    picture down (`.omni-legend-graphic img`). Nothing for Auto, so its
+    legend is as it was.
+    """
+    caps = []
+    if settings.legend_width is not None:
+        caps.append("max-width: none;")
+    if settings.legend_height is not None:
+        caps.append("max-height: none;")
+    if not caps:
+        return []
+    return [f".omni-legend-graphic {{ {' '.join(caps)} }}"]
 
 
 def needs_image_legend(project: ExportProject) -> bool:
@@ -1999,6 +2105,48 @@ def _legend_image_markup(layer: ExportLayer, indent: str) -> list[str]:
     return lines
 
 
+def _filter_attributes(spec: LayerFilterSpec) -> list[tuple[str, str | None]]:
+    """The filter a layer's filter panel drives, as the map opens: a range
+    over every value, or every value kept. The panel reads its mode - slider
+    or tick boxes - from which of the two the layer declares."""
+    if spec.kind is FilterKind.TEXT:
+        return [
+            ("filter-category", spec.field_name),
+            (
+                "filter-categories",
+                json.dumps(list(spec.categories), ensure_ascii=False),
+            ),
+        ]
+    low, high = spec.value_range or (0.0, 0.0)
+    return [
+        ("filter-field", spec.field_name),
+        ("filter-range", f"[{_number(low)}, {_number(high)}]"),
+    ]
+
+
+def build_filter_widget(layer: ExportLayer, indent: str) -> str:
+    """The runtime's filter panel for `layer`, headed by its field's alias.
+
+    A date's ends are labelled in UTC, the zone its milliseconds were counted
+    in (`core.attribute_filter`), so they read as the dates QGIS shows.
+    """
+    spec = layer.filter
+    if spec is None:
+        return ""
+    attributes = (
+        f'layer="{escape_attr(layer.layer_id)}" '
+        f'field="{escape_attr(spec.field_name)}" '
+        f'title="{escape_attr(spec.title)}"'
+    )
+    if spec.kind in (FilterKind.DATE, FilterKind.DATETIME):
+        style = "date" if spec.kind is FilterKind.DATE else "datetime"
+        attributes += f' format="date" date-style="{style}" time-zone="UTC"'
+    return (
+        f'{indent}<om-widget type="filter" {attributes} '
+        f'position="{WIDGET_POSITIONS["filter"]}"></om-widget>'
+    )
+
+
 def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     """A static legend whose swatches are the map's own markers.
 
@@ -2015,7 +2163,7 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     """
     title = "" if project.settings.show_title else project.title
     lines = [f'{indent}<om-widget position="{WIDGET_POSITIONS["legend"]}">']
-    lines.extend(_legend_style_element(indent))
+    lines.extend(_legend_style_element(indent, project.settings))
     lines.append(f'{indent}  <div class="omni-panel">')
     lines.append(f"{indent}    <h4>{escape_attr(title or 'Legend')}</h4>")
 
@@ -2089,6 +2237,21 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
             f'{indent}<om-widget type="layer-switcher" '
             f'position="{WIDGET_POSITIONS["layer-switcher"]}"></om-widget>'
         )
+    basemaps = switcher_basemaps(settings)
+    if basemaps:
+        # The runtime's own panel, one radio button per basemap under its own
+        # name, the map's current one ticked.
+        widgets.append(
+            f'{indent}<om-widget type="basemap-switcher" '
+            f'options="{" ".join(basemaps)}" '
+            f'position="{WIDGET_POSITIONS["basemap-switcher"]}"></om-widget>'
+        )
+    # One panel per filtered layer, in draw order, under the switchers.
+    widgets.extend(
+        build_filter_widget(layer, indent)
+        for layer in project.exportable_layers
+        if layer.filter is not None
+    )
     if settings.show_measure:
         widgets.append(
             f'{indent}<om-widget type="measure" '

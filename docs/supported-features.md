@@ -332,7 +332,7 @@ stopped merging, and its popups open on points, not bubbles. Points at exactly
 the same spot stay one bubble showing how many there are. The Fidelity tab
 gives the zoom at which the points show one by one. Untick **Cluster dense
 points** on the layer's **Points** row in the **Layers** tab to show every
-point instead.
+point instead. A layer with a filter (see *Filter by* below) does not cluster.
 
 **Names beside every point.** On a point layer's **Points** row, **Names**
 picks a field whose value shows beside each point with a halo, without clicking
@@ -440,6 +440,15 @@ A point layer also has a **Points** row: **Names** shows a field's value beside
 every point, with a halo, and **Cluster dense points** (on by default) can be
 unticked to show every point rather than count bubbles.
 
+**Filter by**, on the **This layer only** row, gives the web map a panel that
+filters the layer by one of its fields: a slider for a number or a date, a tick
+box per value for text of up to 50 values. The panel sits top left, under the
+layer switcher, one per filtered layer, headed by the field's alias. It works
+in a map opened from a file and over http. What it cannot do is reported in the
+Fidelity tab: a feature with no value in the field is hidden while the filter
+is there, a filtered layer's points do not merge into count bubbles (the filter
+cannot count the bubbles again), and the layer's labels are not filtered.
+
 Each starts on *"same as map"*, so a layer you never touch follows the map-wide
 choice. This is deliberately something qgis2web has never offered: the same
 three settings have been requested there as per-layer options since 2015
@@ -496,6 +505,10 @@ On the **Appearance** tab you can also:
   Corners are shared with the map controls — the layer switcher is top left,
   the legend top right, the zoom, scale and measure tool bottom left, and the
   OnlyMap credit bottom right.
+- **Set the size of the legend and the layer switcher**, a width and a height
+  in pixels for each. Left on Auto, a panel is as wide as its contents and at
+  most half the map tall; set, it is that size, but never bigger than the map,
+  so the page does not scroll.
 - **Set the colour of the controls**, background and text separately. Left
   alone, they use OnlyMap's own colours.
 - **Open popups on hover** instead of on click. Hover replaces click rather
@@ -546,3 +559,12 @@ prohibits bulk downloading and offline use of its tiles.
 
 The Fidelity tab names the provider you are depending on whenever a basemap is
 set.
+
+**Readers can switch basemap** if you tick *Let readers switch basemap* under
+the basemap. The map then carries a Basemap panel listing every basemap above,
+the one you chose ticked, and switching to another fetches that one's tiles
+from its own provider - so the Fidelity tab names every provider the panel can
+reach. A Standalone HTML or Share ZIP map leaves OpenStreetMap out of the list,
+since its servers refuse maps opened from a file (unless it is the basemap you
+chose). Not with relief, which drapes the basemap's imagery over the terrain
+instead of showing the basemap.

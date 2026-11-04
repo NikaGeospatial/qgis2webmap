@@ -33,6 +33,7 @@ from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
     build_manifest,
     collect_attributions,
+    switcher_basemaps,
     texture_credit,
 )
 from ..core.widget_colors import resolve_widget_colors
@@ -505,8 +506,98 @@ def _widget_color_block(project: ExportProject) -> str:
     scale_block = _chrome_scale_block(settings.chrome_scale, settings)
     if scale_block:
         blocks.append(scale_block)
+        stack_block = _top_left_stack_block(project)
+        if stack_block:
+            blocks.append(stack_block)
+
+    size_block = _panel_size_block(settings)
+    if size_block:
+        blocks.append(size_block)
 
     return "\n\n".join(blocks)
+
+
+# The two panels whose size can be set, by the selector that reaches each and
+# the slot it is in. The legend is the runtime's widget or, when a swatch needs
+# a picture, our own static one: an `om-widget` with no type, in its corner
+# (`manifest_builder.build_legend_widget`). Matched on the widget rather than
+# the slot, so the rule follows it into the drawer a narrow map folds it into.
+_SIZED_PANELS = {
+    "legend": (
+        ('om-widget[type="legend"]', 'om-widget[position="top-right"]:not([type])'),
+        "top-end",
+    ),
+    "layer-switcher": (('om-widget[type="layer-switcher"]',), "top-start"),
+}
+
+
+def _panel_size_block(settings: ExportSettings) -> str:
+    """The legend's and layer switcher's set sizes, never bigger than the map.
+
+    Empty when neither has one, so an Auto map is byte-identical to one built
+    before sizes could be set - and Auto is the runtime's own sizing: as wide
+    as the contents, as tall as them up to half the map (`map.html`).
+
+    A set size lifts that half-the-map cap on its corner's slot to the whole
+    map less the 12px inset at each edge, and the panel yields to the slot, so
+    whatever was typed the page never scrolls; on a map narrower than the
+    width, the width yields the same way. Both caps are divided by
+    `chrome_scale`, because its transform grows the panel after layout. A
+    height the contents do not fill is the panel's own colour, which the host
+    wears, rather than a transparent gap under it. Print is left alone, as the
+    half-the-map cap is.
+    """
+    sizes = {
+        "legend": (
+            settings.show_legend,
+            settings.legend_width,
+            settings.legend_height,
+        ),
+        "layer-switcher": (
+            settings.show_layer_switcher,
+            settings.layer_switcher_width,
+            settings.layer_switcher_height,
+        ),
+    }
+    scale = settings.chrome_scale
+    cap = (
+        "calc(100% - 24px)"
+        if abs(scale - 1.0) < 0.01
+        else f"calc((100% - 24px) / {round(scale, 3)})"
+    )
+    rules: list[str] = []
+    for panel, (shown, width, height) in sizes.items():
+        if not shown or (width is None and height is None):
+            continue
+        selectors, slot = _SIZED_PANELS[panel]
+        slot_rules = []
+        panel_rules = []
+        if width is not None:
+            slot_rules.append(f"          max-width: {cap};")
+            panel_rules.extend(
+                [f"          width: {width}px;", "          max-width: 100%;"]
+            )
+        if height is not None:
+            slot_rules.append(f"          max-height: {cap};")
+            panel_rules.extend(
+                [
+                    f"          height: {height}px;",
+                    "          background: var(--om-widget-bg, #fff);",
+                ]
+            )
+        rules.extend(
+            [
+                f'        [data-om-widget-slot="{slot}"] {{',
+                *slot_rules,
+                "        }",
+                ",\n".join(f"        {selector}" for selector in selectors) + " {",
+                *panel_rules,
+                "        }",
+            ]
+        )
+    if not rules:
+        return ""
+    return "\n".join(["      @media not print {", *rules, "      }"])
 
 
 # Which corner each widget is pinned to, so a scale transform grows it *into*
@@ -515,6 +606,8 @@ def _widget_color_block(project: ExportProject) -> str:
 _WIDGET_ORIGINS = {
     "legend": "top right",
     "layer-switcher": "top left",
+    "basemap-switcher": "top left",
+    "filter": "top left",
     "zoom-controls": "bottom left",
     "scale-bar": "bottom left",
     "measure": "bottom left",
@@ -603,6 +696,36 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
         ]
     )
     return "\n".join(rules)
+
+
+def _top_left_stack_block(project: ExportProject) -> str:
+    """Scale the top-left corner as one, when it stacks more than one panel.
+
+    A transform moves nothing out of the way, so each panel scaled on its own
+    grew down over the one under it. The layer switcher was alone up there
+    until the basemap switcher and the filter panels joined it; with company,
+    the corner's slot is scaled from its corner instead, and the panels in it
+    are not scaled again.
+    A narrow map that folds them into a drawer takes them out of the slot,
+    where each keeps its own scale. Empty for a corner with the switcher alone,
+    which keeps the rules it always had.
+    """
+    if not switcher_basemaps(project.settings) and not any(
+        layer.filter is not None for layer in project.exportable_layers
+    ):
+        return ""
+    scale = project.settings.chrome_scale
+    return "\n".join(
+        [
+            '      [data-om-widget-slot="top-start"] {',
+            f"        transform: scale({scale});",
+            "        transform-origin: top left;",
+            "      }",
+            '      [data-om-widget-slot="top-start"] > om-widget {',
+            "        transform: none;",
+            "      }",
+        ]
+    )
 
 
 def _measure_lift(scale: float, settings: ExportSettings) -> str:

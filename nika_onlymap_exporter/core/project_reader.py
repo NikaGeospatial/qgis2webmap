@@ -46,7 +46,9 @@ from .export_ir import (
     ExportSettings,
     Extent,
     ExtentSource,
+    FidelityItem,
     GeometryKind,
+    OutputMode,
 )
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
@@ -59,11 +61,9 @@ from .layer_reader import (
 )
 from .manifest_builder import (
     DEFAULT_LABEL_SIZE,
-    OSM_FILE_NOTE,
     TERRAIN_PRESETS,
-    basemap_note,
+    basemap_notes,
     labels_never_fit,
-    osm_from_file,
     terrain_note,
 )
 from .popup_media import attach_popup_media
@@ -305,29 +305,34 @@ def _report_widget_colors(
 def with_output_notes(
     report: FidelityReportBuilder, settings: ExportSettings
 ) -> FidelityReportBuilder:
-    """`report` with its Basemap row as it reads for `settings`' output type.
+    """`report` with its Basemap rows as they read for `settings`' output type.
 
     The one row the type changes: OpenStreetMap refuses maps opened from a
-    file. Kept out of what a cached read depends on, so switching type is a
+    file, so the type decides whether an OpenStreetMap basemap warns, and
+    whether a basemap switcher offers it - which changes the servers its row
+    names. Kept out of what a cached read depends on, so switching type is a
     redraw rather than a re-read of every feature.
     """
-    general = basemap_note(settings.basemap)
-    if settings.basemap != "osm" or general is None:
+    if settings.basemap != "osm" and not settings.basemap_switcher:
         return report
-    wanted = (
-        OSM_FILE_NOTE
-        if osm_from_file(settings.basemap, settings.output_mode)
-        else general
-    )
+    wanted = basemap_notes(settings)
+    # Whatever the rows read as for any type: the read was made for one.
+    written = {
+        note
+        for mode in OutputMode
+        for note in basemap_notes(dataclasses.replace(settings, output_mode=mode))
+    }
+    items: list[FidelityItem] = []
+    placed = False
+    for item in report.items:
+        if item.subject == "Basemap" and item.detail in written:
+            if not placed:
+                items.extend(dataclasses.replace(item, detail=note) for note in wanted)
+                placed = True
+            continue
+        items.append(item)
     updated = FidelityReportBuilder()
-    updated.extend(
-        tuple(
-            dataclasses.replace(item, detail=wanted)
-            if item.subject == "Basemap" and item.detail in (OSM_FILE_NOTE, general)
-            else item
-            for item in report.items
-        )
-    )
+    updated.extend(tuple(items))
     return updated
 
 
@@ -503,6 +508,9 @@ def prepare_project(
             cluster=per_layer.cluster,
             scans=scans,
             map_time=map_time,
+            # Not in a cartograph's frames (`layer_order`): a filter panel is a
+            # control on the web map, and a frame is a map on a printed page.
+            filter_field=per_layer.filter_field if layer_order is None else None,
         )
         entries.append((map_layer.name(), prepared))
 
@@ -650,13 +658,12 @@ def finish_project(
     # A basemap is the only setting whose cost falls on the *recipient*, and it
     # cannot be undone once the file is sent - so it belongs in the report the
     # user reads before exporting, not only in the dialog they already left.
-    note = basemap_note(settings.basemap)
-    if osm_from_file(settings.basemap, settings.output_mode):
-        report.approximated("Basemap", OSM_FILE_NOTE)
-    elif note is not None:
+    notes = basemap_notes(settings)
+    for note in notes:
         report.approximated("Basemap", note)
-    elif (
-        pending.report_map_title
+    if (
+        not notes
+        and pending.report_map_title
         and pending.has_tile_layer
         and not any(layer.tiles for layer in layers)
     ):
@@ -815,6 +822,8 @@ def _declutter(
     """
     decluttered: list[ExportLayer] = []
     for layer in layers:
+        if layer.filter is not None and layer.cluster_allowed:
+            layer = _unclustered_for_its_filter(layer, report)
         layer, stacked = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)
         if layer.cluster_max_zoom is not None:
             report.approximated(
@@ -860,6 +869,28 @@ def _declutter(
             )
         decluttered.append(layer)
     return decluttered
+
+
+def _unclustered_for_its_filter(
+    layer: ExportLayer, report: FidelityReportBuilder
+) -> ExportLayer:
+    """`layer`, which has a filter, kept from clustering - and said so when it
+    would have clustered.
+
+    The runtime's filter hides points but does not count the bubbles again,
+    so a bubble would go on counting the points the reader filtered out.
+    """
+    clustered = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)[0]
+    if clustered.cluster_max_zoom is not None:
+        report.approximated(
+            f"Markers of '{layer.name}'",
+            f"{layer.feature_count:,} points pile up when zoomed out, but they "
+            "are not merged into count bubbles, because the layer has a filter "
+            "and the map's filter cannot count the bubbles again. Every point "
+            "shows at every zoom.",
+            layer.layer_id,
+        )
+    return dataclasses.replace(layer, cluster_allowed=False)
 
 
 @dataclasses.dataclass(frozen=True)

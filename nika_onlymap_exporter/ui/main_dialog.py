@@ -62,6 +62,7 @@ from qgis.PyQt.QtGui import (
     QPalette,
     QResizeEvent,
     QShowEvent,
+    QWheelEvent,
 )
 from qgis.PyQt.QtWidgets import (
     QAction,
@@ -84,6 +85,7 @@ from qgis.PyQt.QtWidgets import (
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QSpinBox,
     QStackedWidget,
     QStyle,
     QStyledItemDelegate,
@@ -97,6 +99,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from ..core.attribute_filter import CATEGORY_LIMIT
 from ..core.export_ir import (
     ExportProject,
     ExtentSource,
@@ -111,6 +114,7 @@ from ..core.fidelity_summary import (
     strip_message,
     summarise,
 )
+from ..core.layer_reader import filter_kind
 from ..core.license_policy import (
     default_policy,
     report_verdict,
@@ -141,7 +145,11 @@ from ..core.save_folders import (
     web_maps_folder,
 )
 from ..core.settings import (
+    MAX_PANEL_HEIGHT,
+    MAX_PANEL_WIDTH,
     MAX_PRECISION,
+    MIN_PANEL_HEIGHT,
+    MIN_PANEL_WIDTH,
     MIN_PRECISION,
     PRECISION_FULL,
     DialogOutput,
@@ -221,6 +229,13 @@ _OSM_FILE_NOTE_FOR_CATALOGUE = N_(
     "Choose Liberty - the same OpenStreetMap data - or another basemap, or "
     "export as a Folder for a website."
 )
+
+# The Map controls whose panel size can be set: the `DialogState` attributes
+# of each one's width and height.
+_PANEL_SIZE_ATTRIBUTES = {
+    "legend": ("legend_width", "legend_height"),
+    "layerSwitcher": ("layer_switcher_width", "layer_switcher_height"),
+}
 
 # The Share rows that act on the map file, so need one to have been chosen.
 SHARE_ACTIONS_ON_THE_FILE = frozenset({"copy_path", "reveal"})
@@ -619,6 +634,44 @@ def _search_key(text: str) -> str:
     """Case- and accent-insensitive form of `text` for the layer search."""
     decomposed = unicodedata.normalize("NFKD", text.casefold())
     return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+class _PanelSizeBox(QSpinBox):
+    """A legend or layer switcher dimension in pixels, or Auto when empty.
+
+    Auto is the value one below the range, shown as its special text, so the
+    down arrow from the smallest size reaches it and clearing the box picks
+    it. A typed number outside the range is clamped into it rather than
+    thrown away - 50 is the smallest size, not Auto. The wheel is ignored,
+    like the cartograph's spin boxes: it scrolls the tab behind.
+    """
+
+    def __init__(self, low: int, high: int, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._low = low
+        self.setRange(low - 1, high)
+        self.setSpecialValueText(tr("Auto"))
+        self.setSuffix(" px")
+        self.setKeyboardTracking(False)
+        self.setCorrectionMode(QSpinBox.CorrectionMode.CorrectToNearestValue)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def pixels(self) -> int | None:
+        value = self.value()
+        return None if value < self._low else value
+
+    def set_pixels(self, value: int | None) -> None:
+        self.setValue(self.minimum() if value is None else value)
+
+    def fixup(self, text: str | None) -> str:
+        digits = "".join(ch for ch in (text or "") if ch.isdigit())
+        if not digits:
+            return self.specialValueText()
+        return str(max(self._low, min(self.maximum(), int(digits))))
+
+    def wheelEvent(self, event: QWheelEvent | None) -> None:  # noqa: N802
+        if event is not None:
+            event.ignore()
 
 
 class _SearchBox(QLineEdit):
@@ -1082,6 +1135,13 @@ class MainDialog(QDialog):
         self.basemap_combo.currentIndexChanged.connect(self._on_basemap_changed)
         basemap_form.addRow(tr("Show behind the map"), self.basemap_combo)
 
+        self.basemap_switcher_check = QCheckBox(
+            tr("Let readers switch basemap"), basemap_box
+        )
+        self.basemap_switcher_check.setChecked(self.state.basemap_switcher)
+        self.basemap_switcher_check.toggled.connect(self._on_basemap_switcher_toggled)
+        basemap_form.addRow("", self.basemap_switcher_check)
+
         # Warning rather than help: this is the only setting that changes what
         # the *recipient's* machine does, and it cannot be undone after sending.
         self.basemap_warning = FittedLabel("", basemap_box)
@@ -1104,6 +1164,7 @@ class MainDialog(QDialog):
         self.terrain_warning.setWordWrap(True)
         basemap_form.addRow("", self.terrain_warning)
         self._update_terrain_warning()
+        self._update_basemap_switcher()
         layout.addWidget(basemap_box)
 
         data_box = QGroupBox(tr("Data"), page)
@@ -1296,7 +1357,39 @@ class MainDialog(QDialog):
         # The terrain warning names the imagery draped over the relief, which
         # follows the basemap - so it changes when the basemap does.
         self._update_terrain_warning()
+        self._update_basemap_switcher()
         self._fidelity_is_stale = True
+
+    def _on_basemap_switcher_toggled(self, value: bool) -> None:
+        self.state.basemap_switcher = value
+        self._fidelity_is_stale = True
+
+    def _update_basemap_switcher(self) -> None:
+        """Offer the switcher only where the map can switch basemap.
+
+        Not with no basemap, which has nothing to switch from, nor with relief,
+        which replaces the basemap with a picture of it. The tick is kept while
+        it is unavailable, as the export ignores it then
+        (`manifest_builder.switcher_basemaps`).
+        """
+        if self.state.basemap == "none":
+            reason = tr("Choose a basemap first.")
+        elif self.state.terrain != "none":
+            reason = tr(
+                "Not with a ground surface: relief replaces the basemap with "
+                "imagery draped over it, which readers cannot switch."
+            )
+        else:
+            reason = ""
+        self.basemap_switcher_check.setEnabled(not reason)
+        self.basemap_switcher_check.setToolTip(
+            reason
+            or tr(
+                "Adds a panel to the map listing the other basemaps, so readers "
+                "can pick one. Each loads its tiles from its own server, which "
+                "the Fidelity tab names."
+            )
+        )
 
     def _update_basemap_warning(self) -> None:
         """Warn under the basemap when OpenStreetMap will fail its recipients.
@@ -1328,6 +1421,7 @@ class MainDialog(QDialog):
         value = self.terrain_combo.currentData()
         self.state.terrain = value if isinstance(value, str) else "none"
         self._update_terrain_warning()
+        self._update_basemap_switcher()
         self._fidelity_is_stale = True
 
     def _update_terrain_warning(self) -> None:
@@ -1996,7 +2090,7 @@ class MainDialog(QDialog):
         # vector features; a raster has no such rows, so no disclosure arrow.
         if not isinstance(layer, QgsVectorLayer):
             return
-        self._add_layer_options_row(parent, layer_id, settings)
+        self._add_layer_options_row(parent, layer, settings)
         if layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
             self._add_point_options_row(parent, layer, settings)
 
@@ -2052,16 +2146,18 @@ class MainDialog(QDialog):
             _fit_row_to_widget(child, row)
 
     def _add_layer_options_row(
-        self, parent: QTreeWidgetItem, layer_id: str, settings: LayerSettings
+        self, parent: QTreeWidgetItem, layer: QgsVectorLayer, settings: LayerSettings
     ) -> None:
-        """Per-layer overrides of three map-wide settings.
+        """Per-layer overrides of three map-wide settings, and a filter.
 
         Every control starts on "Same as map", so a project that never touches
         this row behaves exactly as before. qgis2web has carried these three as
         global-only since 2015 - its issues #131, #132 and #133 each ask for
         this and each is still open - and the reason it matters is that "all
-        layers alike except one" otherwise means configuring every layer.
+        layers alike except one" otherwise means configuring every layer. The
+        filter starts on none, for the same reason.
         """
+        layer_id = layer.id()
         item = QTreeWidgetItem(parent)
         item.setFirstColumnSpanned(True)
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
@@ -2123,9 +2219,45 @@ class MainDialog(QDialog):
         )
         layout.addWidget(highlight)
 
+        layout.addWidget(self._filter_combo(row, layer, settings))
+
         layout.addStretch(1)
         self.layer_tree.setItemWidget(item, 0, row)
         _fit_row_to_widget(item, row)
+
+    def _filter_combo(
+        self, row: QWidget, layer: QgsVectorLayer, settings: LayerSettings
+    ) -> QComboBox:
+        """ "Filter by": the fields a filter panel on the map can filter by."""
+        combo = QComboBox(row)
+        combo.setToolTip(
+            tr(
+                "Adds a panel to the map that filters this layer by the field: "
+                "a slider for a number or a date, a tick box for each value of "
+                "text (up to {limit} values). A filtered layer's points are not "
+                "merged into count bubbles, because the filter cannot count "
+                "them again."
+            ).format(limit=CATEGORY_LIMIT)
+        )
+        combo.addItem(tr("Filter by: none"), None)
+        for field in layer.fields():
+            if filter_kind(field) is not None:
+                combo.addItem(
+                    tr("Filter by: {field}").format(
+                        field=field.displayName() or field.name()
+                    ),
+                    field.name(),
+                )
+        combo.setCurrentIndex(max(0, combo.findData(settings.filter_field)))
+        layer_id = layer.id()
+        combo.currentIndexChanged.connect(
+            lambda _i, lid=layer_id, box=combo: self._on_layer_filter_changed(lid, box)
+        )
+        return combo
+
+    def _on_layer_filter_changed(self, layer_id: str, combo: QComboBox) -> None:
+        self.state.for_layer(layer_id).filter_field = combo.currentData()
+        self._fidelity_is_stale = True
 
     def _add_point_options_row(
         self, parent: QTreeWidgetItem, layer: QgsVectorLayer, settings: LayerSettings
@@ -2391,6 +2523,9 @@ class MainDialog(QDialog):
         chrome = QGroupBox(tr("Map controls"), page)
         chrome_layout = QVBoxLayout(chrome)
         self.widget_checks: dict[str, QCheckBox] = {}
+        # Width and height boxes beside the two panels whose size is theirs to
+        # set; zoom controls, scale bar and measure tool have fixed sizes.
+        self.widget_sizes: dict[str, tuple[_PanelSizeBox, _PanelSizeBox]] = {}
         for key, label, current in (
             ("legend", tr("Legend"), self.state.show_legend),
             ("layerSwitcher", tr("Layer switcher"), self.state.show_layer_switcher),
@@ -2401,8 +2536,11 @@ class MainDialog(QDialog):
             check = QCheckBox(label, page)
             check.setChecked(current)
             check.toggled.connect(lambda v, k=key: self._on_widget_toggled(k, v))
-            chrome_layout.addWidget(check)
             self.widget_checks[key] = check
+            if key in _PANEL_SIZE_ATTRIBUTES:
+                chrome_layout.addLayout(self._panel_size_row(key, check, page))
+            else:
+                chrome_layout.addWidget(check)
         layout.addWidget(chrome)
 
         layout.addWidget(self._build_caption_group(page))
@@ -2568,6 +2706,52 @@ class MainDialog(QDialog):
         highlight_row.addStretch(1)
         layout.addLayout(highlight_row)
         return box
+
+    def _panel_size_row(self, key: str, check: QCheckBox, page: QWidget) -> QHBoxLayout:
+        """`check` with the panel's width and height beside it, shown while
+        the panel is on the map."""
+        width_attribute, height_attribute = _PANEL_SIZE_ATTRIBUTES[key]
+        width = _PanelSizeBox(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH, page)
+        height = _PanelSizeBox(MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT, page)
+        width.set_pixels(getattr(self.state, width_attribute))
+        height.set_pixels(getattr(self.state, height_attribute))
+        width.setToolTip(
+            tr(
+                "Width in pixels, {low} to {high}. Auto is as wide as its "
+                "contents. On a narrower map it is as wide as the map."
+            ).format(low=MIN_PANEL_WIDTH, high=MAX_PANEL_WIDTH)
+        )
+        height.setToolTip(
+            tr(
+                "Height in pixels, {low} to {high}; what does not fit scrolls "
+                "inside it. Auto grows with its contents up to half the map. On "
+                "a shorter map it is as tall as the map."
+            ).format(low=MIN_PANEL_HEIGHT, high=MAX_PANEL_HEIGHT)
+        )
+        width.setAccessibleName(tr("{control} width").format(control=check.text()))
+        height.setAccessibleName(tr("{control} height").format(control=check.text()))
+        # Connected only once the values are in place, so restoring them never
+        # registers as the user changing one.
+        width.valueChanged.connect(
+            lambda _v, box=width, name=width_attribute: setattr(
+                self.state, name, box.pixels()
+            )
+        )
+        height.valueChanged.connect(
+            lambda _v, box=height, name=height_attribute: setattr(
+                self.state, name, box.pixels()
+            )
+        )
+        times = QLabel("\N{MULTIPLICATION SIGN}", page)
+        row = QHBoxLayout()
+        row.addWidget(check)
+        for widget in (width, times, height):
+            row.addWidget(widget)
+            widget.setVisible(check.isChecked())
+            check.toggled.connect(widget.setVisible)
+        row.addStretch(1)
+        self.widget_sizes[key] = (width, height)
+        return row
 
     def _on_widget_toggled(self, key: str, value: bool) -> None:
         attribute = {

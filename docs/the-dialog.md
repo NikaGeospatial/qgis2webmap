@@ -140,6 +140,17 @@ or Share ZIP export may see "Access blocked" tiles. The dialog warns under the
 basemap when you pick it for those types; choose **Liberty** instead - the same
 OpenStreetMap data, drawn a little differently - or export as a Folder.
 
+**Let readers switch basemap**, off by default, puts a Basemap panel in the
+map's top-left corner, under the layer switcher, listing every basemap above
+but None, with the map's own ticked; a reader picks another to switch to it.
+In a Standalone HTML or Share ZIP export it leaves out OpenStreetMap, which
+refuses maps opened from a file - unless OpenStreetMap is the basemap you
+chose. Each basemap a reader can switch to is another provider their browser
+may contact, so the Fidelity tab names every one of them. It needs a basemap
+to switch from, so it is greyed out while the basemap is None, and while
+**Ground surface** is on, because relief replaces the basemap with imagery
+draped over it.
+
 **Ground surface** sits in the same group because it costs the recipient the same
 thing. **Flat** is the default; **Global relief** tilts the map so elevation
 shows, and fetches terrain tiles to do it. With a basemap chosen too, the
@@ -219,9 +230,30 @@ Expand a layer to list its fields. Each gets its own setting:
 
 **One exception, and it is deliberate.** A field the map *draws* with — the one a
 categorised or graduated style is based on, the one labels read their text from,
-or an extrusion height — stays in the file even when you hide it. Removing it
-would conceal nothing, since it is visible on the map either way; it would only
-break the drawing.
+an extrusion height, or the one the layer is filtered by — stays in the file
+even when you hide it. Removing it would conceal nothing, since it is visible on
+the map either way; it would only break the drawing.
+
+### Filter by
+
+The **This layer only** row of an expanded vector layer has **Filter by**,
+on *none* to start. Choose one of the layer's fields and the map gets a panel,
+top left under the layer switcher, headed by the field's alias, that filters
+the layer by it:
+
+- a **number** or a **date** gets a slider with a low and a high end, which
+  start at the smallest and largest value, so the map opens showing every
+  feature;
+- **text** gets a tick box for each of its values, with how many features have
+  it, all ticked. A field with more than 50 different values is refused — a
+  list that long is not a filter — and the Fidelity tab says so.
+
+Only those three kinds of field are offered. A feature with no value in the
+field is hidden while the layer has a filter, since the filter keeps features
+by their value; the Fidelity tab counts them. A filtered layer's points are not
+merged into count bubbles, because the map's filter cannot count the bubbles
+again, and its labels stay on for features the filter hides. Cartograph frames
+carry no filter panel.
 
 ### Set every field to … Apply to all layers
 
@@ -255,6 +287,18 @@ shape, **Clear** removes it, and clicking the same button again ends measuring.
 While it is measuring, a click places a point rather than opening a popup.
 Distances and areas are measured on the ground, whatever CRS the project uses.
 It sits above the zoom controls in the bottom-left corner.
+
+Beside **Legend** and **Layer switcher**, while each is ticked, two boxes set
+that panel's width and height in pixels — width 140 to 600, height 100 to
+1000; a number outside that is brought into it. Left on **Auto**, the panel is
+as it has always been: as wide as its contents and as tall as them, up to half
+the map, scrolling inside past that. A height the contents do not fill leaves
+the panel that tall, and longer contents scroll inside it. Whatever is set,
+the panel stays on the map: on a smaller window it is at most the map's width
+and height, so the page never scrolls. A WMS or WMTS layer's legend picture
+takes the width of a legend whose width is set, and scrolls with a legend
+whose height is set. The zoom controls, scale bar and measure tool have fixed
+sizes; **Size** under [Control colours](#control-colours) scales them all.
 
 The layer switcher is the one exception to that. It only appears when the map
 has more than one thing to switch between, so a map with a single unlabelled

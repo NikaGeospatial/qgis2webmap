@@ -24,6 +24,26 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
   the zoom controls, bottom left, and is not drawn in a cartograph's
   interactive frames.
+- **Filter by**, a new choice on a vector layer's *This layer only* row in
+  the Layers tab: the web map gets a panel, top left, that filters the layer
+  by that field - a slider for a number or a date, a tick box per value for
+  text of up to 50 values (a field with more is refused and the Fidelity tab
+  says so). Headed by the field's alias. The Fidelity tab also says what it
+  cannot do: features with no value in the field are hidden while the filter
+  is there, a filtered layer's points are not merged into count bubbles, and
+  its labels are not filtered.
+- **Let readers switch basemap**, a new switch under the basemap on the Map
+  tab, off by default: the map carries a Basemap panel, top left under the
+  layer switcher, listing the keyless basemaps with the map's own ticked. In a
+  Standalone HTML or Share ZIP map it leaves out OpenStreetMap, whose servers
+  refuse maps opened from a file. The Fidelity tab and the export's list of
+  network dependencies name every provider the panel can reach. Not available
+  with no basemap or with a ground surface.
+- **A width and a height for the legend and the layer switcher**, beside
+  their switches on the Appearance tab: 140 to 600 pixels wide and 100 to
+  1000 tall, and never bigger than the map, so the page does not scroll; on a
+  narrow screen the width yields. Auto, the default, keeps them exactly as
+  they were. A WMS or WMTS legend picture follows the legend's size.
 - **Exporting without the dialog**, a new guide: batch exports from the
   Processing toolbox, the QGIS Python console and `qgis_process`, and the
   one-time runtime setup they need first.

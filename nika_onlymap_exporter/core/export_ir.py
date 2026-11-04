@@ -864,6 +864,47 @@ class RasterSpec:
         }
 
 
+class FilterKind(str, Enum):
+    """What a layer's filter panel offers, from its field's type.
+
+    A number or a date is a range slider; text is a tick box per value. A date
+    and a date and time differ only in how the slider labels its ends.
+    """
+
+    NUMBER = "number"
+    DATE = "date"
+    DATETIME = "datetime"
+    TEXT = "text"
+
+
+@dataclass(frozen=True)
+class LayerFilterSpec:
+    """A panel on the web map that filters one layer by one of its fields.
+
+    `field_name` is the property the runtime filters on: the field itself, or
+    for a date its time in milliseconds, the only form the runtime's slider
+    reads (`core.attribute_filter`). `title` is the field's alias, the panel's
+    heading. A slider spans `value_range`, every feature's value; tick boxes
+    list `categories`, every value, all ticked, so the map opens showing what
+    QGIS shows.
+    """
+
+    field_name: str
+    title: str
+    kind: FilterKind
+    value_range: tuple[float, float] | None = None
+    categories: tuple[str, ...] = ()
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "field": self.field_name,
+            "title": self.title,
+            "kind": self.kind.value,
+            "range": list(self.value_range) if self.value_range else None,
+            "categories": list(self.categories),
+        }
+
+
 @dataclass(frozen=True)
 class LegendImage:
     """A legend picture a map service draws, loaded by the viewer's browser.
@@ -1124,6 +1165,8 @@ class ExportLayer:
     # The dialog's per-layer "Cluster dense points". Off, `declutter` leaves the
     # layer's points as they are however crowded.
     cluster_allowed: bool = True
+    # The dialog's per-layer "Filter by"; `None` - the default - is no filter.
+    filter: LayerFilterSpec | None = None
     renderer: RendererSpec = field(
         default_factory=lambda: RendererSpec(kind=RendererKind.UNSUPPORTED)
     )
@@ -1216,6 +1259,8 @@ class ExportLayer:
                 self.highlight_color.snapshot() if self.highlight_color else None
             ),
         }
+        if self.filter is not None:
+            data["filter"] = self.filter.snapshot()
         if self.popup_pictures:
             data["popupPictures"] = [
                 {"name": p.name, "sizeBytes": len(p.data)} for p in self.popup_pictures
@@ -1254,6 +1299,11 @@ class ExportSettings:
     # which is a privacy and longevity trade rather than a size one - tiles are
     # streamed, so the file does not grow at all.
     basemap: str = "none"
+    # A panel on the map that lets the reader switch the basemap to another of
+    # the keyless presets. Off by default: every preset it offers is one more
+    # third party the reader's browser can be sent to
+    # (`manifest_builder.switcher_basemaps`).
+    basemap_switcher: bool = False
     # A relief surface under the map, off by default and carrying the same cost
     # as a basemap: DEM tiles streamed from a third party on every open. It is
     # NOT read from the project, because it cannot be - a QGIS terrain is a local
@@ -1265,6 +1315,12 @@ class ExportSettings:
     # and scale bar - not the credit component, which stays fixed so attribution
     # cannot be shrunk out of legibility.
     chrome_scale: float = 1.0
+    # The legend's and layer switcher's size in CSS pixels, before
+    # `chrome_scale`; None is Auto, the runtime's own sizing.
+    legend_width: int | None = None
+    legend_height: int | None = None
+    layer_switcher_width: int | None = None
+    layer_switcher_height: int | None = None
     widget_background: Color | None = None
     widget_foreground: Color | None = None
     # None leaves the runtime's own highlight alone. qgis2web has no equivalent:
@@ -1309,8 +1365,14 @@ class ExportSettings:
             "showAbstract": self.show_abstract,
             "titleCorner": self.title_corner.value,
             "basemap": self.basemap,
+            "basemapSwitcher": self.basemap_switcher,
             "terrain": self.terrain,
             "chromeScale": self.chrome_scale,
+            "legendSize": [self.legend_width, self.legend_height],
+            "layerSwitcherSize": [
+                self.layer_switcher_width,
+                self.layer_switcher_height,
+            ],
             "widgetBackground": (
                 self.widget_background.snapshot() if self.widget_background else None
             ),

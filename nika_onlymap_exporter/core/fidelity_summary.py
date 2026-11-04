@@ -117,6 +117,8 @@ TOPIC_BY_HEAD = {
     "Labels": Topic.LABELS,
     "Names": Topic.LABELS,
     "Popup fields": Topic.POPUPS,
+    # A layer's filter panel (`layer_reader._report_filter`).
+    "Filter": Topic.DATA,
     "Data": Topic.DATA,
     "Data source": Topic.DATA,
     "Layer": Topic.DATA,

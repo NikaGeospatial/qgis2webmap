@@ -21,6 +21,7 @@ from nika_onlymap_exporter.core.export_ir import (
     Extent,
     ExtentSource,
     GeometryKind,
+    OutputMode,
     OverlayCorner,
     PopupFieldSpec,
     PopupSpec,
@@ -418,6 +419,124 @@ class TestBasemap:
             assert basemap_note(preset) is not None, preset
 
 
+class TestBasemapSwitcher:
+    """A panel that lets the reader switch to another keyless basemap."""
+
+    @staticmethod
+    def _options(markup: str) -> list[str] | None:
+        import re
+
+        found = re.search(
+            r'<om-widget type="basemap-switcher" options="([^"]*)"', markup
+        )
+        return found.group(1).split() if found else None
+
+    def test_it_is_off_by_default(self) -> None:
+        assert DialogState().basemap_switcher is False
+        assert self._options(build_manifest(make_project(basemap="positron"))) is None
+
+    def test_a_file_opened_map_offers_every_preset_but_osm(self) -> None:
+        """OpenStreetMap's servers refuse a page opened from a file."""
+        for mode in (OutputMode.STANDALONE_HTML, OutputMode.SHARE_ZIP):
+            markup = build_manifest(
+                make_project(
+                    basemap="positron", basemap_switcher=True, output_mode=mode
+                )
+            )
+            assert self._options(markup) == [
+                "positron",
+                "dark-matter",
+                "voyager",
+                "liberty",
+                "bright",
+            ], mode
+
+    def test_a_folder_offers_osm_too(self) -> None:
+        markup = build_manifest(
+            make_project(
+                basemap="liberty", basemap_switcher=True, output_mode=OutputMode.FOLDER
+            )
+        )
+        assert self._options(markup) == [p for p in BASEMAP_PRESETS if p != "none"]
+        assert 'position="top-left"' in markup.split('type="basemap-switcher"')[1]
+
+    def test_a_chosen_osm_stays_in_the_list_from_a_file(self) -> None:
+        """The author was warned; the switcher must still show the map's own."""
+        markup = build_manifest(make_project(basemap="osm", basemap_switcher=True))
+        assert (self._options(markup) or [])[0] == "osm"
+
+    @pytest.mark.parametrize(
+        "settings",
+        [
+            {"basemap": "none"},
+            {"basemap": "positron", "terrain": "terrarium"},
+            {"basemap": "positron", "map_crs": "EPSG:27700", "map_crs_def": "+x"},
+        ],
+    )
+    def test_it_needs_a_flat_web_map_with_a_basemap(self, settings) -> None:
+        markup = build_manifest(make_project(basemap_switcher=True, **settings))
+        assert self._options(markup) is None
+
+    def test_the_network_list_is_every_host_offered(self) -> None:
+        from nika_onlymap_exporter.core.manifest_builder import settings_network_hosts
+
+        def hosts(**settings) -> set[str]:
+            return set(settings_network_hosts(ExportSettings(**settings)))
+
+        assert hosts(basemap="positron") == {"openfreemap.org"}
+        assert hosts(basemap="positron", basemap_switcher=True) == {
+            "openfreemap.org",
+            "carto.com",
+        }
+        assert hosts(
+            basemap="positron", basemap_switcher=True, output_mode=OutputMode.FOLDER
+        ) == {"openfreemap.org", "carto.com", "openstreetmap.org"}
+
+    def test_the_note_names_every_host_a_reader_can_reach(self) -> None:
+        from nika_onlymap_exporter.core.manifest_builder import basemap_notes
+
+        (note,) = basemap_notes(
+            ExportSettings(
+                basemap="voyager", basemap_switcher=True, output_mode=OutputMode.FOLDER
+            )
+        )
+        assert "from carto.com every time" in note
+        assert "openstreetmap.org or openfreemap.org" in note
+        (from_file,) = basemap_notes(
+            ExportSettings(basemap="voyager", basemap_switcher=True)
+        )
+        assert "openstreetmap.org" not in from_file
+        assert "openfreemap.org" in from_file
+
+    def test_osm_from_a_file_keeps_its_warning_and_names_the_rest(self) -> None:
+        from nika_onlymap_exporter.core.manifest_builder import (
+            OSM_FILE_NOTE,
+            basemap_notes,
+        )
+
+        assert basemap_notes(ExportSettings(basemap="osm")) == (OSM_FILE_NOTE,)
+        warning, note = basemap_notes(
+            ExportSettings(basemap="osm", basemap_switcher=True)
+        )
+        assert warning == OSM_FILE_NOTE
+        assert "openfreemap.org or carto.com" in note
+
+    def test_scaled_it_grows_with_the_corner_not_over_the_switcher(self) -> None:
+        """Each panel scaled alone would grow down over the one under it."""
+        block = _widget_color_block(
+            make_project(basemap="positron", basemap_switcher=True, chrome_scale=2.0)
+        )
+        corner = block.split('[data-om-widget-slot="top-start"] {')[1].split("}")[0]
+        assert "transform: scale(2.0);" in corner
+        assert (
+            '[data-om-widget-slot="top-start"] > om-widget {\n        transform: none;'
+            in block
+        )
+        # Without the switcher the corner keeps the rules it always had.
+        alone = _widget_color_block(make_project(basemap="positron", chrome_scale=2.0))
+        assert 'data-om-widget-slot="top-start"' not in alone
+
+
 class TestChromeScale:
     """Sizing the map controls, measured rather than assumed.
 
@@ -496,3 +615,63 @@ class TestChromeScale:
         block = _widget_color_block(project)
         assert "--om-widget-bg" in block
         assert "transform: scale(1.5)" in block
+
+
+class TestPanelSizes:
+    """The legend's and layer switcher's width and height, from Appearance."""
+
+    @staticmethod
+    def _block(**settings) -> str:
+        from nika_onlymap_exporter.writers.onlymap_writer import _widget_color_block
+
+        return _widget_color_block(make_project(**settings))
+
+    def test_auto_emits_nothing(self) -> None:
+        """Auto is the runtime's own sizing, byte for byte."""
+        assert self._block() == ""
+        assert "omni-legend-graphic { max" not in build_manifest(make_project())
+
+    def test_a_set_size_is_the_panels_size(self) -> None:
+        block = self._block(legend_width=320, legend_height=480)
+        rule = block.split('om-widget[type="legend"],')[1].split("}")[0]
+        assert "width: 320px;" in rule
+        assert "height: 480px;" in rule
+        # The static legend a picture swatch needs is matched too.
+        assert 'om-widget[position="top-right"]:not([type]) {' in block
+
+    def test_the_map_caps_it_whatever_was_typed(self) -> None:
+        """The corner's half-the-map cap becomes the whole map less its insets,
+        and the panel yields to it, so the page never scrolls."""
+        block = self._block(layer_switcher_width=600, layer_switcher_height=1000)
+        slot = block.split('[data-om-widget-slot="top-start"] {')[1].split("}")[0]
+        assert "max-height: calc(100% - 24px);" in slot
+        assert "max-width: calc(100% - 24px);" in slot
+        panel = block.split('om-widget[type="layer-switcher"] {')[1].split("}")[0]
+        assert "max-width: 100%;" in panel
+
+    def test_the_cap_allows_for_the_controls_scale(self) -> None:
+        """The scale's transform grows the panel after layout."""
+        block = self._block(legend_height=900, chrome_scale=2.0)
+        assert "max-height: calc((100% - 24px) / 2.0);" in block
+
+    def test_only_the_dimension_set_changes(self) -> None:
+        block = self._block(legend_width=300)
+        assert "height" not in block
+        assert "top-start" not in block
+
+    def test_a_panel_left_off_the_map_gets_no_rule(self) -> None:
+        assert self._block(show_legend=False, legend_width=300) == ""
+
+    def test_a_service_legend_picture_follows_a_sized_legend(self) -> None:
+        from nika_onlymap_exporter.core.manifest_builder import _legend_style_element
+
+        style = "\n".join(_legend_style_element("", ExportSettings(legend_width=400)))
+        assert ".omni-legend-graphic { max-width: none; }" in style
+        style = "\n".join(
+            _legend_style_element(
+                "", ExportSettings(legend_width=400, legend_height=600)
+            )
+        )
+        assert ".omni-legend-graphic { max-width: none; max-height: none; }" in style
+        auto = "\n".join(_legend_style_element("", ExportSettings()))
+        assert "max-width: none" not in auto

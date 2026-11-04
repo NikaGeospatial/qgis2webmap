@@ -440,6 +440,201 @@ class TestMeasureToolSwitch:
             dialog.close()
 
 
+class TestPanelSizes:
+    """Width and height boxes beside the Legend and Layer switcher switches."""
+
+    def test_sizes_round_trip_and_auto_is_none(self, project) -> None:
+        save_state(
+            project,
+            DialogState(legend_width=320, legend_height=480, layer_switcher_height=200),
+        )
+        state = load_state(project)
+        assert (state.legend_width, state.legend_height) == (320, 480)
+        assert (state.layer_switcher_width, state.layer_switcher_height) == (
+            None,
+            200,
+        )
+        settings = state.to_export_settings()
+        assert (settings.legend_width, settings.layer_switcher_height) == (320, 200)
+
+    def test_a_project_saved_before_sizes_is_auto(self, project) -> None:
+        import json
+
+        save_state(project, DialogState(legend_width=320))
+        widgets = json.loads(project.readEntry("qgis2webmap", "widgets", "")[0])
+        for key in (
+            "legendWidth",
+            "legendHeight",
+            "layerSwitcherWidth",
+            "layerSwitcherHeight",
+        ):
+            del widgets[key]
+        project.writeEntry("qgis2webmap", "widgets", json.dumps(widgets))
+        state = load_state(project)
+        assert state.legend_width is None
+        assert state.layer_switcher_height is None
+
+    def test_a_hand_edited_size_is_clamped_or_auto(self, project) -> None:
+        import json
+
+        save_state(project, DialogState())
+        widgets = json.loads(project.readEntry("qgis2webmap", "widgets", "")[0])
+        widgets.update(
+            legendWidth=5000,
+            legendHeight=3,
+            layerSwitcherWidth="wide",
+            layerSwitcherHeight=True,
+        )
+        project.writeEntry("qgis2webmap", "widgets", json.dumps(widgets))
+        state = load_state(project)
+        assert (state.legend_width, state.legend_height) == (600, 100)
+        assert state.layer_switcher_width is None
+        assert state.layer_switcher_height is None
+
+    def test_the_boxes_show_only_while_the_control_is_on(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            assert set(dialog.widget_sizes) == {"legend", "layerSwitcher"}
+            width, height = dialog.widget_sizes["legend"]
+            # Hidden by the switch, not by the Appearance tab being unseen.
+            assert not width.isHidden() and not height.isHidden()
+            assert width.text() == height.text() == "Auto"
+            dialog.widget_checks["legend"].setChecked(False)
+            assert width.isHidden() and height.isHidden()
+            dialog.widget_checks["legend"].setChecked(True)
+            assert not width.isHidden()
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize(
+        ("typed", "expected"),
+        [("320", 320), ("50", 140), ("9000", 600), ("", None)],
+    )
+    def test_what_is_typed_is_clamped_into_the_range(
+        self, qgis_app, project, make_memory_layer, typed, expected
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            width, _height = dialog.widget_sizes["layerSwitcher"]
+            width.set_pixels(300)
+            width.lineEdit().setText(typed)
+            width.interpretText()
+            assert dialog.state.layer_switcher_width == expected
+            assert dialog.state.to_export_settings().layer_switcher_width == expected
+        finally:
+            dialog.close()
+
+    def test_the_height_has_its_own_range(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            _width, height = dialog.widget_sizes["legend"]
+            for typed, expected in (("5", 100), ("1200", 1000), ("750", 750)):
+                height.lineEdit().setText(typed)
+                height.interpretText()
+                assert dialog.state.legend_height == expected
+            # The step below the smallest size is Auto.
+            height.set_pixels(100)
+            height.stepDown()
+            assert height.text() == "Auto"
+            assert dialog.state.legend_height is None
+        finally:
+            dialog.close()
+
+    def test_it_opens_with_the_sizes_the_project_saved(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        save_state(project, DialogState(legend_width=250, layer_switcher_height=400))
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            assert dialog.widget_sizes["legend"][0].pixels() == 250
+            assert dialog.widget_sizes["legend"][1].pixels() is None
+            assert dialog.widget_sizes["layerSwitcher"][1].pixels() == 400
+        finally:
+            dialog.close()
+
+
+class TestBasemapSwitcherCheckbox:
+    """The Map tab's "Let readers switch basemap", beside the basemap choice."""
+
+    def test_the_choice_round_trips_and_starts_off(self, project) -> None:
+        assert load_state(project).basemap_switcher is False
+        save_state(project, DialogState(basemap="positron", basemap_switcher=True))
+        state = load_state(project)
+        assert state.basemap_switcher is True
+        assert state.to_export_settings().basemap_switcher is True
+
+    def test_it_is_offered_only_where_the_map_can_switch(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            check = dialog.basemap_switcher_check
+            assert check.text() == "Let readers switch basemap"
+            assert not check.isChecked()
+            # No basemap: nothing to switch from.
+            assert not check.isEnabled()
+            assert check.toolTip() == "Choose a basemap first."
+            dialog.basemap_combo.setCurrentIndex(
+                dialog.basemap_combo.findData("positron")
+            )
+            assert check.isEnabled()
+            check.setChecked(True)
+            assert dialog.state.to_export_settings().basemap_switcher is True
+            # Relief replaces the basemap, so there is nothing to switch.
+            dialog.terrain_combo.setCurrentIndex(
+                dialog.terrain_combo.findData("terrarium")
+            )
+            assert not check.isEnabled()
+            assert "ground surface" in check.toolTip()
+            dialog.terrain_combo.setCurrentIndex(dialog.terrain_combo.findData("none"))
+            assert check.isEnabled() and check.isChecked()
+        finally:
+            dialog.close()
+
+    def test_switching_type_redraws_the_hosts_without_a_read(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """A Folder's switcher offers OpenStreetMap; a file's does not, so its
+        Basemap row stops naming openstreetmap.org - redrawn, not re-read."""
+        dialog = TestFidelityStrip()._dialog(project, make_memory_layer)
+        try:
+            dialog.basemap_combo.setCurrentIndex(
+                dialog.basemap_combo.findData("positron")
+            )
+            dialog.basemap_switcher_check.setChecked(True)
+            dialog.mode_buttons[OutputMode.FOLDER].click()
+            export, report = dialog._read_current_project(None)
+            signature = dialog.state.data_snapshot()
+            dialog._cached_export, dialog._cached_report = export, report
+            dialog._cached_signature = signature
+            dialog._show_fidelity(report, signature)
+
+            def basemap_rows() -> list[str]:
+                summary = dialog._fidelity_summary
+                return [
+                    row.detail
+                    for g in summary.groups
+                    for row in g.rows
+                    if "basemap tiles" in row.detail
+                ]
+
+            (row,) = basemap_rows()
+            assert "openstreetmap.org" in row and "carto.com" in row
+            reads: list[str] = []
+            dialog._start_job = lambda *a, **k: reads.append("read")
+            dialog.mode_buttons[OutputMode.STANDALONE_HTML].click()
+            assert not dialog._fidelity_is_stale
+            (row,) = basemap_rows()
+            assert "openstreetmap.org" not in row and "carto.com" in row
+            assert reads == []
+        finally:
+            dialog.close()
+
+
 class TestShortWindows:
     """A short window scrolls a tab of stacked cards; it never crushes them."""
 
@@ -2019,7 +2214,7 @@ class TestDialogConstruction:
         row = _options_row(dialog, dialog.layer_tree.topLevelItem(0))
 
         combos = row.findChildren(QComboBox)
-        assert len(combos) == 2, "hover and precision"
+        assert len(combos) == 3, "hover, precision and the filter"
         assert row.findChild(QgsColorButton) is not None, "highlight colour"
         # Everything starts on "same as the map", so an untouched project is
         # unchanged by the existence of this row.
