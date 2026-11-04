@@ -343,3 +343,38 @@ class TestVectorTileService:
         exported, report = _read(qgis_core.QgsVectorTileLayer(source, "Bare"))
         assert exported is None
         assert "has none on the web" in _rows(report, FidelityStatus.UNSUPPORTED)
+
+
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+
+
+def test_a_government_style_reads_as_unchanged(qgis_app) -> None:
+    """swisstopo's light base map style: two tile sets named by TileJSON,
+    expressions, zoom functions and labels. Its addresses are moved to the
+    test's server, which has no sprites, as QGIS would find them offline."""
+    style = json.loads(
+        (FIXTURES / "swisstopo-lightbasemap-style.json").read_text(encoding="utf-8")
+    )
+    files: dict[str, bytes] = {}
+    with FakeCogServer(files) as host:
+        prefix = "https://vectortiles.geo.admin.ch/"
+        text = json.dumps(style).replace(prefix, host.url("/"))
+        files["/styles/style.json"] = text.encode()
+        moved = json.loads(text)
+        base = moved["sources"]["base_v1.0.0"]["url"].rsplit("/", 1)[0]
+        source = (
+            f"styleUrl={quote(host.url('/styles/style.json'), safe='')}&type=xyz"
+            f"&url={quote(base + '/{z}/{x}/{y}.pbf', safe='')}&zmax=14&zmin=0"
+        )
+        layer = qgis_core.QgsVectorTileLayer(source, "swisstopo")
+        _message, loaded = layer.loadDefaultStyle()
+        assert loaded
+        exported, report = _read(layer)
+    assert exported is not None, [item.detail for item in report.items]
+    tiles = exported.vector_tiles
+    assert tiles is not None
+    # The second of the style's two tile sets.
+    assert tiles.style_source == "base_v1.0.0"
+    assert "background layers are not drawn" in _rows(
+        report, FidelityStatus.APPROXIMATED
+    )

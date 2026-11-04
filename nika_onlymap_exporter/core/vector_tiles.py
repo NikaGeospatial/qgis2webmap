@@ -509,22 +509,36 @@ def publisher_style_state(
     return StyleState.UNCHANGED if ours == theirs else StyleState.RESTYLED
 
 
-def _style_source(style: Mapping[str, Any], url: str) -> str:
-    """The style's vector source the layer's tiles are, when it is not the
-    first one (`vector-style-source`); `""` for the first."""
+def _style_source(style: Mapping[str, Any], url: str) -> str | None:
+    """The style's vector source the layer's tiles are (`vector-style-source`):
+    `""` for the first, the source's name for another, and `None` when the
+    style has several and none can be told to be this layer's.
+
+    A source lists its tile addresses (`tiles`), or names a TileJSON document
+    (`url`) that lists them; QGIS keeps no copy of that document, so a TileJSON
+    source is this layer's when the tiles sit in the document's own folder, as
+    a publisher lays them out (`…/v1.0.0/tiles.json`, `…/v1.0.0/{z}/{x}/{y}`).
+    """
     sources = style.get("sources")
     if not isinstance(sources, dict):
         return ""
     vector = [
-        (key, value)
+        (str(key), value)
         for key, value in sources.items()
         if isinstance(value, dict) and value.get("type") == "vector"
     ]
     for index, (key, value) in enumerate(vector):
         tiles = value.get("tiles")
-        if isinstance(tiles, list) and url in tiles:
-            return "" if index == 0 else str(key)
-    return ""
+        document = value.get("url")
+        if isinstance(tiles, list):
+            matched = url in tiles
+        elif isinstance(document, str) and "/" in document:
+            matched = url.startswith(document.rsplit("/", 1)[0] + "/")
+        else:
+            matched = False
+        if matched:
+            return "" if index == 0 else key
+    return "" if len(vector) <= 1 else None
 
 
 # The style layer types the runtime does not draw on a vector tile layer.
@@ -626,6 +640,17 @@ def read_vector_tile_layer(
 
     assert style is not None
     url, dependency = _live_dependency(url, name)
+    style_source = _style_source(style, url)
+    if style_source is None:
+        report.unsupported(
+            subject,
+            "The publisher's style draws several tile sets, and none of them "
+            "is at this layer's address, so the web map cannot tell which part "
+            "of the style is this layer's. Add the layer from the address the "
+            "style names. The layer is omitted from the map.",
+            layer_id,
+        )
+        return None
     style_url, style_dependency = _live_dependency(
         style_url, name, what="style address"
     )
@@ -682,7 +707,7 @@ def read_vector_tile_layer(
         vector_tiles=VectorTileSpec(
             url=url,
             style_url=style_url,
-            style_source=_style_source(style, url),
+            style_source=style_source,
             min_zoom=_zoom("zmin"),
             max_zoom=_zoom("zmax"),
         ),

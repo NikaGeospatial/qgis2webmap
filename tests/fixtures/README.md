@@ -42,3 +42,12 @@ Exporting a real artifact needs the OnlyMap runtime, so without
 
 Add a fixture by adding a builder to `conftest.py` and a row here. Keep each one
 narrow: a fixture that exercises everything tells you nothing about what broke.
+
+## Recorded service responses
+
+`swisstopo-lightbasemap-style.json` is swisstopo's light base map style
+(`https://vectortiles.geo.admin.ch/styles/ch.swisstopo.lightbasemap.vt/style.json`,
+v1.26.0, fetched once on 2026-11-04), a government vector tile style with
+expressions, filters, zoom functions and labels. `tests/qgis/test_vector_tile_layers.py`
+serves it locally, its addresses moved to the test's own server, to check that a
+layer QGIS styled from it reads as unchanged. Style © swisstopo.
