@@ -1016,6 +1016,50 @@ class TileSpec:
         return snapshot
 
 
+class LiveMode(str, Enum):
+    """Where a web feature service layer's features come from in the map.
+
+    `LIVE_FIRST` loads them from the service in the reader's browser and
+    switches to the copy embedded at export when that fails; `LIVE_ONLY` has
+    no copy to switch to; `EMBEDDED` is the copy alone, as every service layer
+    was before 0.3.3.
+    """
+
+    LIVE_FIRST = "live-first"
+    EMBEDDED = "embedded"
+    LIVE_ONLY = "live-only"
+
+
+@dataclass(frozen=True)
+class LiveFeaturesSpec:
+    """A WFS, OGC API Features or ArcGIS FeatureServer layer, loaded live.
+
+    `url` is the request the runtime fills with the area in view
+    (`{bbox-crs84}` or `{bbox-epsg-4326}`, `core.live_features`), free of any
+    access key or login. Read with the user's per-layer `choice` (`None` is
+    automatic) and the reasons the layer's look is worked out from its
+    features at export (`embedded_only`); `core.live_features.resolve_live`
+    then settles `mode`, or drops the spec when the layer stays embedded.
+    """
+
+    url: str
+    host: str
+    service: str
+    mode: LiveMode = LiveMode.LIVE_FIRST
+    choice: LiveMode | None = None
+    embedded_only: tuple[str, ...] = ()
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "url": self.url,
+            "host": self.host,
+            "service": self.service,
+            "mode": self.mode.value,
+            "choice": None if self.choice is None else self.choice.value,
+            "embeddedOnly": list(self.embedded_only),
+        }
+
+
 # --------------------------------------------------------------------------
 # Popups
 # --------------------------------------------------------------------------
@@ -1268,6 +1312,9 @@ class ExportLayer:
     # The web addresses this layer's popups show pictures from, which the
     # recipient's browser fetches when a popup opens: network dependencies.
     popup_remote_pictures: tuple[str, ...] = ()
+    # A web feature service layer's live source (`LiveFeaturesSpec`); `None`
+    # for every other layer, and for one whose features stay embedded.
+    live: LiveFeaturesSpec | None = None
 
     def __post_init__(self) -> None:
         # Read-only all the way down (`core.read_only_json`), so the text kept
@@ -1330,6 +1377,8 @@ class ExportLayer:
         }
         if self.filter is not None:
             data["filter"] = self.filter.snapshot()
+        if self.live is not None:
+            data["live"] = self.live.snapshot()
         if self.popup_pictures:
             data["popupPictures"] = [
                 {"name": p.name, "sizeBytes": len(p.data)} for p in self.popup_pictures

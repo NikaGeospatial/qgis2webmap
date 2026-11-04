@@ -14,6 +14,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -33,6 +34,7 @@ from ..core.export_ir import (
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
+    FALLBACK_SCRIPT_TYPE,
     build_manifest,
     collect_attributions,
     needs_static_legend,
@@ -64,6 +66,7 @@ from ..packaging.runtime_manager import (
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
 # The measure tool's page script and styles, on a map that has the tool.
 MEASURE_TOOL_PATH = TEMPLATE_PATH.with_name("measure-tool.html")
+LAYER_NOTICE_PATH = TEMPLATE_PATH.with_name("layer-notice.html")
 METADATA_PATH = Path(__file__).resolve().parent.parent / "metadata.txt"
 
 
@@ -219,6 +222,9 @@ class OnlyMapWriter:
             manifest += "\n" + _NO_TICKS_HOOK
         if project.settings.show_measure:
             manifest += "\n" + MEASURE_TOOL_PATH.read_text(encoding="utf-8").rstrip()
+        notice = _layer_notice_block(project)
+        if notice:
+            manifest += "\n" + notice
 
         if runtime_file:
             # An import rather than a `src=` attribute, so the template's single
@@ -829,6 +835,43 @@ def _top_left_stack_block(project: ExportProject) -> str:
             "        transform: none;",
             "      }",
         ]
+    )
+
+
+def loads_layers_from_the_web(project: ExportProject) -> bool:
+    """Whether a layer of the map is read from the web as the map is used:
+    live features, a tile or map service, a remote raster - the layers that
+    can fail in the reader's browser."""
+    return any(
+        layer.live is not None
+        or layer.tiles is not None
+        or (layer.raster is not None and layer.raster.remote)
+        for layer in project.exportable_layers
+    )
+
+
+def _layer_notice_block(project: ExportProject) -> str:
+    """The page's answer to a layer that fails to load: live features switch
+    to their embedded copy, and anything else is named in a small notice
+    (`templates/layer-notice.html`). Empty for a map with no layer read from
+    the web, which has nothing that can fail that way.
+
+    The notice takes the bottom centre, the one slot the map's controls leave
+    free, or the top centre when the map's title is in the bottom one.
+    """
+    if not loads_layers_from_the_web(project):
+        return ""
+    settings = project.settings
+    title_below = settings.title_corner is OverlayCorner.BOTTOM_CENTER and bool(
+        _caption_block(project)
+    )
+    place = {
+        "position": "top-center" if title_below else "bottom-center",
+        "scale": round(settings.chrome_scale, 3),
+    }
+    template = LAYER_NOTICE_PATH.read_text(encoding="utf-8").rstrip()
+    return template.replace("@FALLBACK_TYPE@", FALLBACK_SCRIPT_TYPE).replace(
+        "@NOTICE_PLACE@", json.dumps(place)
     )
 
 

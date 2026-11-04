@@ -48,6 +48,7 @@ from .export_ir import (
     ExtentSource,
     FidelityItem,
     GeometryKind,
+    LiveMode,
     OutputMode,
 )
 from .extent_math import extent_from_geojson, union_extents
@@ -62,6 +63,7 @@ from .layer_reader import (
     follows_map_time,
     prepare_layer,
 )
+from .live_features import resolve_live
 from .manifest_builder import (
     DEFAULT_LABEL_SIZE,
     TERRAIN_PRESETS,
@@ -521,6 +523,11 @@ def prepare_project(
             # control on the web map, and a frame is a map on a printed page.
             filter_field=per_layer.filter_field if layer_order is None else None,
             map_crs=map_crs,
+            # Embedded in a cartograph's frames: a printed page shows the
+            # features it was made with, and its frames carry no fallback.
+            live_choice=(
+                per_layer.resolved_live() if layer_order is None else LiveMode.EMBEDDED
+            ),
         )
         entries.append((map_layer.name(), prepared))
 
@@ -697,6 +704,10 @@ def finish_project(
     extent = _resolve_extent(layers, report, settings, canvas_extent)
     layers = _translate_scale_visibility(pending.scale_basis, layers, extent, report)
     layers = _declutter(layers, report)
+    # After the declutter, which settles the count bubbles and labels that
+    # keep a service layer embedded; after the extent, which a live-only
+    # layer's features still give.
+    layers = _resolve_live(layers, report)
 
     _report_terrain(pending.terrain_kind, settings, report, pending.report_map_title)
 
@@ -882,6 +893,17 @@ def _declutter(
             )
         decluttered.append(layer)
     return decluttered
+
+
+def _resolve_live(
+    layers: list[ExportLayer], report: FidelityReportBuilder
+) -> list[ExportLayer]:
+    """Each web feature service layer live first, live only or embedded
+    (`core.live_features`), too big to carry past the size a single file is
+    warned at."""
+    from ..packaging.dependency_scanner import SINGLE_FILE_WARN_BYTES
+
+    return [resolve_live(layer, report, SINGLE_FILE_WARN_BYTES) for layer in layers]
 
 
 def _unclustered_for_its_filter(
