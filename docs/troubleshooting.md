@@ -32,9 +32,10 @@ faq:
       under Help, About.
   - q: Why is the Export button greyed out?
     a: >-
-      The reason is printed beside the button. Either the project has no vector
-      layer to export, or every layer is unticked in the Include column on the
-      Layers tab, or the Fidelity tab has a Blocked item naming the layer and
+      The reason is printed at the foot of the dialog. Either the project has no
+      vector or raster layer to export, or every layer is unticked in the
+      Include column on the Layers tab. A Blocked item does not grey it out:
+      Export asks first, and the Fidelity tab names the layer and
       the reason.
   - q: Why is my exported map blank, or showing a message about JavaScript?
     a: >-
@@ -155,13 +156,16 @@ on.
 
 ### Export is greyed out
 
-The reason is printed beside the button. The three you will meet:
+The reason is printed at the foot of the dialog. It is one of two:
 
 | The reason says | What to do |
 |---|---|
 | *Add a vector or raster layer to the project to export.* | The project has no layer the web map can draw - for example only ArcGIS map services or attribute tables |
 | *Tick at least one layer to include.* | Everything is unticked in the **Include** column on the Layers tab |
-| Something else | Open the **Fidelity** tab. A **Blocked** item names the layer and the reason |
+
+Export and Preview also go dark while a job is running, and come back when it
+finishes. A **Blocked** item on the **Fidelity** tab does not grey Export out:
+pressing it asks first, naming what the map will be missing.
 
 ### Extruded polygons export flat
 

@@ -491,30 +491,30 @@ opens the menu:
 | Row | What it does |
 |---|---|
 | **Copy file path** | Puts the map file's path on the clipboard |
-| **Show in file manager** | Opens the folder the map file is in |
+| **Show in file manager** (**Reveal in Finder** on macOS, **Show in Explorer** on Windows) | Opens the folder the map file is in |
 | **NIKA hosting: Join NIKA hosting waitlist ↗** | Hosting is not live yet; this opens a short waitlist form in your browser. It does not publish the map |
 | **Ask on Discord** | Opens the QGIS2WebMap channel on the NIKA Discord |
 
 **Copy file path and Show in file manager need a Save to path.** A new map
 has one from the start; if you clear the field on the Map tab they are greyed
 out, and each says so if you hover it. The other rows are always available.
-The two NIKA rows also need a map file, and say so if there is no Save to path;
-like Show in file manager, they write the map first when it is missing or out
-of date.
 
-**Show in file manager writes the map first** when it is missing or out of
-date, so it never points at something stale. Copy file path only copies the
-path, so it never waits for a write.
+**Neither writes the map.** Copy file path only copies the path, and Show in
+file manager opens the folder straight away - the folder the map will be
+written to, if it is not written yet. Export first if the project has moved
+on since the last export.
 
-Preview, Export and Share's file rows are greyed out when the map cannot be produced correctly,
-with the reason in the bar at the foot of the dialog rather than a silent
-refusal:
+Preview, Export and Share's file rows are greyed out when there is no map to
+produce, with the reason in the bar at the foot of the dialog rather than a
+silent refusal:
 
 | The reason says | Fix |
 |---|---|
 | *Add a vector or raster layer to the project to export.* | The project has no exportable layer |
 | *Tick at least one layer to include.* | Everything is unticked on the Layers tab |
-| A blocked item | Open the Fidelity tab; it names the layer and why |
+
+A **Blocked** item does not grey them out: Export asks first, naming what the
+map will be missing, and the Fidelity tab says why.
 
 ### Progress and Cancel
 

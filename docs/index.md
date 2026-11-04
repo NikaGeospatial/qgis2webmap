@@ -78,8 +78,8 @@ verdicts:
     - key: Blocked
       tone: blocked
       text: >-
-        Exporting would produce a broken map, so the Export button stays off
-        until it is fixed.
+        It cannot be carried into the map at all, so Export asks before going
+        on and names what the map will be missing.
 
 sections:
   - title: Start here
