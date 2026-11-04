@@ -141,7 +141,8 @@ basemap when you pick it for those types; choose **Liberty** instead - the same
 OpenStreetMap data, drawn a little differently - or export as a Folder.
 
 **Let readers switch basemap**, off by default, puts a Basemap panel in the
-map's top-left corner, under the layer switcher, listing every basemap above
+map's bottom-left corner, with the zoom controls, scale bar and measure tool,
+listing every basemap above
 but None, with the map's own ticked; a reader picks another to switch to it.
 In a Standalone HTML or Share ZIP export it leaves out OpenStreetMap, which
 refuses maps opened from a file - unless OpenStreetMap is the basemap you
@@ -286,7 +287,11 @@ total in metric, imperial or nautical units; **Enter** finishes the line or
 shape, **Clear** removes it, and clicking the same button again ends measuring.
 While it is measuring, a click places a point rather than opening a popup.
 Distances and areas are measured on the ground, whatever CRS the project uses.
-It sits above the zoom controls in the bottom-left corner.
+It sits in the bottom-left corner, which narrows upward like a pyramid: the
+widest control at the bottom, just above OnlyMap's licence notice - the measure
+tool, then the basemap panel, the scale bar and the zoom controls on top. On a
+window too short for the corner its controls fold into a drawer, as they do on
+a narrow one, rather than reach the panels in the top-left corner.
 
 Beside **Legend** and **Layer switcher**, while each is ticked, two boxes set
 that panel's width and height in pixels — width 140 to 600, height 100 to
@@ -316,8 +321,8 @@ worse than a missing one.
 - **Project description** draws the abstract from
   **Project Properties → Metadata**. Nothing appears if the project has none.
 - **Position** places the caption. All four corners already hold controls —
-  switcher top left, legend top right, zoom, scale and measure tool bottom
-  left, credit bottom right — so the two centre positions are the only
+  switcher top left, legend top right, zoom, scale, measure tool and basemap
+  panel bottom left, credit bottom right — so the two centre positions are the only
   genuinely clear space, and they are listed first.
 
 ### Control colours

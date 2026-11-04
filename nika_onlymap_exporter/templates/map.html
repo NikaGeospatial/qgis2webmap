@@ -670,6 +670,100 @@
       })();
     </script>
 
+    <!--
+      Folds the map's controls when the window is too short for them, as the
+      runtime folds them when it is too narrow. The bottom-left corner stacks
+      the measure tool, the basemap switcher, the scale bar and the zoom
+      controls on the licence badge; on a short window, or at a big Size,
+      that stack reached up into the top-left corner's panels, or past the top
+      of the map. The runtime folds by width alone, at
+      `--om-widget-fold-breakpoint`, so when a bottom-left control would
+      touch another one - or the top edge - this sets that width out of reach
+      and the controls go into their drawers. It remembers how much taller the
+      map had to be, and hands the width back once the map is that tall (or a
+      good deal wider or narrower, which changes what collides), so a window
+      made bigger again gets its controls back.
+    -->
+    <script>
+      (function () {
+        var map = document.querySelector("om-map");
+        if (!map || typeof ResizeObserver !== "function") return;
+        var GAP = 8;
+        var BAND = 40;
+        var CORNER = '[data-om-widget-slot="bottom-start"] > om-widget';
+        var OTHERS =
+          '[data-om-widget-slot]:not([data-om-widget-slot="bottom-start"]) > *';
+        var held = null;
+        // A legend or layer switcher given a size on the Appearance tab is as
+        // big as the author asked (`--q2w-sized`), up to the whole map, so it
+        // is not one the corner folds away from.
+        var boxes = function (selector) {
+          return [].filter
+            .call(document.querySelectorAll(selector), function (element) {
+              return !getComputedStyle(element).getPropertyValue("--q2w-sized");
+            })
+            .map(function (element) {
+              return element.getBoundingClientRect();
+            })
+            .filter(function (r) {
+              return r.width > 0 && r.height > 0;
+            });
+        };
+        // The runtime measures again when the attribute changes.
+        var refold = function () {
+          var value = map.getAttribute("widgets-fold") === "auto" ? "on" : "auto";
+          map.setAttribute("widgets-fold", value);
+        };
+        var check = function () {
+          var box = map.getBoundingClientRect();
+          if (held) {
+            if (box.height >= held.height || Math.abs(box.width - held.width) > BAND) {
+              held = null;
+              map.style.removeProperty("--om-widget-fold-breakpoint");
+              refold();
+            }
+            return;
+          }
+          if (document.querySelector("[data-om-widgets-folded]")) return;
+          var others = boxes(OTHERS);
+          var short = 0;
+          boxes(CORNER).forEach(function (r) {
+            short = Math.max(short, box.top + 12 - r.top);
+            others.forEach(function (o) {
+              if (
+                o.left < r.right &&
+                r.left < o.right &&
+                o.top < r.bottom + GAP &&
+                r.top - GAP < o.bottom
+              ) {
+                short = Math.max(short, o.bottom + GAP - r.top);
+              }
+            });
+          });
+          if (short <= 0) return;
+          held = { height: box.height + Math.ceil(short) + BAND, width: box.width };
+          map.style.setProperty("--om-widget-fold-breakpoint", "100000px");
+          refold();
+        };
+        var pending = false;
+        var later = function () {
+          if (pending) return;
+          pending = true;
+          requestAnimationFrame(function () {
+            pending = false;
+            check();
+            // The corner's controls change size as they are used.
+            document.querySelectorAll(CORNER).forEach(function (widget) {
+              sizes.observe(widget);
+            });
+          });
+        };
+        var sizes = new ResizeObserver(later);
+        sizes.observe(map);
+        new MutationObserver(later).observe(map, { childList: true, subtree: true });
+      })();
+    </script>
+
 @PREVIEW_HOOK@
     <!--
       The runtime. Inlined so this file works from a filesystem with no server

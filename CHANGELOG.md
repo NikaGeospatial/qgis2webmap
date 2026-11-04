@@ -21,9 +21,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   distance or an area on it, in metric, imperial or nautical units, measured
   on the ground whatever CRS the project uses. On by default, like the other
   map controls; untick **Measure tool** on the Appearance tab, or the
-  Processing algorithm's *Measure tool* parameter, to leave it off. It sits above
-  the zoom controls, bottom left, and is not drawn in a cartograph's
-  interactive frames.
+  Processing algorithm's *Measure tool* parameter, to leave it off. It sits
+  bottom left, just above the licence notice, and is not drawn in a
+  cartograph's interactive frames.
 - **Filter by**, a new choice on a vector layer's *This layer only* row in
   the Layers tab: the web map gets a panel, top left, that filters the layer
   by that field - a slider for a number or a date, a tick box per value for
@@ -33,8 +33,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   is there, a filtered layer's points are not merged into count bubbles, and
   its labels are not filtered.
 - **Let readers switch basemap**, a new switch under the basemap on the Map
-  tab, off by default: the map carries a Basemap panel, top left under the
-  layer switcher, listing the keyless basemaps with the map's own ticked. In a
+  tab, off by default: the map carries a Basemap panel, bottom left with the
+  zoom controls, scale bar and measure tool, listing the keyless basemaps with the map's own ticked. In a
   Standalone HTML or Share ZIP map it leaves out OpenStreetMap, whose servers
   refuse maps opened from a file. The Fidelity tab and the export's list of
   network dependencies name every provider the panel can reach. Not available
@@ -160,6 +160,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   credit is long, from about 540px wide down. The credit moves up clear of
   the badge and of whatever else is in the bottom row, and back down when
   there is room.
+- The bottom-left corner narrows upward, the widest control at the bottom:
+  the measure tool, then the basemap panel, the scale bar and the zoom
+  controls, all above the licence notice. Its controls are scaled by **Size**
+  so that the corner stacks them at their scaled size, and on a window too
+  short for them they fold into their drawer, as on a narrow one, rather than
+  reach the top-left corner's panels.
 - At a Size above Normal on the Appearance tab, the map controls fold into
   their drawers in time: at Largest the measure tool reached under the
   legend and past the edge of a phone's screen. A bigger size folds them at

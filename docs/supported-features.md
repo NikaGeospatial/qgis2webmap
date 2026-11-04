@@ -532,8 +532,8 @@ On the **Appearance** tab you can also:
   of your choosing. The description is the abstract from
   *Project Properties → Metadata*; nothing appears if the project has none.
   Corners are shared with the map controls — the layer switcher is top left,
-  the legend top right, the zoom, scale and measure tool bottom left, and the
-  OnlyMap credit bottom right.
+  the legend top right, the zoom, scale, measure tool and basemap panel bottom
+  left, and the OnlyMap credit bottom right.
 - **Set the size of the legend and the layer switcher**, a width and a height
   in pixels for each. Left on Auto, a panel is as wide as its contents and at
   most half the map tall; set, it is that size, but never bigger than the map,
@@ -591,7 +591,8 @@ The Fidelity tab names the provider you are depending on whenever a basemap is
 set.
 
 **Readers can switch basemap** if you tick *Let readers switch basemap* under
-the basemap. The map then carries a Basemap panel listing every basemap above,
+the basemap. The map then carries a Basemap panel, bottom left, listing every
+basemap above,
 the one you chose ticked, and switching to another fetches that one's tiles
 from its own provider - so the Fidelity tab names every provider the panel can
 reach. A Standalone HTML or Share ZIP map leaves OpenStreetMap out of the list,

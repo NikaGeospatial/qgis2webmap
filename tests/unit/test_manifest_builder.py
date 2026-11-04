@@ -550,7 +550,9 @@ class TestManifest:
     def test_the_measure_tool_is_on_by_default(self) -> None:
         markup = build_manifest(make_project())
         assert re.search(
-            r'<om-widget type="measure" position="bottom-left"></om-widget>', markup
+            r'<om-widget type="measure" order="\d+" position="bottom-left">'
+            r"</om-widget>",
+            markup,
         )
 
     def test_the_measure_tool_can_be_switched_off(self) -> None:
@@ -562,12 +564,24 @@ class TestManifest:
         assert 'type="zoom-controls"' in markup
         assert 'type="scale-bar"' in markup
 
-    def test_the_measure_tool_stacks_above_the_zoom_controls(self) -> None:
-        """Same corner, earlier in the page, so the runtime stacks it on top -
-        `_chrome_scale_block` lifts it on that assumption."""
-        markup = build_manifest(make_project())
-        assert markup.index('type="measure"') < markup.index('type="zoom-controls"')
-        assert WIDGET_POSITIONS["measure"] == WIDGET_POSITIONS["zoom-controls"]
+    def test_the_bottom_left_corner_narrows_upward(self) -> None:
+        """Widest at the bottom: the slot stacks by `order`, lowest on top."""
+        markup = build_manifest(
+            make_project(
+                settings=ExportSettings(basemap="positron", basemap_switcher=True)
+            )
+        )
+        orders = {
+            kind: int(re.search(rf'type="{kind}"[^>]*order="(\d+)"', markup).group(1))
+            for kind in ("zoom-controls", "scale-bar", "basemap-switcher", "measure")
+        }
+        assert sorted(orders, key=orders.get) == [
+            "zoom-controls",
+            "scale-bar",
+            "basemap-switcher",
+            "measure",
+        ]
+        assert {WIDGET_POSITIONS[kind] for kind in orders} == {"bottom-left"}
 
     def test_widgets_can_be_switched_off(self) -> None:
         project = make_project(

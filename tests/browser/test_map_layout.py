@@ -1,12 +1,14 @@
 """Where the exported map opens, and where its chrome sits, measured in the page.
 
-Four things a reader sees on opening a map, each checked in a real browser from
+What a reader sees on opening a map, each checked in a real browser from
 a file and over http: the whole data extent is on screen, tall or wide, in a
 desktop window and a phone's; the legend lists the top layer first, as QGIS
 does; the runtime's licence badge and our credit chip never cover each other
 down to a 320px phone; and the measure tool, at every Size, stays on the
 screen and off the other controls - folded into a drawer where the map is too
-narrow for it.
+narrow for it; and the bottom-left corner narrows upward, the widest control
+at the bottom, and folds away rather than reach the top-left corner on a short
+window.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -425,3 +427,78 @@ class TestTheMeasureToolAtEverySize:
                     assert not _overlap(tool, other), (
                         f"at {width}px and size {scale} it covers {other['name']}"
                     )
+
+
+BOTTOM_LEFT = ("measure", "basemap-switcher", "scale-bar", "zoom-controls")
+
+
+def _corner_map(runtime, destination: Path, scale: float) -> Path:
+    """Every bottom-left control, and a layer switcher over three layers in the
+    top-left corner for the stack to stay clear of."""
+    return _write(
+        runtime,
+        destination,
+        ExportProject(
+            title="Corner",
+            layers=tuple(
+                _layer(f"layer{n}", f"Layer {n}", [(0.1 * n, 51.1)]) for n in range(3)
+            ),
+            extent=Extent(west=-1.0, south=50.9, east=1.0, north=51.9),
+            settings=ExportSettings(
+                basemap="positron", basemap_switcher=True, chrome_scale=scale
+            ),
+        ),
+    )
+
+
+class TestTheBottomLeftCorner:
+    @pytest.mark.parametrize("how", HOW)
+    @pytest.mark.parametrize("scale", (0.85, 1.0, 1.25, 1.5, 2.0))
+    def test_it_narrows_upward_and_covers_nothing(
+        self, opener, runtime, tmp_path, scale, how
+    ) -> None:
+        entry = _corner_map(runtime, tmp_path, scale)
+        for height in (900, 700, 480):
+            page = opener(entry, how, (1200, height))
+            boxes = page.evaluate(
+                BOXES,
+                "om-widget, .om-credit, [data-om-badge], [data-om-fold-toggle]",
+            )
+            where = f"at size {scale}, 1200x{height}"
+            for box in boxes:
+                assert box["left"] >= 0 and box["top"] >= 0, f"{where}: {box}"
+                assert box["right"] <= 1200 and box["bottom"] <= height, (
+                    f"{where}: {box}"
+                )
+            for place, box in enumerate(boxes):
+                for other in boxes[place + 1 :]:
+                    assert not _overlap(box, other), (
+                        f"{where}: {box['name']} covers {other['name']}"
+                    )
+            corner = [b for b in boxes if b["name"] in BOTTOM_LEFT]
+            if not corner:
+                # Folded for room: the drawer holds them, and it fits.
+                assert page.locator("[data-om-fold-toggle]").count() > 0, where
+                continue
+            assert len(corner) == len(BOTTOM_LEFT), f"{where}: {corner}"
+            badge = next(b for b in boxes if b["name"] == "badge")
+            rising = sorted(corner, key=lambda b: -b["bottom"])
+            assert all(b["bottom"] <= badge["top"] for b in corner), where
+            widths = [round(b["right"] - b["left"]) for b in rising]
+            assert widths == sorted(widths, reverse=True), (
+                f"{where}: bottom to top {[b['name'] for b in rising]} {widths}"
+            )
+
+    def test_a_taller_window_gets_the_controls_back(
+        self, opener, runtime, tmp_path
+    ) -> None:
+        entry = _corner_map(runtime, tmp_path, 2.0)
+        page = opener(entry, "file", (1400, 480))
+        page.wait_for_selector('[data-om-fold-toggle="bottom"]', timeout=10_000)
+        page.set_viewport_size({"width": 1400, "height": 1100})
+        page.wait_for_function(
+            """() => !document.querySelector('[data-om-widgets-folded]')
+                 && document.querySelector('om-widget[type="measure"]')
+                      .closest('[data-om-widget-slot="bottom-start"]')""",
+            timeout=10_000,
+        )

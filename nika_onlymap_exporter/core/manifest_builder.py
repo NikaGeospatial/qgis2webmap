@@ -1859,13 +1859,30 @@ def _popup_behavior(
 WIDGET_POSITIONS = {
     "legend": "top-right",
     "layer-switcher": "top-left",
-    # Under the layer switcher: the other list of what the map shows.
-    "basemap-switcher": "top-left",
-    # Under both: each narrows one layer the switcher lists.
+    # Under the layer switcher: each narrows one layer the switcher lists.
     "filter": "top-left",
+    # With the other controls that work the map rather than list its layers.
+    "basemap-switcher": "bottom-left",
     "zoom-controls": "bottom-left",
     "scale-bar": "bottom-left",
     "measure": "bottom-left",
+}
+
+# The bottom-left corner as a pyramid: the widest control at the bottom, each
+# one above it narrower. The runtime stacks the corner's slot by `order`,
+# lowest at the top, and its licence badge - the widest of all, 346px - stays
+# under everything: it is mandated chrome, which the runtime always puts last.
+# Widths measured at Normal size in chromium: measure tool 279px, basemap
+# switcher 164px (its panel's own minimum is 140px), scale bar 89-115px (it
+# picks a round distance, so it changes as the map zooms, but stays under
+# 140px), zoom controls 30px (44px on a touch screen). Every Size scales them
+# alike, so the order holds at each one, and a control left off leaves the
+# rest in order.
+BOTTOM_LEFT_ORDER = {
+    "zoom-controls": 1,
+    "scale-bar": 2,
+    "basemap-switcher": 3,
+    "measure": 4,
 }
 
 
@@ -2312,9 +2329,10 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
         widgets.append(
             f'{indent}<om-widget type="basemap-switcher" '
             f'options="{" ".join(basemaps)}" '
+            f'order="{BOTTOM_LEFT_ORDER["basemap-switcher"]}" '
             f'position="{WIDGET_POSITIONS["basemap-switcher"]}"></om-widget>'
         )
-    # One panel per filtered layer, in draw order, under the switchers.
+    # One panel per filtered layer, in draw order, under the layer switcher.
     widgets.extend(
         build_filter_widget(layer, indent)
         for layer in project.exportable_layers
@@ -2323,16 +2341,19 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
     if settings.show_measure:
         widgets.append(
             f'{indent}<om-widget type="measure" '
+            f'order="{BOTTOM_LEFT_ORDER["measure"]}" '
             f'position="{WIDGET_POSITIONS["measure"]}"></om-widget>'
         )
     if settings.show_zoom_controls:
         widgets.append(
             f'{indent}<om-widget type="zoom-controls" '
+            f'order="{BOTTOM_LEFT_ORDER["zoom-controls"]}" '
             f'position="{WIDGET_POSITIONS["zoom-controls"]}"></om-widget>'
         )
     if settings.show_scale_bar:
         widgets.append(
             f'{indent}<om-widget type="scale-bar" '
+            f'order="{BOTTOM_LEFT_ORDER["scale-bar"]}" '
             f'position="{WIDGET_POSITIONS["scale-bar"]}"></om-widget>'
         )
 
