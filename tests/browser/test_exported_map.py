@@ -1505,11 +1505,13 @@ class TestTallControls:
                  .scrollTop > 0""",
             timeout=5_000,
         )
-        # The last layer's row can be scrolled into the panel's view.
+        # The legend's last row - the lowest, now the bottom layer, as the
+        # legend reads top layer first - can be scrolled into the panel's view.
         last = legend.evaluate(
             """el => {
-                const rows = [...el.shadowRoot.querySelectorAll('.omni-row')];
-                const row = rows[rows.length - 1].getBoundingClientRect();
+                const rows = [...el.shadowRoot.querySelectorAll('.omni-row')]
+                  .map(r => r.getBoundingClientRect());
+                const row = rows.reduce((a, b) => (b.bottom > a.bottom ? b : a));
                 const panel = el.getBoundingClientRect();
                 return row.bottom <= panel.bottom + 1 && row.top >= panel.top;
             }"""
