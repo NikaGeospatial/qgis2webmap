@@ -124,8 +124,12 @@ def _water_layer(tiles: VectorTileSpec, remote: bool) -> ExportLayer:
         source_kind=SourceKind.SERVICE if remote else SourceKind.FILE,
         renderer=RendererSpec(
             kind=RendererKind.SINGLE,
+            # An outline wide enough that the archive's roads, were they
+            # drawn by this layer, would show in its colour.
             symbol=SymbolSpec(
-                fill_color=Color(*WATER_FILL), stroke_color=Color(*WATER_FILL)
+                fill_color=Color(*WATER_FILL),
+                stroke_color=Color(*WATER_FILL),
+                stroke_width=6.0,
             ),
         ),
         popup=PopupSpec(enabled=False),
