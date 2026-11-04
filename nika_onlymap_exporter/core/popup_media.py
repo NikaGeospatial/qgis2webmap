@@ -256,7 +256,8 @@ def load_picture(path: Path) -> LoadedPicture | PictureProblem:
     (QImage, never QPixmap)."""
     try:
         stat = path.stat()
-    except OSError:
+    except (OSError, ValueError):
+        # ValueError: a value with a NUL in it, which no file can be named.
         return PictureProblem.MISSING
     if not path.is_file():
         return PictureProblem.MISSING

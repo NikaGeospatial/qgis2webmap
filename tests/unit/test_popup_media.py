@@ -372,6 +372,22 @@ class TestAttachPopupMedia:
         assert row.status is FidelityStatus.UNSUPPORTED
         assert words in row.detail and "'a.jpg'" in row.detail
 
+    def test_a_path_no_file_can_have_shows_as_text(self) -> None:
+        """A NUL cannot be in a file name, so the value names no file: the
+        popup shows it, and the export goes on, as for a missing picture."""
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=PICTURE)],
+            [{"photo": "photos/bad\x00.jpg"}],
+        )
+        report = FidelityReportBuilder()
+        # The real loader: it is the one that met the NUL.
+        [result] = attach_popup_media([layer], report)
+        assert _properties(result)[0]["photo_html"] == "photos/bad\x00.jpg"
+        assert result.popup_pictures == ()
+        [row] = report.items
+        assert row.status is FidelityStatus.UNSUPPORTED
+        assert "could not be found" in row.detail
+
     def test_the_maps_picture_budget_leaves_out_the_last_layers(self) -> None:
         big = MAX_EXPORT_PICTURE_BYTES // 2 + 1
         loader = FakeLoader(
