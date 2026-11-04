@@ -518,10 +518,15 @@ their own, so a labelled layer is enough to bring it back. The legend lists the
 top layer first, as QGIS does; the layer switcher lists them in the order the
 map draws them, bottom first.
 
-The measure tool measures distances and areas on the ground, in metric,
-imperial or nautical units, whatever CRS the project uses. It works in a map
-opened from a file, served from a website and in the Preview. It is not drawn
-in a cartograph's interactive frames, which are maps on a printed page.
+The measure tool measures distances and areas on the ground, whatever CRS
+the project uses, in the units chosen beside its switch on the Appearance tab:
+metric, imperial or nautical (nautical areas are in metric). The reader does
+not pick the units. A distance ends at its second point and hands clicks back
+to the map; an area closes on Ctrl + click (Cmd + click on a Mac), a
+double-click, a double-tap or Enter, with a hint above the tool while it is
+being drawn. It works in a map opened from a file, served from a website and
+in the Preview. It is not drawn in a cartograph's interactive frames, which
+are maps on a printed page.
 
 A WMS or WMTS layer's legend entry carries the picture the service draws for
 its legend, under the layer's name, as in QGIS. The reader's browser loads it

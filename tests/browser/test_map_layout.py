@@ -489,6 +489,56 @@ class TestTheBottomLeftCorner:
                 f"{where}: bottom to top {[b['name'] for b in rising]} {widths}"
             )
 
+    @pytest.mark.parametrize("scale", (1.0, 1.25))
+    def test_the_area_hint_takes_its_room_in_the_stack(
+        self, opener, runtime, tmp_path, scale
+    ) -> None:
+        """While an area is drawn the measure tool carries its Ctrl + click
+        hint above it, inside its own box, so the stack makes room for it as
+        for any taller control - and a narrow map's drawer holds it too."""
+        entry = _corner_map(runtime, tmp_path, scale)
+        selector = "om-widget, .om-credit, [data-om-badge], [data-om-fold-toggle]"
+        for size in ((1280, 800), (390, 844)):
+            page = opener(entry, "file", size)
+            where = f"at size {scale}, {size[0]}x{size[1]}"
+            toggle = page.locator('[data-om-fold-toggle="bottom"]')
+            if toggle.count():
+                toggle.click(timeout=10_000)
+                page.wait_for_timeout(200)
+            page.locator('om-widget[type="measure"] button[data-mode="area"]').click(
+                timeout=10_000
+            )
+            hint = page.locator('om-widget[type="measure"] .q2w-measure-hint')
+            hint.wait_for(state="visible", timeout=10_000)
+            page.wait_for_timeout(300)
+            boxes = page.evaluate(BOXES, selector)
+            tool = next(b for b in boxes if b["name"] == "measure")
+            spot = hint.bounding_box()
+            assert spot is not None
+            assert (
+                tool["left"] <= spot["x"]
+                and spot["x"] + spot["width"] <= tool["right"] + 0.5
+                and tool["top"] <= spot["y"] + 0.5
+            ), f"{where}: the hint is outside the tool: {spot} {tool}"
+            for box in boxes:
+                assert box["left"] >= 0 and box["top"] >= 0, f"{where}: {box}"
+                assert box["right"] <= size[0] and box["bottom"] <= size[1], (
+                    f"{where}: {box}"
+                )
+            for place, box in enumerate(boxes):
+                for other in boxes[place + 1 :]:
+                    assert not _overlap(box, other), (
+                        f"{where}: {box['name']} covers {other['name']}"
+                    )
+            assert page.evaluate(
+                "() => document.scrollingElement.scrollHeight <= innerHeight"
+            ), f"{where}: the page scrolls"
+            corner = [b for b in boxes if b["name"] in BOTTOM_LEFT]
+            if size[0] == 1280 and len(corner) == len(BOTTOM_LEFT):
+                rising = sorted(corner, key=lambda b: -b["bottom"])
+                widths = [round(b["right"] - b["left"]) for b in rising]
+                assert widths == sorted(widths, reverse=True), f"{where}: {widths}"
+
     def test_a_taller_window_gets_the_controls_back(
         self, opener, runtime, tmp_path
     ) -> None:

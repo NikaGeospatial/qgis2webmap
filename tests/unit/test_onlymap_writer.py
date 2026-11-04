@@ -171,6 +171,20 @@ class TestWriter:
         assert "&amp;" in html
         assert "<Paths>" not in html
 
+    @pytest.mark.parametrize("on", [True, False])
+    def test_the_measure_tools_page_script_comes_with_the_tool(
+        self, tmp_path, on
+    ) -> None:
+        """After the map, so it finds the widget, and only on a map with one:
+        `tests/browser/test_measure_tool.py` drives what it does."""
+        result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
+            make_project(settings=ExportSettings(show_measure=on)), tmp_path
+        )
+        html = result.entry_path.read_text()
+        assert ("q2w-measure-hint" in html) is on
+        if on:
+            assert html.index("</om-map>") < html.index("q2w-measure-hint")
+
     def test_mode_is_recorded(self, tmp_path) -> None:
         result = OnlyMapWriter(runtime_provider=FakeRuntime()).write(
             make_project(), tmp_path, mode=OutputMode.STANDALONE_HTML

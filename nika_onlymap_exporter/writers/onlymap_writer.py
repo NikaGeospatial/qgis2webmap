@@ -62,6 +62,8 @@ from ..packaging.runtime_manager import (
 )
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
+# The measure tool's page script and styles, on a map that has the tool.
+MEASURE_TOOL_PATH = TEMPLATE_PATH.with_name("measure-tool.html")
 METADATA_PATH = Path(__file__).resolve().parent.parent / "metadata.txt"
 
 
@@ -215,6 +217,8 @@ class OnlyMapWriter:
             for layer in project.exportable_layers
         ):
             manifest += "\n" + _NO_TICKS_HOOK
+        if project.settings.show_measure:
+            manifest += "\n" + MEASURE_TOOL_PATH.read_text(encoding="utf-8").rstrip()
 
         if runtime_file:
             # An import rather than a `src=` attribute, so the template's single

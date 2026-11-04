@@ -283,15 +283,26 @@ Five switches — **Legend**, **Layer switcher**, **Zoom controls**, **Scale bar
 
 The **measure tool** lets whoever opens the map measure on it. They pick
 **Measure distance** or **Measure area**, click points on the map, and read the
-total in metric, imperial or nautical units; **Enter** finishes the line or
-shape, **Clear** removes it, and clicking the same button again ends measuring.
-While it is measuring, a click places a point rather than opening a popup.
-Distances and areas are measured on the ground, whatever CRS the project uses.
+total. A distance is two points: the second click ends it, the line and its
+total stay on the map, and clicks go back to the map - popups, panning - until
+**Measure distance** is pressed again for a new one. An area takes as many
+points as needed and closes on **Ctrl + click** (**Cmd + click** on a Mac),
+which places its last point; a double-click, a double-tap on a touch screen or
+**Enter** close it too. While an area is being drawn a small hint above the
+tool says so. **Clear** removes the measurement, and clicking a pressed button
+again ends measuring. While it is measuring, a click places a point rather
+than opening a popup. Distances and areas are measured on the ground, whatever
+CRS the project uses.
 It sits in the bottom-left corner, which narrows upward like a pyramid: the
 widest control at the bottom, just above OnlyMap's licence notice - the measure
 tool, then the basemap panel, the scale bar and the zoom controls on top. On a
 window too short for the corner its controls fold into a drawer, as they do on
 a narrow one, rather than reach the panels in the top-left corner.
+
+Beside **Measure tool**, while it is ticked, **Metric**, **Imperial** and
+**Nautical** choose the units it reads in (with Nautical, areas stay metric).
+Metric is the default. The choice is saved with the project, and the exported
+map has no units control of its own: it measures in what you chose.
 
 Beside **Legend** and **Layer switcher**, while each is ticked, two boxes set
 that panel's width and height in pixels — width 140 to 600, height 100 to
