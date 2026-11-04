@@ -462,6 +462,33 @@ class TestAttachPopupMedia:
         assert "{{note}}" in markup and "{{{note}}}" not in markup
 
 
+class TestNetworkDependencies:
+    """The export's list of what the map fetches names a popup's web
+    pictures, so a map with them is never called offline."""
+
+    def _scan(self, value: str):
+        from nika_onlymap_exporter.packaging.dependency_scanner import scan
+
+        picture = LoadedPicture(b"jpeg-bytes", "image/jpeg", "jpg")
+        layer = _layer(
+            [PopupFieldSpec("photo", attachment=PICTURE)], [{"photo": value}]
+        )
+        loader = FakeLoader({Path("/project/a.jpg"): picture})
+        [layer] = attach_popup_media([layer], FidelityReportBuilder(), loader)
+        project = ExportProject(title="t", layers=(layer,))
+        return scan(project, FidelityReportBuilder())
+
+    def test_a_web_picture_is_one(self) -> None:
+        result = self._scan("https://example.org/a.jpg")
+        assert result.remote_dependencies == ("https://example.org/a.jpg",)
+        assert not result.is_offline
+
+    def test_a_carried_picture_is_not(self) -> None:
+        result = self._scan("a.jpg")
+        assert result.remote_dependencies == ()
+        assert result.is_offline
+
+
 class TestPictureMemory:
     """The pictures a map reads hold no more memory than the ones it carries."""
 

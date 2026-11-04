@@ -58,7 +58,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   folder or under the widget's default path are carried, wherever the path
   leads (`..`, an absolute path, a link): a picture anywhere else shows its
   path, and the Fidelity tab names it. Links and web pictures need an
-  internet connection when the map is viewed; carried pictures work offline.
+  internet connection when the map is viewed, and the export's list of
+  network dependencies names the web pictures; carried pictures work offline.
   The Fidelity tab says what was carried, made smaller or left out, and no
   attribute value can add markup to the page. qgis2web users report broken
   attribute links ([qgis2web#1126](https://github.com/qgis2web/qgis2web/issues/1126))

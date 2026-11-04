@@ -1265,6 +1265,9 @@ class ExportLayer:
     # `popup_media.file_version`), so a read kept for reuse is known to be
     # stale once one of them changes.
     popup_files: tuple[tuple[str, tuple[str, int, int] | None], ...] = ()
+    # The web addresses this layer's popups show pictures from, which the
+    # recipient's browser fetches when a popup opens: network dependencies.
+    popup_remote_pictures: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         # Read-only all the way down (`core.read_only_json`), so the text kept

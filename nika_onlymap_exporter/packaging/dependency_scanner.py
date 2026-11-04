@@ -349,6 +349,10 @@ def scan(
                 blocking.append(reason)
                 report.blocked(f"Data source of '{layer.name}'", reason, layer.layer_id)
 
+        # A popup's web pictures are fetched each time it opens; the reader
+        # has already said so in the Fidelity tab.
+        remote.extend(layer.popup_remote_pictures)
+
         # A map service's legend pictures are fetched from it on every open,
         # like its tiles - but only when there is a legend to show them in.
         if project.settings.show_legend and layer.tiles is not None:

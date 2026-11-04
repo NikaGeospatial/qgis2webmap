@@ -520,6 +520,7 @@ def _with_media(
         ),
         popup_pictures=tuple(pictures.values()),
         popup_files=tuple(versions.items()),
+        popup_remote_pictures=tuple(sorted(tally.remote)),
     )
 
 
