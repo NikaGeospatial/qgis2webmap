@@ -16,7 +16,7 @@ notes below are the things that are commonly assumed wrong.
 - Output is drawn by **OnlyMap** (deck.gl-based, GPU-rendered), not Leaflet and
   not OpenLayers. Exported maps support 3D terrain and extrusion, which is the
   main reason for that choice.
-- Verified against **QGIS 3.44 LTR** and **QGIS 4.0 (Qt6)**. Earlier 3.x
+- Verified against **QGIS 3.44 LTR** and **QGIS 4.2 (Qt6)**. Earlier 3.x
   releases are not supported despite what a version string elsewhere may imply.
 
 ## Rules that differ from what you probably assume
@@ -29,8 +29,11 @@ notes below are the things that are commonly assumed wrong.
   / 25,000-feature / 20 MB caps apply only to maps served over `http(s)` from a
   real domain. A Standalone HTML file someone opens from disk draws everything.
   Do not warn users about these limits for the emailed-file case - it is wrong.
-- **Nothing is uploaded automatically.** Export is entirely local. Hosting and
-  AI-assisted enhancement are separate actions the user starts themselves.
+- **Nothing is uploaded automatically.** Export is local; it reaches the web
+  only for layers QGIS itself reads from the web (a web service layer's
+  features, a web Cloud Optimized GeoTIFF's header), and sends nothing of the
+  user's. Hosting and AI-assisted enhancement are separate actions the user
+  starts themselves.
 - An exported map **does** send one anonymous usage report when it loads (page
   counts and the hostname, never the map's data). See the privacy page; do not
   claim the export is zero-network.
@@ -40,12 +43,43 @@ notes below are the things that are commonly assumed wrong.
   Folder or Share ZIP. XYZ, WMTS and WMS layers stay live and need a
   connection; a WMS only when it offers Web Mercator (EPSG:3857), a WMTS only
   on a Web Mercator tile grid, and the service must allow web pages to load
-  its images (CORS). WCS and ArcGIS services are not exported. Dense point layers cluster when zoomed out, and
-  crowded labels wait for a closer zoom. Data in any CRS is
+  its images (CORS). A WMS or WMTS layer's legend shows the service's legend
+  picture, loaded live. A time-enabled WMS (WMS-T) that follows QGIS's time is
+  a fixed snapshot of the time QGIS draws at export, with no time slider. A
+  Cloud Optimized GeoTIFF QGIS reads from an `https://` address is a live
+  layer only when it is a 3-band colour composite in Web Mercator, compressed
+  with DEFLATE, JPEG, WEBP or nothing (not LZW, ZSTD or LERC), on a server
+  allowing CORS and Range requests. WFS, OGC API Features and SensorThings
+  layers are downloaded once and embedded, a snapshot rather than a live feed.
+  WCS and ArcGIS map services are not exported. Dense point layers cluster when
+  zoomed out, and crowded labels wait for a closer zoom. Data in any CRS is
   reprojected to WGS84. **Scale-dependent visibility is exported** as a web zoom
   range matched at the map's centre; on a map spanning many degrees of latitude
   the switch points drift slightly towards its edges, and the Fidelity tab says
   by how much.
+- **Styling and labels:** single symbol, categorized, graduated and
+  **rule-based** renderers export. Rule-based is approximated: QGIS decides
+  which rule draws each feature at export, a feature two rules match shows only
+  the top symbol, and rule scale ranges and symbol levels are not kept. Labels
+  come from a field or a QGIS **expression** (worked out per feature at export,
+  so they show the data as it was then), with multi-part, repeated line labels
+  and Formatted numbers as QGIS draws them; rule-based labelling is exported
+  only when it is one rule with no filter or scale range, and otherwise shows
+  no labels. Collision handling, curved placement and callouts are not
+  exported.
+- **Popups show links and pictures**: `http`, `https` and `mailto` values
+  become links; a field with QGIS's Attachment widget set to Image shows its
+  pictures, carried with the map when they are in the project's folder (or
+  under the widget's default path), loaded live when they are web addresses.
+- **Map controls readers get:** legend, layer switcher, zoom, scale bar and a
+  **measure tool** (distance and area) by default; optionally a basemap
+  switcher, and a per-layer **filter panel** (a slider for a number or date
+  field, tick boxes for a text field of up to 50 values) set with *Filter by*
+  on the Layers tab.
+- **The Processing algorithm exports what the dialog saved** in the project
+  (layers, popups, labels, appearance); a title or map control passed to it
+  replaces the saved one. A project saved with "Export only the features in this
+  view" is refused there, as Processing has no QGIS view.
 - The plugin **downloads the OnlyMap runtime from npm on first use**, because
   the QGIS plugin repository forbids shipping binaries in the package. Exporting
   works offline after that. There is a documented offline/proxy path.
