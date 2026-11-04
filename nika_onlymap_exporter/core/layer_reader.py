@@ -1559,6 +1559,7 @@ def read_map_service(
     group_path: tuple[str, ...] = (),
     visible: bool = True,
     map_time: MapTime | None = None,
+    time_slider: bool = True,
 ) -> ExportLayer | None:
     """Read a WMS or WMTS layer as a live tile layer, or refuse it with a reason.
 
@@ -1576,7 +1577,8 @@ def read_map_service(
     now, worked out from `map_time` as QGIS works it out
     (`_wms_snapshot_time`), and is refused when that cannot be told. A time
     slider steps it through the service's times (`_wms_time_slider`); where
-    it cannot, the layer is a snapshot of that time.
+    it cannot, or `time_slider` is off (a cartograph's frame, which has no
+    controls), the layer is a snapshot of that time.
 
     The legend pictures QGIS's legend shows for the layer travel the same
     way, as addresses the browser loads (`TileSpec.legend`).
@@ -1725,8 +1727,11 @@ def read_map_service(
     ]
     slider: tuple[str, str, int, int] | str | None = None
     if takes_time and time is not None:
-        slider = _wms_time_slider(
-            map_services.value(pairs, "timeDimensionExtent"), time
+        slider = (
+            _wms_time_slider(map_services.value(pairs, "timeDimensionExtent"), time)
+            if time_slider
+            else "it is drawn in a cartograph's interactive frame, which has no "
+            "controls"
         )
     template = map_services.wms_get_map_template(
         map_services.prepare_url(get_map).rstrip("?&"),
@@ -2098,6 +2103,7 @@ def read_raster(
     group_path: tuple[str, ...] = (),
     visible: bool = True,
     map_time: MapTime | None = None,
+    time_slider: bool = True,
 ) -> ExportLayer | PendingRemoteRaster | None:
     """Read one raster layer into the normalized model.
 
@@ -2137,7 +2143,12 @@ def read_raster(
         return read_tile_service(layer, report, group_path=group_path, visible=visible)
     if provider_key == "wms" and _source_type(layer) in ("", "wmst", "wmts"):
         return read_map_service(
-            layer, report, group_path=group_path, visible=visible, map_time=map_time
+            layer,
+            report,
+            group_path=group_path,
+            visible=visible,
+            map_time=map_time,
+            time_slider=time_slider,
         )
 
     if provider_key == "arcgismapserver":
@@ -2841,6 +2852,7 @@ def read_layer(
     cluster: bool = True,
     map_time: MapTime | None = None,
     filter_field: str | None = None,
+    time_slider: bool = True,
 ) -> ExportLayer | None:
     """Read one layer into the normalized model, on the calling thread.
 
@@ -2864,6 +2876,7 @@ def read_layer(
         cluster=cluster,
         map_time=map_time,
         filter_field=filter_field,
+        time_slider=time_slider,
     )
     if isinstance(prepared, (PendingLayer, PendingRemoteRaster)):
         return prepared.finish(report)
@@ -2889,6 +2902,7 @@ def prepare_layer(
     map_time: MapTime | None = None,
     filter_field: str | None = None,
     map_crs: QgsCoordinateReferenceSystem | None = None,
+    time_slider: bool = True,
 ) -> ExportLayer | PendingLayer | PendingRemoteRaster | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
@@ -2922,6 +2936,9 @@ def prepare_layer(
 
     `map_crs` is the CRS QGIS draws the layer in, which its line labels are
     placed along (`translate_labeling`); `None` is the project's.
+
+    `time_slider` is off where the map has no controls (a cartograph's
+    frame): a WMS-T is then a snapshot of the time QGIS draws.
     """
     layer_id = layer.id()
     name = layer.name()
@@ -2931,7 +2948,12 @@ def prepare_layer(
         # to hide, no popup to build, no labels and no geometry to quantise.
         # Passing them along would only make the seam look wider than it is.
         return read_raster(
-            layer, report, group_path=group_path, visible=visible, map_time=map_time
+            layer,
+            report,
+            group_path=group_path,
+            visible=visible,
+            map_time=map_time,
+            time_slider=time_slider,
         )
 
     if layer.type() != QgsMapLayerType.VectorLayer:

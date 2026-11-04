@@ -521,6 +521,8 @@ def prepare_project(
             # control on the web map, and a frame is a map on a printed page.
             filter_field=per_layer.filter_field if layer_order is None else None,
             map_crs=map_crs,
+            # Nor is a WMS-T's time slider.
+            time_slider=layer_order is None,
         )
         entries.append((map_layer.name(), prepared))
 
