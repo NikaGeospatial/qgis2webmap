@@ -796,3 +796,43 @@ class TestMemory:
             _build(world, cache)
         assert cache.read_count == 4
         assert len(cache._entries) == 1
+
+
+class TestAProjectIsNotKeptAlive:
+    """A script's own `QgsProject()`, followed by a cache, used to live until
+    the interpreter shut down - after QGIS, which crashed on the way out."""
+
+    def test_a_followed_project_can_still_be_deleted(self, qgis_app) -> None:
+        import gc
+        import weakref
+
+        from nika_onlymap_exporter.core.build_cache import ProjectFollower
+
+        cleared: list[bool] = []
+        follower = ProjectFollower(lambda: cleared.append(True))
+        project = qgis_core.QgsProject()
+        follower.follow(project)
+        follower.follow(project)  # following twice is still one connection
+        alive = weakref.ref(project)
+
+        del project
+        gc.collect()
+
+        assert alive() is None
+        # What the cache held for it is dropped with it (a project being
+        # deleted is cleared on the way, so this may be heard twice).
+        assert cleared
+        follower.stop()
+
+    def test_a_cleared_project_still_empties_the_cache(self, qgis_app) -> None:
+        from nika_onlymap_exporter.core.build_cache import ProjectFollower
+
+        cleared: list[bool] = []
+        follower = ProjectFollower(lambda: cleared.append(True))
+        project = qgis_core.QgsProject()
+        follower.follow(project)
+        project.clear()
+        assert cleared == [True]
+        follower.stop()
+        project.clear()
+        assert cleared == [True]  # stopped: no longer listening
