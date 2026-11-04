@@ -36,12 +36,16 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ### Changed
 - The map runtime is OnlyMap 0.13.4.
 - **Tile and WMS services that refuse web pages (CORS) now show.** Their
-  tiles are drawn as plain pictures, under every other layer, hidden while
-  the map is tilted or rotated, and left out of pictures the map saves of
-  itself; they used to stay empty. Services that allow only `https://` pages,
-  such as Sachsen-Anhalt's (issue #2), now show in a map opened from a file
-  and in **Preview in browser** too. A service on `http://` still does not
-  draw in a map served over `https://` unless it also answers on `https://`.
+  Web Mercator tiles are drawn as plain pictures, under every other layer,
+  hidden while the map is tilted or rotated, and left out of pictures the
+  map saves of itself; they used to stay empty. Services that allow only
+  `https://` pages, such as Sachsen-Anhalt's (issue #2), now show in a map
+  opened from a file and in **Preview in browser** too. Still empty without
+  CORS: a WMS asked in another coordinate system, a WMTS on a national grid,
+  and any such layer in a cartograph frame drawn in another projection,
+  since those pictures are warped into place. A service on `http://` still
+  does not draw in a map served over `https://` unless it also answers on
+  `https://`.
 
 ### Fixed
 - Tile layers whose addresses carry no file extension (ArcGIS tile caches'

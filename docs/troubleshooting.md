@@ -300,19 +300,25 @@ reports the cause on its `om-validation-error` event. Common causes:
 - **The service answers with an error** - a WMS error message instead of a
   picture, or an HTTP error such as 404 - often because the layer name, style
   or time it is asked for no longer exists. The event quotes it.
+- **The service does not allow web pages to read its images (CORS), and
+  its pictures are warped into place** - a WMS asked in a coordinate system
+  other than Web Mercator, a WMTS on a national grid, or any such layer in a
+  cartograph frame drawn in another projection. The service must send an
+  `Access-Control-Allow-Origin` header (`*` for a map opened from a file);
+  only its provider can change that.
 - **The coordinate system could not be looked up.** A WMS asked in a
   coordinate system other than Web Mercator, or a WMTS on a national grid,
   needs that system's definition; for one the map does not carry, the
   reader's browser fetches it from epsg.io (the Fidelity tab says which), so
   the layer stays empty offline or when epsg.io cannot be reached.
 
-A service that does not allow web pages to read its images (no
+Otherwise, a service that does not allow web pages to read its images (no
 `Access-Control-Allow-Origin` header, or one that allows only `https://`
 sites, as Sachsen-Anhalt's does) is no longer a cause: QGIS is not a web
-page, so such a service works there, and the map now shows it too, as plain
-pictures. Those sit under every other layer of the map, whatever the layer
-order, are hidden while the map is tilted or rotated, and are left out of
-pictures the map saves of itself.
+page, so such a service works there, and the map now shows its Web Mercator
+tiles too, as plain pictures. Those sit under every other layer of the map,
+whatever the layer order, are hidden while the map is tilted or rotated, and
+are left out of pictures the map saves of itself.
 
 ### A WMS or WMTS layer's legend shows no picture
 

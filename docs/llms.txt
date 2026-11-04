@@ -44,8 +44,9 @@ notes below are the things that are commonly assumed wrong.
   connection; a WMS is asked in Web Mercator (EPSG:3857) when it offers it
   and otherwise in the coordinate system QGIS asks it in, a WMTS on its own
   tile grid, national grids included. A service that does not allow web
-  pages to read its images (CORS) still shows, as plain pictures under the
-  other layers. A WMS or WMTS layer's legend shows the service's legend
+  pages to read its images (CORS) still shows its Web Mercator tiles, as
+  plain pictures under the other layers; warped ones (another CRS, a
+  national grid) stay empty without CORS. A WMS or WMTS layer's legend shows the service's legend
   picture, loaded live. A time-enabled WMS (WMS-T) that follows QGIS's time
   opens at the time QGIS draws, with a time slider over the service's times
   (a fixed snapshot when that time is not one of them). A
