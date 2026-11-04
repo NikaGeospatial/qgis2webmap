@@ -177,7 +177,8 @@
         "tests/browser/test_popup_media.py",
         "tests/browser/test_popup_wrapping.py",
         "tests/browser/test_map_services.py",
-        "tests/browser/test_remote_cog.py"
+        "tests/browser/test_remote_cog.py",
+        "tests/browser/test_vector_tiles.py"
       ]
     },
     "export_pipeline": {
