@@ -544,14 +544,17 @@ class TestEditsThatTouchTheData:
 def _rule_based(world: World) -> None:
     """Draw the sites by rules on "pop", a rule-based layer's generated class."""
     from qgis.core import QgsMarkerSymbol, QgsRuleBasedRenderer
+    from rule_trees import qgis_made
 
-    root = QgsRuleBasedRenderer.Rule(None)
+    root = qgis_made(QgsRuleBasedRenderer.Rule(None))
     for label, expression, colour in (
         ("Small", '"pop" < 25', "#ff0000"),
         ("Large", "ELSE", "#0000ff"),
     ):
         symbol = QgsMarkerSymbol.createSimple({"color": colour})
-        root.appendChild(QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression, label))
+        root.appendChild(
+            qgis_made(QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression, label))
+        )
     world.sites.setRenderer(QgsRuleBasedRenderer(root))
 
 

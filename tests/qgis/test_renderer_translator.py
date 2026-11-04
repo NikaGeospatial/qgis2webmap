@@ -10,6 +10,7 @@ import bisect
 import re
 
 import pytest
+from rule_trees import qgis_made
 
 from nika_onlymap_exporter.core.export_ir import (
     ClassificationMethod,
@@ -359,10 +360,12 @@ def _rule_layer(rules, field_type: str = "string", values=None):
     values = values or ["Index", "Intermediate", "Other", None]
 
     def renderer():
-        root = qgis_core.QgsRuleBasedRenderer.Rule(None)
+        root = qgis_made(qgis_core.QgsRuleBasedRenderer.Rule(None))
         for number, (expression, colour, active, label) in enumerate(rules):
-            rule = qgis_core.QgsRuleBasedRenderer.Rule(
-                marker_symbol(colour, 2.0 + number), 0, 0, expression, label
+            rule = qgis_made(
+                qgis_core.QgsRuleBasedRenderer.Rule(
+                    marker_symbol(colour, 2.0 + number), 0, 0, expression, label
+                )
             )
             rule.setActive(active)
             root.appendChild(rule)
@@ -501,12 +504,14 @@ def _tree_layer(rules, extra_field: str | None = None):
                 if colour
                 else None
             )
-            rule = qgis_core.QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression, label)
+            rule = qgis_made(
+                qgis_core.QgsRuleBasedRenderer.Rule(symbol, 0, 0, expression, label)
+            )
             rule.setActive(active)
             parent.appendChild(rule)
             append(rule, children)
 
-    root = qgis_core.QgsRuleBasedRenderer.Rule(None)
+    root = qgis_made(qgis_core.QgsRuleBasedRenderer.Rule(None))
     append(root, rules)
     layer.setRenderer(qgis_core.QgsRuleBasedRenderer(root))
     return layer

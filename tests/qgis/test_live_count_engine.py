@@ -35,6 +35,7 @@ from qgis.core import (
     QgsRuleBasedRenderer,
 )
 from qgis.PyQt.QtCore import QRectF, QSize, Qt
+from rule_trees import qgis_made
 
 from nika_onlymap_exporter.core import live_count as lc
 
@@ -188,14 +189,16 @@ class TestWhatIsSwitchedOff:
     def test_rule_visibility_is_respected_and_a_feature_matching_two_rules_counts_once(
         self, page
     ) -> None:
-        root = QgsRuleBasedRenderer.Rule(None)
+        root = qgis_made(QgsRuleBasedRenderer.Rule(None))
         for label, expression in (
             ("a", "\"status\" = 'Active'"),
             ("b", '"status" = \'Active\' OR "cap" = 5'),
             ("c", "\"status\" = 'Closed'"),
         ):
-            rule = QgsRuleBasedRenderer.Rule(
-                QgsMarkerSymbol.createSimple({}), 0, 0, expression, label
+            rule = qgis_made(
+                QgsRuleBasedRenderer.Rule(
+                    QgsMarkerSymbol.createSimple({}), 0, 0, expression, label
+                )
             )
             root.appendChild(rule)
         page.sites.setRenderer(QgsRuleBasedRenderer(root))
@@ -489,22 +492,26 @@ class TestOnlyWhatTheCountReadsIsFetched:
             QgsSymbolLayer.Property.Size,
             QgsProperty.fromExpression('length("name")'),
         )
-        root = QgsRuleBasedRenderer.Rule(None)
-        root.appendChild(QgsRuleBasedRenderer.Rule(symbol, 0, 0, '"cap" = 10', "big"))
+        root = qgis_made(QgsRuleBasedRenderer.Rule(None))
+        root.appendChild(
+            qgis_made(QgsRuleBasedRenderer.Rule(symbol, 0, 0, '"cap" = 10', "big"))
+        )
         page.sites.setRenderer(QgsRuleBasedRenderer(root))
         outcome, asked = _counted_recording_requests(page, add_counter(page))
         _ok(outcome, count_sites(cap=10))
         assert [_names_read(page, request) for request in asked] == [["cap", "name"]]
 
     def test_a_rule_reading_every_attribute_reads_them_all(self, page) -> None:
-        root = QgsRuleBasedRenderer.Rule(None)
+        root = qgis_made(QgsRuleBasedRenderer.Rule(None))
         root.appendChild(
-            QgsRuleBasedRenderer.Rule(
-                QgsMarkerSymbol.createSimple({}),
-                0,
-                0,
-                "attributes()['status'] = 'Closed'",
-                "closed",
+            qgis_made(
+                QgsRuleBasedRenderer.Rule(
+                    QgsMarkerSymbol.createSimple({}),
+                    0,
+                    0,
+                    "attributes()['status'] = 'Closed'",
+                    "closed",
+                )
             )
         )
         page.sites.setRenderer(QgsRuleBasedRenderer(root))

@@ -381,12 +381,15 @@ class TestLiveLegendChecks:
         """It is exported as categories, so the browser changes its legend
         the same way."""
         from qgis.core import QgsRuleBasedRenderer
+        from rule_trees import qgis_made
 
         layout, map_item, parcels, _roads = _layout(project)
-        root = QgsRuleBasedRenderer.Rule(None)
+        root = qgis_made(QgsRuleBasedRenderer.Rule(None))
         root.appendChild(
-            QgsRuleBasedRenderer.Rule(
-                QgsFillSymbol.createSimple({"color": "red"}), 0, 0, "ELSE", "All"
+            qgis_made(
+                QgsRuleBasedRenderer.Rule(
+                    QgsFillSymbol.createSimple({"color": "red"}), 0, 0, "ELSE", "All"
+                )
             )
         )
         parcels.setRenderer(QgsRuleBasedRenderer(root))
