@@ -261,3 +261,116 @@ class TestTheGeneratedProperty:
         assert read.labeling.expression is None
         assert [text for _x, text in exported] == ["Alpha", "Beta"]
         assert "label_text" not in read.geojson["features"][0]["properties"]
+
+
+class TestALayerAnotherLayerReads:
+    """A label reading another layer (`aggregate`, `get_feature`) is worked
+    out on the worker, while the user may remove or edit that layer on the
+    GUI thread. QGIS fetches a layer an expression names on the thread that
+    owns it; the export must neither crash nor carry a value QGIS never had."""
+
+    COUNT = 3000
+
+    def _layers(self, project):
+        lookup = qgis_core.QgsVectorLayer(
+            "Point?crs=EPSG:4326&field=key:integer&field=code:string",
+            "lookup",
+            "memory",
+        )
+        rows = []
+        for key in range(3):
+            feature = qgis_core.QgsFeature(lookup.fields())
+            feature.setAttributes([key, f"code{key}"])
+            feature.setGeometry(qgis_core.QgsGeometry.fromWkt("Point(0 0)"))
+            rows.append(feature)
+        lookup.dataProvider().addFeatures(rows)
+        points = qgis_core.QgsVectorLayer(
+            "Point?crs=EPSG:4326&field=n:integer", "points", "memory"
+        )
+        features = []
+        for number in range(self.COUNT):
+            feature = qgis_core.QgsFeature(points.fields())
+            feature.setAttributes([number])
+            feature.setGeometry(
+                qgis_core.QgsGeometry.fromWkt(f"Point({number % 100} {number // 100})")
+            )
+            features.append(feature)
+        points.dataProvider().addFeatures(features)
+        settings = qgis_core.QgsPalLayerSettings()
+        settings.fieldName = (
+            "attribute(get_feature('lookup', 'key', \"n\" % 3), 'code')"
+            " || '/' || aggregate('lookup', 'count', \"key\")"
+        )
+        settings.isExpression = True
+        points.setLabeling(qgis_core.QgsVectorLayerSimpleLabeling(settings))
+        points.setLabelsEnabled(True)
+        project.addMapLayers([lookup, points])
+        return lookup, points
+
+    def _finish_on_a_worker(self, qgis_app, pending, during):
+        """`finish_project` on a thread while the GUI thread runs `during`
+        and keeps its event loop turning, as the dialog's does."""
+        import threading
+        import time
+
+        from nika_onlymap_exporter.core.project_reader import finish_project
+
+        done: list = []
+        errors: list[BaseException] = []
+        report = FidelityReportBuilder()
+
+        def work() -> None:
+            try:
+                done.append(finish_project(pending, report))
+            except BaseException as exc:  # reported on the test thread
+                errors.append(exc)
+
+        thread = threading.Thread(target=work, daemon=True)
+        thread.start()
+        qgis_app.processEvents()
+        during()
+        deadline = time.monotonic() + 120
+        while thread.is_alive() and time.monotonic() < deadline:
+            qgis_app.processEvents()
+            time.sleep(0.005)
+        assert not thread.is_alive(), "the worker never finished"
+        assert not errors, errors
+        (export,) = done
+        (layer,) = [read for read in export.layers if read.name == "points"]
+        field = layer.labeling.field_name
+        return [f["properties"].get(field) for f in layer.geojson["features"]], report
+
+    @pytest.mark.parametrize("change", ["none", "removed", "edited"])
+    def test_a_change_meanwhile_neither_crashes_nor_invents(
+        self, qgis_app, project, change
+    ) -> None:
+        from nika_onlymap_exporter.core.project_reader import prepare_project
+
+        lookup, points = self._layers(project)
+        pending = prepare_project(
+            project,
+            FidelityReportBuilder(),
+            selected_layer_ids=frozenset({points.id()}),
+        )
+
+        def during() -> None:
+            if change == "none":
+                return
+            if change == "removed":
+                project.removeMapLayer(lookup.id())
+                return
+            lookup.startEditing()
+            for feature in lookup.getFeatures():
+                lookup.changeAttributeValue(feature.id(), 1, feature["code"].upper())
+            lookup.commitChanges()
+
+        texts, _report = self._finish_on_a_worker(qgis_app, pending, during)
+        assert len(texts) == self.COUNT
+        possible = {None}
+        for key in range(3):
+            for code in (f"code{key}", f"CODE{key}"):
+                possible.add(f"{code}/3")
+        assert set(texts) <= possible, set(texts) - possible
+        if change == "none":
+            # The control: on the worker, the other layer is read at all.
+            assert texts[:3] == ["code0/3", "code1/3", "code2/3"]
