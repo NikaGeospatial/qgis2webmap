@@ -312,7 +312,7 @@ def report_service_legend(layer: ExportLayer, report: FidelityReportBuilder) -> 
             "contextual WMS legend); the map's is the layer's whole legend, "
             "which does not change as the map moves."
         )
-    report.approximated(f"Legend of '{layer.name}'", detail, layer.layer_id)
+    report.approximated(f"Legend picture of '{layer.name}'", detail, layer.layer_id)
 
 
 def scan(

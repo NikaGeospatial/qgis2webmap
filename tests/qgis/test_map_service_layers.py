@@ -474,7 +474,7 @@ class TestLegend:
         assert "access key" in " ".join(
             item.detail
             for item in report.items
-            if item.subject == "Legend of 'WMS'"
+            if item.subject == "Legend picture of 'WMS'"
             and item.status is FidelityStatus.UNSUPPORTED
         )
         assert "SENTINEL" not in repr(exported.snapshot()) + repr(report.items)
@@ -558,7 +558,7 @@ class TestCartographLegend:
         ]
         assert rows and "cannot show a picture" in rows[0]
         # The web map's row is for the web map's legend, which this is not.
-        assert not [i for i in report.items if i.subject == "Legend of 'WMS'"]
+        assert not [i for i in report.items if i.subject == "Legend picture of 'WMS'"]
 
     def test_a_legend_without_the_layer_says_nothing(self, project, services) -> None:
         report = self._report(project, services, legend_hides_it=True)

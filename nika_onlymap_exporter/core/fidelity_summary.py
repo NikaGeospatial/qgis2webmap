@@ -114,6 +114,9 @@ TOPIC_BY_HEAD = {
     "Contrast": Topic.SYMBOLOGY,
     "Height": Topic.SYMBOLOGY,
     "Scale visibility": Topic.SYMBOLOGY,
+    # A WMS/WMTS layer's own legend picture on a web map - not "Legend",
+    # which is a cartograph's legend item.
+    "Legend picture": Topic.SYMBOLOGY,
     "Labels": Topic.LABELS,
     "Names": Topic.LABELS,
     "Popup fields": Topic.POPUPS,

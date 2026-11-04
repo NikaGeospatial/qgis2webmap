@@ -313,7 +313,7 @@ class TestDependencyScanner:
         rows = [
             item.detail
             for item in report.items
-            if item.subject == "Legend of 'Roads'"
+            if item.subject == "Legend picture of 'Roads'"
             and item.status is FidelityStatus.APPROXIMATED
         ]
         return rows, result.remote_dependencies

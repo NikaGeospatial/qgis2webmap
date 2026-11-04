@@ -428,3 +428,10 @@ class TestFilterCounts:
         problems = frozenset({LOST, CHANGED})
         assert summary.topic_counts(problems)[Topic.MAP] == 1
         assert summary.topic_counts(problems)[Topic.SYMBOLOGY] == 1
+
+
+def test_a_web_map_legend_picture_is_not_a_layout_item() -> None:
+    from nika_onlymap_exporter.core.fidelity_summary import Topic, topic_of
+
+    assert topic_of("Legend picture of 'WMS'") is Topic.SYMBOLOGY
+    assert topic_of("Legend 'Main legend'") is Topic.LAYOUT

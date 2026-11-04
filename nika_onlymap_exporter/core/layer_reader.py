@@ -1501,7 +1501,7 @@ def _service_legend(
         if _carries_key(address):
             host = urlsplit(address).netloc.rpartition("@")[2]
             report.unsupported(
-                f"Legend of '{name}'",
+                f"Legend picture of '{name}'",
                 f"The address of this layer's legend picture on {host} carries "
                 "an access key, which the legend would write into the map for "
                 "anyone who receives it to copy. The picture is left out of the "
