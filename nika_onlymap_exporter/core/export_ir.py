@@ -622,6 +622,45 @@ class ElevationSpec:
 
 
 @dataclass(frozen=True)
+class LineLabelRepeat:
+    """How far apart a line's labels repeat along it.
+
+    `distance` and `units_per_pixel` are in the units of the plane the
+    layer's lines are measured in (`LabelingSpec.measure_plane`), fixed at the
+    layer's reference scale (`renderer_translator.reference_scale`): a repeat
+    distance in millimetres or pixels is the one QGIS would draw there.
+
+    `from_qgis` marks the layer's own "Repeat" setting, placed as QGIS places
+    it; otherwise the distance is the web map's default, which adds labels
+    either side of the one QGIS draws at the middle (`label_points`).
+    """
+
+    distance: float
+    units_per_pixel: float
+    from_qgis: bool = False
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "distance": self.distance,
+            "unitsPerPixel": self.units_per_pixel,
+            "fromQgis": self.from_qgis,
+        }
+
+
+@dataclass(frozen=True)
+class NumberFormat:
+    """QGIS's "Formatted numbers": a label that reads as a number is drawn
+    with `decimals` places, and a plus sign on a positive one with
+    `plus_sign`, in QGIS's own number format for its language."""
+
+    decimals: int = 3
+    plus_sign: bool = False
+
+    def snapshot(self) -> dict[str, Any]:
+        return {"decimals": self.decimals, "plusSign": self.plus_sign}
+
+
+@dataclass(frozen=True)
 class LabelingSpec:
     """Layer labelling, when enabled.
 
@@ -669,6 +708,17 @@ class LabelingSpec:
     # or polygon part rather than one on the longest or largest. A MultiPoint
     # is labelled at every point either way (see `label_points.label_anchors`).
     per_part: bool = False
+    # The plane a line's length is measured in, as QGIS measures it in its map
+    # CRS: "mercator" (Web Mercator, the web map's own) or "degrees" for a
+    # geographic one (see `label_points.MEASURE_PLANES`).
+    measure_plane: str = "mercator"
+    # Where labels repeat along a line layer's lines; `None` labels each line
+    # (or part) once, at half its length.
+    repeat: LineLabelRepeat | None = None
+    # QGIS's "Formatted numbers", applied as the label text is worked out at
+    # export (`layer_reader.LabelExpression`), which a formatted layer's
+    # labels always are.
+    number_format: NumberFormat | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -695,6 +745,11 @@ class LabelingSpec:
             "wrapChar": self.wrap_char,
             "autoWrapLength": self.auto_wrap_length,
             "perPart": self.per_part,
+            "measurePlane": self.measure_plane,
+            "repeat": self.repeat.snapshot() if self.repeat else None,
+            "numberFormat": (
+                self.number_format.snapshot() if self.number_format else None
+            ),
         }
 
 

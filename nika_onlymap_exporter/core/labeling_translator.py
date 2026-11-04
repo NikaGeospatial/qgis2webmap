@@ -15,22 +15,39 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import math
 import string
 from typing import TYPE_CHECKING, Any
 
 from qgis.core import (
+    Qgis,
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsCsException,
     QgsExpression,
     QgsExpressionContext,
     QgsExpressionContextUtils,
     QgsExpressionNodeColumnRef,
     QgsFeatureRequest,
+    QgsPalLayerSettings,
+    QgsPointXY,
+    QgsProject,
     QgsRuleBasedLabeling,
+    QgsUnitTypes,
 )
+from qgis.PyQt.QtCore import QLocale
 
-from .export_ir import MM_TO_PIXELS, Color, LabelingSpec
+from .export_ir import (
+    MM_TO_PIXELS,
+    Color,
+    LabelingSpec,
+    LineLabelRepeat,
+    NumberFormat,
+)
 from .fidelity_report import FidelityReportBuilder
-from .label_points import apply_capitalization
+from .label_points import apply_capitalization, to_plane
 from .render_units import to_pixels
+from .renderer_translator import reference_render_context, reference_scale
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from qgis.core import QgsVectorLayer
@@ -317,6 +334,14 @@ def translate_labeling(
     if not field_name:
         return LabelingSpec(enabled=False)
 
+    number_format = _number_format(settings, report, subject, layer_id)
+    if number_format is not None and expression is None:
+        # QGIS formats the text a label reads as a number in its own locale,
+        # which the web map cannot, so the field is worked out per feature at
+        # export as an expression would be, into a property of its own.
+        expression = QgsExpression.quotedColumnRef(field_name)
+        field_name = expression_label_property(layer)
+
     text_format = settings.format()
     font = text_format.font()
     buffer_settings = text_format.buffer()
@@ -388,6 +413,8 @@ def translate_labeling(
     anchor, baseline = read_quadrant(settings)
     wrap_char = str(getattr(settings, "wrapChar", "") or "")
     auto_wrap = int(getattr(settings, "autoWrapLength", 0) or 0)
+    plane = measure_plane()
+    repeat = _line_repeat(layer, settings, plane, report, subject, layer_id)
 
     report.approximated(
         subject,
@@ -423,7 +450,167 @@ def translate_labeling(
         wrap_char=wrap_char,
         auto_wrap_length=auto_wrap,
         per_part=bool(getattr(settings, "labelPerPart", False)),
+        measure_plane=plane,
+        repeat=repeat,
+        number_format=number_format,
     )
+
+
+def measure_plane() -> str:
+    """The plane QGIS measures lines in for labelling: its map CRS's, which
+    for a geographic CRS is plain degrees (`label_points.MEASURE_PLANES`)."""
+    crs = QgsProject.instance().crs()
+    return "degrees" if crs.isValid() and crs.isGeographic() else "mercator"
+
+
+# The web map's own repeat for line labels where QGIS sets none: MapLibre's
+# default `symbol-spacing`, the spacing web maps repeat line labels at. Fixed at
+# the layer's reference scale, where the layer fills the view, so a line that
+# crosses it carries a few labels there - none on a line shorter than three
+# spacings - and one about every screen two zooms in.
+DEFAULT_LINE_REPEAT_PX = 250.0
+
+
+def _line_repeat(
+    layer: QgsVectorLayer,
+    settings: Any,
+    plane: str,
+    report: FidelityReportBuilder,
+    subject: str,
+    layer_id: str,
+) -> LineLabelRepeat | None:
+    """How far apart a line layer's labels repeat, in `plane` units, or `None`
+    for any other layer, or one with no reference scale to fix it at.
+
+    QGIS's "Repeat" distance is converted by QGIS itself
+    (`QgsRenderContext.convertToMapUnits`, in its unit) at the layer's
+    reference scale, as the layer's map-unit symbol sizes are. Without its map
+    unit scale: QGIS 4.2's labelling draws a repeat in map units with a
+    minimum size or a scale limit set exactly as without one (measured by
+    rendering both), so applying it would repeat where QGIS does not.
+    """
+    if layer.geometryType() != Qgis.GeometryType.Line:
+        return None
+    scale = reference_scale(layer)
+    context = reference_render_context(layer)
+    per_map_unit = _plane_units_per_map_unit(layer, plane)
+    if scale is None or context is None or per_map_unit is None:
+        return None
+    context.setRendererScale(scale.scale_denominator)
+    units_per_pixel = context.mapToPixel().mapUnitsPerPixel() * per_map_unit
+
+    distance = float(getattr(settings, "repeatDistance", 0.0) or 0.0)
+    if _data_defined(settings, "RepeatDistance", "RepeatDistanceUnit"):
+        report.approximated(
+            subject,
+            "The labels' repeat distance is set by a data-defined override, "
+            "which the web map cannot work out per feature, so the layer's own "
+            "repeat setting is used.",
+            layer_id,
+        )
+    if not distance > 0:
+        return LineLabelRepeat(
+            DEFAULT_LINE_REPEAT_PX * units_per_pixel, units_per_pixel
+        )
+
+    unit = settings.repeatDistanceUnit
+    map_units = context.convertToMapUnits(distance, unit)
+    if not (map_units > 0 and math.isfinite(map_units)):
+        return None
+    report.approximated(
+        subject,
+        f"QGIS repeats these labels along each line every {distance:g} "
+        f"{QgsUnitTypes.toAbbreviatedString(unit)}, afresh at every scale. The "
+        "web map places the repeats once, at that spacing where the layer fills "
+        "the view, so they spread apart as you zoom in, and the labels show "
+        "from the zoom where the repeats have room.",
+        layer_id,
+    )
+    return LineLabelRepeat(map_units * per_map_unit, units_per_pixel, from_qgis=True)
+
+
+def _plane_units_per_map_unit(layer: QgsVectorLayer, plane: str) -> float | None:
+    """How long one of the layer CRS's map units is in `plane`, measured
+    across the middle of the layer's extent."""
+    extent = layer.extent()
+    if extent.isNull() or extent.isEmpty():
+        return None
+    centre = extent.center()
+    step = max(extent.width(), extent.height()) / 1000.0
+    try:
+        to_wgs84 = QgsCoordinateTransform(
+            layer.crs(),
+            QgsCoordinateReferenceSystem("EPSG:4326"),
+            QgsProject.instance().transformContext(),
+        )
+        west = to_wgs84.transform(QgsPointXY(centre.x() - step / 2, centre.y()))
+        east = to_wgs84.transform(QgsPointXY(centre.x() + step / 2, centre.y()))
+    except QgsCsException:
+        return None
+    (x0, y0), (x1, y1) = (
+        to_plane((west.x(), west.y()), plane),
+        to_plane((east.x(), east.y()), plane),
+    )
+    length = math.hypot(x1 - x0, y1 - y0)
+    return length / step if length > 0 and step > 0 else None
+
+
+def _data_defined(settings: Any, *names: str) -> bool:
+    """Whether any of the named label properties is data-defined."""
+    try:
+        properties = settings.dataDefinedProperties()
+        return any(
+            properties.isActive(getattr(QgsPalLayerSettings.Property, name))
+            for name in names
+        )
+    except (AttributeError, TypeError):  # pragma: no cover
+        return False
+
+
+def _number_format(
+    settings: Any, report: FidelityReportBuilder, subject: str, layer_id: str
+) -> NumberFormat | None:
+    """QGIS's "Formatted numbers", when it is on."""
+    if not getattr(settings, "formatNumbers", False):
+        return None
+    number_format = NumberFormat(
+        decimals=max(0, int(getattr(settings, "decimals", 3))),
+        plus_sign=bool(getattr(settings, "plusSign", False)),
+    )
+    sign = ", with a plus sign on positive numbers," if number_format.plus_sign else ""
+    report.preserved(
+        subject,
+        f"Labels that read as numbers are formatted as QGIS draws them, to "
+        f"{number_format.decimals} decimal place(s){sign} in QGIS's number "
+        "format for its language, when the map is exported.",
+        layer_id,
+    )
+    if _data_defined(settings, "NumFormat", "NumDecimals", "NumPlusSign"):
+        report.approximated(
+            subject,
+            "The labels' number formatting is set by a data-defined override, "
+            "which is not carried, so the layer's own Formatted numbers "
+            "setting is used.",
+            layer_id,
+        )
+    return number_format
+
+
+def format_label_number(text: str, number_format: NumberFormat) -> str:
+    """`text` as QGIS's "Formatted numbers" draws it.
+
+    QGIS reads the label text as a number the way Qt's C locale does - so
+    "1e3" and " 3.5 " are numbers and "1,5" is not, whatever the language -
+    and writes it back with `QLocale().toString(value, 'f', decimals)`: in its
+    own language's separators, rounded half away from zero, which Python's
+    own formatting does not do. A plus sign goes on a number above zero only.
+    Measured against QGIS 4.2's drawn labels in en_US, de_DE and fr_FR.
+    """
+    value, ok = QLocale.c().toDouble(text)
+    if not ok:
+        return text
+    formatted = QLocale().toString(value, "f", number_format.decimals)
+    return f"+{formatted}" if number_format.plus_sign and value > 0 else formatted
 
 
 # `QgsStringUtils::Capitalization`, by value rather than by name: the enum is

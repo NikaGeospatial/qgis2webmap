@@ -105,6 +105,24 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Print settings and Browser appearance fields; *Frames* and *Image frame
   resolution*, when passed, replace every map's saved choice.
 
+- **Line labels repeat along long lines.** With **Repeat** set in a line
+  layer's label placement, labels repeat where QGIS repeats them: the line cut
+  into equal pieces at least that long, each labelled at its middle, the
+  distance in millimetres, points, pixels or inches taken at the view where
+  the layer fills the map, and in map units or metres on the ground as set.
+  With no Repeat set, a long line is labelled again every 250 pixels at that
+  view, either side of the label QGIS draws at its middle, so a line keeps a
+  label in view as you zoom in; a line shorter than three spacings keeps its
+  one label. The repeats are fixed along the line, so a layer's labels show
+  from the zoom where no repeat overlaps the next. At most 50 labels sit on
+  one line and 5,000 on one layer; past either the repeats spread out, and the
+  Fidelity tab says so.
+- **Formatted numbers** in a layer's label settings apply to labels from a
+  field or an expression: a label that reads as a number has the decimal
+  places and plus sign QGIS draws, in QGIS's number format for its language
+  (for example `+1.234,50` in German, with a narrow no-break space between
+  thousands in French). The text is worked out at export.
+
 ### Fixed
 - A long popup value with nowhere to wrap - a file path, a web address, an
   ID - breaks onto the next line inside the popup instead of running past its
@@ -112,6 +130,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - A WMS layer made of several sublayers stacks them as QGIS draws them. The
   web map asked the service for them in the reverse order, so the one QGIS
   draws at the bottom covered the others; each sublayer's style stays with it.
+- A line's label sits at half its length along it, as QGIS places it. It was
+  on the line's middle vertex, which on a line of two vertices is one of its
+  ends.
+- A point layer's **Names** showing a different field from its labels draws
+  every accented or other non-ASCII letter of the names. Letters only the
+  names field used drew blank.
 - Labels on multi-part features land where QGIS draws them
   ([qgis2web#1095](https://github.com/qgis2web/qgis2web/issues/1095)): every
   point of a multipoint is labelled, not only the first; a multi-part line is

@@ -144,6 +144,8 @@
         "tests/qgis/test_renderer_translator.py",
         "tests/qgis/test_labeling_translator.py",
         "tests/qgis/test_label_parts.py",
+        "tests/qgis/test_line_label_repeats.py",
+        "tests/qgis/test_formatted_number_labels.py",
         "tests/qgis/test_expression_labels.py",
         "tests/qgis/test_symbol_rasterizer.py",
         "tests/qgis/test_raster_smoothing.py",

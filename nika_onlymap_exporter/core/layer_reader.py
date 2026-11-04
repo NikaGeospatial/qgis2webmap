@@ -49,6 +49,7 @@ from .export_ir import (
     LabelingSpec,
     LegendImage,
     NoDataRule,
+    NumberFormat,
     PopupSpec,
     RasterSpec,
     RendererKind,
@@ -58,7 +59,12 @@ from .export_ir import (
     TileSpec,
 )
 from .fidelity_report import FidelityReportBuilder
-from .labeling_translator import label_expression_context, translate_labeling
+from .labeling_translator import (
+    collect_character_set,
+    format_label_number,
+    label_expression_context,
+    translate_labeling,
+)
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
 from .renderer_translator import (
@@ -306,6 +312,8 @@ class LabelExpression:
     # The fields the expression reads, which the read must fetch; `None` when
     # it may read any of them (`attribute(@feature, ...)`).
     columns: frozenset[str] | None
+    # QGIS's "Formatted numbers", applied to each text that reads as a number.
+    number_format: NumberFormat | None = None
 
     def texts(
         self,
@@ -335,6 +343,8 @@ class LabelExpression:
                 failed += 1
                 first_error = first_error or expression.evalErrorString()
                 value = None
+            if value and self.number_format is not None:
+                value = format_label_number(value, self.number_format)
             texts.append({self.property_name: value or None})
         if failed:
             report.approximated(
@@ -365,6 +375,7 @@ def label_expression(
             if QgsFeatureRequest.ALL_ATTRIBUTES in columns
             else frozenset(str(name) for name in columns)
         ),
+        number_format=labeling.number_format,
     )
 
 
@@ -2397,17 +2408,24 @@ def _file_size(path: str) -> int | None:
 NAME_HALO = Color(255, 255, 255, 0.9)
 
 
-def point_names(labeling: LabelingSpec, field_name: str) -> LabelingSpec:
+def point_names(
+    labeling: LabelingSpec, field_name: str, character_set: str | None
+) -> LabelingSpec:
     """`labeling` showing `field_name`, always, with a halo.
 
     Built on the layer's own labelling when it has one, so its font and size
-    carry over; a halo is added only where QGIS set none.
+    carry over; a halo is added only where QGIS set none. `character_set` is
+    the names field's own (`collect_character_set`): the labelling's is its
+    label field's, and the atlas it builds *replaces* the runtime's, so a name
+    with a glyph only the names field uses would draw blank.
     """
     return dataclasses.replace(
         labeling,
         enabled=True,
         field_name=field_name,
         expression=None,
+        number_format=None,
+        character_set=character_set,
         halo_color=labeling.halo_color or NAME_HALO,
         halo_width=labeling.halo_width or 1.0,
     )
@@ -2750,7 +2768,15 @@ def prepare_layer(
         and kind is GeometryKind.POINT
         and layer.fields().indexOf(name_field) >= 0
     ):
-        labeling = point_names(labeling, name_field)
+        labeling = point_names(
+            labeling,
+            name_field,
+            collect_character_set(layer, name_field, labeling.capitalization)
+            if scans is None
+            else scans.character_set(
+                layer, name_field, labeling.capitalization, collect_character_set
+            ),
+        )
         report.preserved(
             f"Names on '{name}'",
             f"Each point's '{name_field}' shows beside it with a halo, without "

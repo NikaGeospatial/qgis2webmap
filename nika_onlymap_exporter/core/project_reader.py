@@ -52,6 +52,8 @@ from .export_ir import (
 )
 from .extent_math import extent_from_geojson, union_extents
 from .fidelity_report import FidelityReportBuilder
+from .label_points import MAX_LABELS_PER_LAYER, MAX_LABELS_PER_LINE, RepeatedLabels
+from .labeling_translator import DEFAULT_LINE_REPEAT_PX
 from .layer_reader import (
     WGS84,
     MapTime,
@@ -824,7 +826,8 @@ def _declutter(
     for layer in layers:
         if layer.filter is not None and layer.cluster_allowed:
             layer = _unclustered_for_its_filter(layer, report)
-        layer, stacked = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)
+        layer, stacked, repeated = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)
+        _report_repeats(layer, repeated, report)
         if layer.cluster_max_zoom is not None:
             report.approximated(
                 f"Markers of '{layer.name}'",
@@ -891,6 +894,42 @@ def _unclustered_for_its_filter(
             layer.layer_id,
         )
     return dataclasses.replace(layer, cluster_allowed=False)
+
+
+def _report_repeats(
+    layer: ExportLayer, repeated: RepeatedLabels, report: FidelityReportBuilder
+) -> None:
+    """Say where the web map repeats labels QGIS draws once, and where the
+    caps on repeated labels spread them wider than set."""
+    subject = f"Labels on '{layer.name}'"
+    repeat = layer.labeling.repeat
+    if repeated.neighbours and repeat is not None and not repeat.from_qgis:
+        report.approximated(
+            subject,
+            "QGIS labels each line once. On a long line the web map repeats "
+            f"the label every {DEFAULT_LINE_REPEAT_PX:g} pixels at the view "
+            "where the layer fills the screen, so the line keeps a label in "
+            "view as you zoom in, and the labels show from the zoom where the "
+            "repeats have room. A Repeat distance in the layer's label "
+            "placement in QGIS sets the spacing instead.",
+            layer.layer_id,
+        )
+    if repeated.lines_capped:
+        report.approximated(
+            subject,
+            f"A line carries at most {MAX_LABELS_PER_LINE} repeats of its "
+            f"label, so on {repeated.lines_capped:,} long line(s) they are "
+            "spread further apart than the repeat distance.",
+            layer.layer_id,
+        )
+    if repeated.spread > 1:
+        report.approximated(
+            subject,
+            f"Repeated along every line, this layer's labels would be more than "
+            f"{MAX_LABELS_PER_LAYER:,} for the map to carry, so they repeat "
+            f"{repeated.spread:g} times further apart than the repeat distance.",
+            layer.layer_id,
+        )
 
 
 @dataclasses.dataclass(frozen=True)

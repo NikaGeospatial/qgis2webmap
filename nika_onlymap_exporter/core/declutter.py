@@ -24,7 +24,13 @@ import math
 from collections.abc import Sequence
 
 from .export_ir import ExportLayer, GeometryKind
-from .label_points import LABEL_PROPERTY, build_label_collection
+from .label_points import (
+    GLYPH_WIDTH,
+    LABEL_PROPERTY,
+    RepeatedLabels,
+    build_label_collection_noting_repeats,
+)
+from .zoom_range import WORLD_PIXELS_AT_ZOOM_0
 
 # A layer this small reads fine unclustered at any zoom.
 CLUSTER_MIN_POINTS = 100
@@ -37,8 +43,6 @@ FIT_SHARE = 0.9
 # Past this nothing is gained: the runtime's own zoom range tops out near here.
 MAX_ZOOM = 18
 
-# Average glyph width as a share of the font size, for a typical sans-serif.
-_GLYPH_WIDTH = 0.6
 _LINE_HEIGHT = 1.3
 _PADDING_PX = 4.0
 
@@ -185,19 +189,59 @@ def label_min_zoom(
     if len(labels) < 2:
         return None
     points = [(lon, lat) for lon, lat, _ in labels]
-    sizes = []
-    for _, _, text in labels:
-        # A wrapped label is as wide as its longest line and a line taller
-        # per break.
-        lines = text.split("\n")
-        sizes.append(
-            (
-                max(1, *(len(line) for line in lines)) * _GLYPH_WIDTH * font_px
-                + _PADDING_PX,
-                len(lines) * _LINE_HEIGHT * font_px + _PADDING_PX,
-            )
-        )
+    sizes = [_label_box(text, font_px) for _, _, text in labels]
     return _first_zoom_that_fits(*_distinct(points, sizes))
+
+
+def _label_box(text: str, font_px: float) -> tuple[float, float]:
+    """A label's estimated width and height in pixels, padding included."""
+    # A wrapped label is as wide as its longest line and a line taller per
+    # break.
+    lines = text.split("\n")
+    return (
+        max(1, *(len(line) for line in lines)) * GLYPH_WIDTH * font_px + _PADDING_PX,
+        len(lines) * _LINE_HEIGHT * font_px + _PADDING_PX,
+    )
+
+
+def repeats_have_room(
+    labels: Sequence[tuple[float, float, str]],
+    neighbours: Sequence[tuple[int, int]],
+    font_px: float,
+) -> int | None:
+    """The zoom from which no label overlaps the next one along its line, or
+    `None` if none ever does.
+
+    `neighbours` pairs the indexes into `labels` (`(lon, lat, text)`) of labels
+    that follow each other along one line (`label_points.RepeatedLabels`).
+    Repeats are fixed along the line, so zoomed out they close up into a smear
+    of one name; the greedy share in `label_min_zoom` would let a few long
+    lines do that among many short ones, so every pair is held to it. Two
+    boxes `dx` and `dy` apart in the unit world stop overlapping once one of
+    those gaps, times the world's width in pixels, covers the box's width or
+    height. That width is the runtime's own, `512 * 2**zoom`
+    (`zoom_range.WORLD_PIXELS_AT_ZOOM_0`), not the 256 the greedy share
+    counts in: exact here rather than a zoom cautious, so a lone line's
+    repeats have room at the view the map opens on.
+    """
+    zoom = 0
+    for first, second in neighbours:
+        lon_a, lat_a, text = labels[first]
+        lon_b, lat_b, _ = labels[second]
+        (xa, ya), (xb, yb) = _unit(lon_a, lat_a), _unit(lon_b, lat_b)
+        width, height = _label_box(text, font_px)
+        gaps = [
+            size / gap
+            for size, gap in ((width, abs(xb - xa)), (height, abs(yb - ya)))
+            if gap > 0
+        ]
+        if not gaps:
+            return MAX_ZOOM
+        needed = math.ceil(math.log2(min(gaps) / WORLD_PIXELS_AT_ZOOM_0))
+        if needed >= MAX_ZOOM:
+            return MAX_ZOOM
+        zoom = max(zoom, needed)
+    return zoom or None
 
 
 def cluster_max_zoom(
@@ -262,27 +306,31 @@ def declutter_layer(layer: ExportLayer, default_font_px: float) -> ExportLayer:
     """`layer` with its `cluster_max_zoom` and `label_min_zoom` filled in.
 
     See `declutter_noting_stacks`, which also says whether the clustered
-    points include stacks.
+    points include stacks, and what repeating the labels came to.
     """
     return declutter_noting_stacks(layer, default_font_px)[0]
 
 
 def declutter_noting_stacks(
     layer: ExportLayer, default_font_px: float
-) -> tuple[ExportLayer, bool]:
-    """`layer` with its `cluster_max_zoom` and `label_min_zoom` filled in, and
+) -> tuple[ExportLayer, bool, RepeatedLabels]:
+    """`layer` with its `cluster_max_zoom` and `label_min_zoom` filled in,
     whether it clusters points of which some share one spot, from the
-    positions already read rather than a second pass over them.
+    positions already read rather than a second pass over them, and what
+    repeating its line labels came to.
 
     Labels of a clustered layer wait until bubbles stop merging separate
     sites: a count bubble over several places wearing one place's name would
     be wrong. A stack at one spot never splits, and does not hold them back.
+    Labels repeated along a line wait until the repeats stop overlapping; the
+    share of labels that must have room counts each line once.
 
     A label limit at or below the layer's own minimum zoom changes nothing on
     the map, so it is left out rather than reported.
     """
+    repeated = RepeatedLabels()
     if layer.raster is not None or layer.tiles is not None or not layer.geojson:
-        return layer, False
+        return layer, False, repeated
 
     clusters: int | None = None
     sites: int | None = None
@@ -309,26 +357,38 @@ def declutter_noting_stacks(
     labels: int | None = None
     labeling = layer.labeling
     if labeling.enabled and labeling.field_name:
-        collection = build_label_collection(
+        font_px = labeling.font_size or default_font_px
+        collection, repeated = build_label_collection_noting_repeats(
             layer.geojson,
             labeling.field_name,
             capitalization=labeling.capitalization,
             wrap_char=labeling.wrap_char,
             auto_wrap_length=labeling.auto_wrap_length,
             per_part=labeling.per_part,
+            plane=labeling.measure_plane,
+            repeat=labeling.repeat,
+            font_px=font_px,
         )
         if collection is not None:
+            placed = [
+                (
+                    float(f["geometry"]["coordinates"][0]),
+                    float(f["geometry"]["coordinates"][1]),
+                    str(f["properties"][LABEL_PROPERTY]),
+                )
+                for f in collection["features"]
+            ]
             labels = label_min_zoom(
                 [
-                    (
-                        float(f["geometry"]["coordinates"][0]),
-                        float(f["geometry"]["coordinates"][1]),
-                        str(f["properties"][LABEL_PROPERTY]),
-                    )
-                    for f in collection["features"]
+                    label
+                    for index, label in enumerate(placed)
+                    if index not in repeated.extras
                 ],
-                labeling.font_size or default_font_px,
+                font_px,
             )
+            room = repeats_have_room(placed, repeated.neighbours, font_px)
+            if room is not None:
+                labels = max(labels or 0, room)
             if sites is not None:
                 labels = max(labels or 0, sites + 1)
             floor = layer.visible_zoom_range[0] if layer.visible_zoom_range else 0.0
@@ -336,8 +396,9 @@ def declutter_noting_stacks(
                 labels = None
 
     if clusters is None and labels is None:
-        return layer, stacked
+        return layer, stacked, repeated
     return (
         dataclasses.replace(layer, cluster_max_zoom=clusters, label_min_zoom=labels),
         stacked,
+        repeated,
     )
