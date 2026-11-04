@@ -347,23 +347,27 @@ class TestReadRaster:
         assert exported.tiles is not None
         assert exported.raster is None
 
-    def test_a_wms_service_qgis_knows_nothing_about_is_refused_with_a_reason(
+    def test_a_wms_service_qgis_knows_nothing_about_is_asked_as_qgis_asks(
         self, qgis_app
     ) -> None:
-        """A WMS is exported as Web Mercator tiles only when QGIS's stored
-        capabilities say the service offers EPSG:3857; this one was never
-        reached, so there is nothing to go on. The exported cases are in
-        `test_map_service_layers.py`."""
+        """With no stored capabilities to say whether the service offers
+        EPSG:3857, the map asks in the CRS QGIS asks in (OnlyMap 0.13.4
+        fills `{bbox-epsg-XXXX}`); this one was never reached. The other
+        cases are in `test_map_service_layers.py`."""
         layer = qgis_core.QgsRasterLayer(
             "crs=EPSG:4326&format=image/png&layers=x&styles&url=https://example.invalid/wms",
             "wms service",
             "wms",
         )
         report = FidelityReportBuilder()
-        assert read_raster(layer, report) is None
+        exported = read_raster(layer, report)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.url.endswith(
+            "&CRS=EPSG:4326&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-4326}"
+        )
         details = " ".join(item.detail for item in report.items)
-        assert "WMS" in details
-        assert "EPSG:3857" in details
+        assert "in EPSG:4326, as QGIS does" in details
 
     def test_a_raster_reaches_read_raster_through_read_layer(
         self, qgis_app, make_raster_layer

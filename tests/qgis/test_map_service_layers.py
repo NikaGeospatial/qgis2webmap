@@ -13,6 +13,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import json
 from urllib.parse import parse_qsl, quote, unquote, urlsplit
 
 import pytest
@@ -25,6 +26,8 @@ from nika_onlymap_exporter.core.export_ir import (
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.layer_reader import read_layer
+from nika_onlymap_exporter.core.manifest_builder import build_layer_element
+from nika_onlymap_exporter.core.map_services import parse_instant
 
 qgis_core = pytest.importorskip("qgis.core")
 
@@ -126,23 +129,52 @@ class TestWms:
         assert exported.tiles is not None
         assert len(services.requests) == before
 
-    def test_a_service_without_web_mercator_is_refused(
+    def test_a_service_without_web_mercator_is_asked_in_its_own_crs(
         self, qgis_app, services
     ) -> None:
+        """OnlyMap 0.13.4 asks a WMS in any EPSG code and warps the picture."""
         layer = _wms(services.url("cors/wms"), layers=("utm_only",))
         assert layer.isValid()
         exported, report = _read(layer)
-        assert exported is None
-        assert "does not offer Web Mercator (EPSG:3857)" in _rows(
-            report, FidelityStatus.UNSUPPORTED
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.url.endswith(
+            "&CRS=EPSG:25832&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-25832}"
+        )
+        markup = build_layer_element(exported)
+        assert "BBOX={bbox-epsg-25832}" in markup
+        row = _rows(report, FidelityStatus.APPROXIMATED)
+        assert "in EPSG:25832, as QGIS does, and warps each picture" in row
+        # A CRS the runtime carries: no lookup for the reader's browser.
+        assert "epsg.io" not in row
+        assert not _rows(report, FidelityStatus.UNSUPPORTED)
+
+    def test_a_crs_the_runtime_must_look_up_says_so(self, qgis_app) -> None:
+        exported, report = _read(_wms(OFFLINE, crs="EPSG:3067"))
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.url.endswith("&BBOX={bbox-epsg-3067}")
+        assert "looks up EPSG:3067's definition at epsg.io" in _rows(
+            report, FidelityStatus.APPROXIMATED
         )
 
-    def test_without_capabilities_a_projected_layer_is_refused(self, qgis_app) -> None:
-        """Offline and never cached: there is nothing to tell whether the
-        service offers EPSG:3857, so the export does not guess."""
+    def test_without_capabilities_a_projected_layer_is_asked_as_qgis_asks(
+        self, qgis_app
+    ) -> None:
+        """Offline and never cached: nothing tells whether the service offers
+        EPSG:3857, so the map asks in the CRS QGIS asks in, which it lists."""
         exported, report = _read(_wms(OFFLINE))
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.url.endswith(
+            "&CRS=EPSG:25832&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-25832}"
+        )
+        assert not _rows(report, FidelityStatus.UNSUPPORTED)
+
+    def test_a_crs_the_map_cannot_name_is_refused(self, qgis_app) -> None:
+        exported, report = _read(_wms(OFFLINE, crs="ESRI:54009"))
         assert exported is None
-        assert "no stored copy" in _rows(report, FidelityStatus.UNSUPPORTED)
+        assert "'ESRI:54009'" in _rows(report, FidelityStatus.UNSUPPORTED)
 
     def test_without_capabilities_a_web_mercator_layer_still_exports(
         self, qgis_app
@@ -680,18 +712,87 @@ class TestTime:
         assert exported is not None
         assert exported.tiles is not None
         asked = dict(parse_qsl(urlsplit(exported.tiles.url).query)).get("TIME")
-        assert asked == expected
         row = " ".join(
             item.detail
             for item in report.items
             if item.subject == "Time of 'WMS'"
             and item.status is FidelityStatus.APPROXIMATED
         )
-        assert "fixed snapshot" in row and "no time slider" in row
-        if expected is not None:
-            assert expected.split("/")[0] in row
+        markup = build_layer_element(exported)
+        if expected is None or temporal == "2031":
+            # No time, or one off the service's list: a snapshot, as 0.3.2.
+            assert asked == expected
+            assert exported.tiles.times is None
+            assert "{time}" not in markup and 'time="' not in markup
+            assert "fixed snapshot" in row and "no time slider" in row
+            if expected is None:
+                assert "default time" in row
+            else:
+                assert expected.split("/")[0] in row
+                assert "not one of the times the service lists" in row
         else:
-            assert "default time" in row
+            # On the list: the slider's token, opening at the time QGIS draws.
+            assert asked == "{time}"
+            assert exported.tiles.times == YEAR_EXTENT.rpartition("=")[2]
+            assert parse_instant(exported.tiles.time or "") == parse_instant(expected)
+            assert f'time="{exported.tiles.time}"' in markup
+            assert "time slider" in row and exported.tiles.time in row
+            assert "366 times" in row
+
+    def test_a_long_list_of_times_is_stepped_around_qgis_time(
+        self, qgis_app, services
+    ) -> None:
+        """More times than a slider steps through (2,000): the ones around
+        the time QGIS draws."""
+        from nika_onlymap_exporter.core.layer_reader import MapTime
+
+        layer = _wms(
+            services.url("cors/wms"),
+            crs="EPSG:3857",
+            extra="&type=wmst&timeDimensionExtent="
+            "2000-01-01T00:00:00Z/2030-12-31T00:00:00Z/P1D",
+        )
+        map_time = MapTime(True, qgis_core.QgsDateTimeRange(_utc(5), _utc(5)))
+        exported, report = _read(layer, map_time=map_time)
+        assert exported is not None
+        assert exported.tiles is not None
+        times = (exported.tiles.times or "").split(",")
+        assert len(times) == 2000
+        assert exported.tiles.time == "2020-03-05T00:00:00Z"
+        assert exported.tiles.time in times
+        assert "2000 of the service's 11323 times" in _rows(
+            report, FidelityStatus.APPROXIMATED
+        )
+
+    def test_in_a_cartograph_frame_it_is_a_snapshot(self, qgis_app, services) -> None:
+        """A frame is a map on a printed page, with no controls to step with."""
+        from nika_onlymap_exporter.core.layer_reader import MapTime
+
+        layer = _wms(services.url("cors/wms"), crs="EPSG:3857", extra=YEAR_EXTENT)
+        map_time = MapTime(True, qgis_core.QgsDateTimeRange(_utc(5), _utc(5)))
+        report = FidelityReportBuilder()
+        exported = read_layer(layer, report, map_time=map_time, time_slider=False)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.times is None
+        assert "TIME=2020-03-05T00:00:00Z" in exported.tiles.url
+        assert "cartograph's interactive frame" in _rows(
+            report, FidelityStatus.APPROXIMATED
+        )
+
+    def test_without_a_list_of_times_it_is_a_snapshot(self, qgis_app, services) -> None:
+        from nika_onlymap_exporter.core.layer_reader import MapTime
+
+        layer = _wms(services.url("cors/wms"), crs="EPSG:3857", extra="&type=wmst")
+        map_time = MapTime(True, qgis_core.QgsDateTimeRange(_utc(5), _utc(5)))
+        exported, report = _read(layer, map_time=map_time)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.times is None
+        assert "TIME=2020-03-05T00:00:00Z" in exported.tiles.url
+        assert "no list of the service's times" in _rows(
+            report, FidelityStatus.APPROXIMATED
+        )
 
     def test_the_canvas_time_is_what_the_temporal_controller_set(
         self, qgis_app
@@ -855,12 +956,30 @@ class TestWmts:
         assert exported.tiles.tile_size == 256
         assert "CORS" in _rows(report, FidelityStatus.APPROXIMATED)
 
-    def test_another_grid_is_refused_by_name(self, qgis_app, services) -> None:
+    def test_a_national_grid_draws_on_its_own_matrices(
+        self, qgis_app, services
+    ) -> None:
+        """OnlyMap 0.13.4: the grid from the capabilities QGIS cached, with
+        no request at export."""
         layer = _wmts(services.url("cors/wmts"), matrix_set="UTM32")
         assert layer.isValid()
+        before = len(services.requests)
         exported, report = _read(layer)
-        assert exported is None
-        assert "tile grid 'UTM32'" in _rows(report, FidelityStatus.UNSUPPORTED)
+        assert len(services.requests) == before, "reading contacted the service"
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.url.endswith(
+            "&TILEMATRIXSET=UTM32&TILEMATRIX={TileMatrix}&TILEROW={TileRow}"
+            "&TILECOL={TileCol}"
+        )
+        grid = json.loads(exported.tiles.tile_matrix_set or "")
+        assert grid["supportedCRS"] == "urn:ogc:def:crs:EPSG::25832"
+        assert (exported.tiles.min_zoom, exported.tiles.max_zoom) == (0, 9)
+        markup = build_layer_element(exported)
+        assert "tile-matrix-set=" in markup and "tile-size" not in markup
+        row = _rows(report, FidelityStatus.APPROXIMATED)
+        assert "its tile grid 'UTM32', as QGIS does, and warps them" in row
+        assert not _rows(report, FidelityStatus.UNSUPPORTED)
 
 
 class TestOtherServices:
