@@ -507,7 +507,9 @@ one, so if your source requires attribution, set it in QGIS before exporting.
 Legend, layer switcher, zoom controls, a scale bar and a measure tool are **on
 by default**. The layer switcher is left out of maps that have only one layer
 to switch, since it would hold a single ticked box; labels count as an entry of
-their own, so a labelled layer is enough to bring it back.
+their own, so a labelled layer is enough to bring it back. The legend lists the
+top layer first, as QGIS does; the layer switcher lists them in the order the
+map draws them, bottom first.
 
 The measure tool measures distances and areas on the ground, in metric,
 imperial or nautical units, whatever CRS the project uses. It works in a map

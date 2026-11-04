@@ -2187,6 +2187,48 @@ class TestImageLegend:
         assert "&lt;img onerror" in markup
 
 
+class TestLegendOrder:
+    """QGIS lists the top layer first; the map draws the bottom one first."""
+
+    LAYERS = (
+        make_layer(layer_id="under", name="Under layer"),
+        make_layer(layer_id="over", name="Over layer"),
+    )
+
+    def test_our_legend_lists_the_top_layer_first(self) -> None:
+        layers = [
+            make_icon_layer(SINGLE_ICON, layer_id=lid, name=name)
+            for lid, name in (("under", "Under layer"), ("over", "Over layer"))
+        ]
+        markup = build_legend_widget(make_project(layers))
+        assert markup.index("Over layer") < markup.index("Under layer")
+
+    def test_the_built_in_legend_is_ordered_top_first(self) -> None:
+        widgets = build_widget_elements(make_project(list(self.LAYERS)))
+        legend = widgets[widgets.index('<om-widget type="legend"') :]
+        legend = legend[: legend.index("</om-widget>")]
+        assert '[data-layer="over"] { order: 1; }' in legend
+        assert '[data-layer="over-labels"] { order: 1; }' in legend
+        assert '[data-layer="under"] { order: 2; }' in legend
+        # The draw order itself is left alone.
+        manifest = build_manifest(make_project(list(self.LAYERS)))
+        assert manifest.index('id="under"') < manifest.index('id="over"')
+
+    def test_a_single_layer_legend_is_as_before(self) -> None:
+        widgets = build_widget_elements(make_project())
+        assert '"></om-widget>' in widgets.split('type="legend"', 1)[1].split("\n")[0]
+
+    def test_an_id_cannot_break_out_of_the_rule(self) -> None:
+        layers = [
+            make_layer(layer_id='a"] </style><b>', name="Odd"),
+            make_layer(layer_id="plain", name="Plain"),
+        ]
+        widgets = build_widget_elements(make_project(layers))
+        rules = widgets.split("<style>", 1)[1].split("</style>", 1)[0]
+        assert "<" not in rules and '"]' not in rules.replace('"] {', "")
+        assert "<b>" not in widgets
+
+
 class TestPopupsDoNotStack:
     """Only one popup may be open at a time.
 

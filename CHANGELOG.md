@@ -149,6 +149,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - OGC API Features and SensorThings layers are described as web services in
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
+- The legend lists the top layer first, as QGIS's Layers panel does, with a
+  layer's labels right under it. It listed them bottom first, in the order
+  the map draws them. The layer switcher's order is still OnlyMap's.
 
 ## [0.3.1] - 2026-11-03
 

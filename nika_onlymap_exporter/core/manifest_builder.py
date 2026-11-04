@@ -2159,6 +2159,9 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     generated JavaScript this project exists not to write, and it needs nothing
     from the Content Security Policy beyond the `data:` images.
 
+    Top layer first, as QGIS's Layers panel lists them: the model is in draw
+    order, bottom first (see `build_manifest`), so it is walked in reverse.
+
     What it gives up against the built-in widget is reactivity: it cannot grey
     a layer out when the layer switcher hides it. That is why it is used only
     when a layer needs a swatch the built-in widget cannot produce - an image
@@ -2170,7 +2173,7 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     lines.append(f'{indent}  <div class="omni-panel">')
     lines.append(f"{indent}    <h4>{escape_attr(title or 'Legend')}</h4>")
 
-    for layer in project.exportable_layers:
+    for layer in reversed(project.exportable_layers):
         symbol = layer.renderer.representative_symbol or SymbolSpec()
         lines.append(
             f'{indent}    <div class="omni-row">'
@@ -2183,6 +2186,62 @@ def build_legend_widget(project: ExportProject, indent: str = "    ") -> str:
     lines.append(f"{indent}  </div>")
     lines.append(f"{indent}</om-widget>")
     return "\n".join(lines)
+
+
+# The built-in legend lists the map's layers in document order, which is draw
+# order - the bottom layer first, the reverse of QGIS. The widget has no order
+# of its own, and reordering the `<om-layer>`s would change what draws on top,
+# so the rows are reordered where they are drawn: the widget moves its
+# children into its shadow root, a `<style>` among them, and every row and
+# class list it renders carries its layer's id in `data-layer`. A flex column
+# takes an `order`; it does not collapse margins the way the panel's block
+# flow did, so the rows' own margins are reset to the gaps they collapsed to -
+# through `.omni-panel >`, because the widget's own stylesheet lands after this
+# one and would win a tie.
+LEGEND_ORDER_STYLES = """.omni-panel { display: flex; flex-direction: column; }
+.omni-panel > .omni-row, .omni-panel > .omni-legend-sub { margin-top: 0; }
+.omni-legend-sub > :first-child { margin-top: 0; }
+.omni-legend-sub > :last-child { margin-bottom: 0; }"""
+
+
+def _css_string(value: str) -> str:
+    """A quoted CSS string for any text: everything but a plain identifier
+    character goes in as a hex escape, so no id can close the string, the
+    rule, or the `<style>` element."""
+    return (
+        '"'
+        + "".join(
+            char
+            if char.isascii() and (char.isalnum() or char in "-_")
+            else f"\\{ord(char):x} "
+            for char in value
+        )
+        + '"'
+    )
+
+
+def _legend_order_style(project: ExportProject, indent: str) -> list[str]:
+    """The built-in legend's rows top layer first, as QGIS lists them.
+
+    A layer's labels share its place, and so sit right under it: they are
+    emitted after every layer (`build_manifest`), and rows with the same
+    `order` keep their document order. Nothing for a single layer, which has
+    no order to change.
+    """
+    layers = project.exportable_layers
+    if len(layers) < 2:
+        return []
+    rules = [
+        f"[data-layer={_css_string(layer_id)}] {{ order: {place}; }}"
+        for place, layer in enumerate(reversed(layers), start=1)
+        for layer_id in (layer.layer_id, f"{layer.layer_id}-labels")
+    ]
+    return [
+        f"{indent}  <style>",
+        *(f"{indent}    {line}" for line in LEGEND_ORDER_STYLES.splitlines()),
+        *(f"{indent}    {rule}" for rule in rules),
+        f"{indent}  </style>",
+    ]
 
 
 def _switchable_layer_count(project: ExportProject) -> int:
@@ -2231,9 +2290,15 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
             title_attribute = (
                 f'title="{escape_attr(legend_title)}" ' if legend_title else ""
             )
-            widgets.append(
+            opening = (
                 f'{indent}<om-widget type="legend" {title_attribute}'
-                f'position="{WIDGET_POSITIONS["legend"]}"></om-widget>'
+                f'position="{WIDGET_POSITIONS["legend"]}">'
+            )
+            order = _legend_order_style(project, indent)
+            widgets.append(
+                "\n".join([opening, *order, f"{indent}</om-widget>"])
+                if order
+                else f"{opening}</om-widget>"
             )
     if settings.show_layer_switcher and _switchable_layer_count(project) > 1:
         widgets.append(
