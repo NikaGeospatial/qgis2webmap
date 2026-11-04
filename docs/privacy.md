@@ -17,15 +17,17 @@ had QGIS installed.
 
 - One anonymous usage report each time the map finishes loading. See below
   for exactly what is in it.
-- No basemap tiles fetched from a server - unless you choose a basemap; see
-  below.
+- No tiles or pictures fetched from a server - unless you choose a basemap or
+  relief, or the map has a live web layer or a popup picture from a web
+  address; see below.
 - No fonts, scripts or styles loaded from a CDN - everything is inside the
-  file.
+  file, unless you switch relief on; see below.
 - No identifier of any kind for whoever opens the map.
 
 You can check this yourself: open an exported map in a browser, open the
-developer tools Network tab, and reload. You will see exactly one request,
-to NIKA's telemetry service.
+developer tools Network tab, and reload. For a map with none of the web
+content described below, you will see exactly one request, to NIKA's
+telemetry service.
 
 ## The one report: usage telemetry
 
@@ -57,7 +59,7 @@ There is no setting in the plugin to turn this off today. It can be turned
 off by hand, by editing `telemetry="off"` into the exported HTML file's
 `<om-map>` tag after export - see the licence for the technical detail.
 
-## The one exception: basemaps
+## Basemaps and relief
 
 There is no basemap by default, and a default export makes no basemap
 requests at all.
@@ -74,6 +76,23 @@ so the dialog warns in red when it is not, and the Fidelity tab names the
 provider. With *Let readers switch basemap* ticked, a reader can switch to any
 of the other basemaps, so the Fidelity tab names every provider the switcher
 can reach.
+
+Relief, on the Map tab, works the same way: the reader's browser fetches
+elevation tiles, the imagery draped over them, and the scripts that decode the
+terrain (from unpkg.com) while the map is used. The Fidelity tab names each
+host.
+
+## Live web layers and their legends
+
+A layer QGIS itself reads from the web - an XYZ, WMS or WMTS layer, or a Cloud
+Optimized GeoTIFF at an `https://` address - is exported live: the reader's
+browser asks that layer's own server for what it draws, so that server sees the
+requests and the area being looked at. A WMS or WMTS layer's legend picture is
+loaded from the service the same way when the map opens. An address that
+carries an access key is never written into the map: such a layer is refused,
+and such a legend picture left out. Vector layers from a web service (WFS, OGC
+API Features, SensorThings) are not live: their features are read once at
+export and carried in the file.
 
 ## Popup pictures that are web addresses
 
@@ -128,20 +147,22 @@ Be aware that the data itself is in the file, in full. If a layer contains
 information that should not be shared, do not include that layer in the export.
 The Fidelity tab lists exactly which layers were included.
 
-## The one thing the plugin downloads
+## What the plugin downloads
 
-The plugin itself makes exactly one network request in its entire life: the
-first time you build a map, it downloads the OnlyMap runtime from npm — about
-5.7 MB, once per computer, after showing you the licence and asking. See
-[installation](installation.md).
+The plugin itself downloads one thing on its own: the first time you build a
+map, it downloads the OnlyMap runtime from npm — about 5.7 MB, once per
+computer, after showing you the licence and asking. See
+[installation](installation.md). The only other download is one you ask for:
+a language pack, fetched from jsDelivr when you pick a language other than
+English under Settings.
 
-That request sends nothing about you or your data. It is an anonymous download
-of a public package: no account, no token, no identifier, and nothing about
-your project, your layers or your machine. npm can see that some computer at
-your IP address downloaded a public file, which is what any software download
-looks like.
+Neither request sends anything about you or your data. Each is an anonymous
+download of a public file: no account, no token, no identifier, and nothing
+about your project, your layers or your machine. npm, or jsDelivr, can see
+that some computer at your IP address downloaded a public file, which is what
+any software download looks like.
 
-After that, the plugin never contacts anything again, with one exception of
+Beyond those, the plugin never contacts anything, with one exception of
 QGIS's own making. Exporting is entirely local — your data is read from disk and
 written into the file, and no part of it leaves your computer.
 
