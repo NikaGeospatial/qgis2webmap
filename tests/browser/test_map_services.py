@@ -500,9 +500,10 @@ class TestWmsLegend:
         assert image["shown"]["width"] == LEGEND_SIZES["target"][0]
         (asked,) = _legend_requests(services, before)
         assert asked["params"]["LAYER"] == "target"
-        assert [row["text"] for row in state["rows"]] == ["Fake WMS", "Stations"]
+        # Top layer first, as QGIS lists them: the stations draw over the WMS.
+        assert [row["text"] for row in state["rows"]] == ["Stations", "Fake WMS"]
         # The picture sits under its layer's row, inside the panel.
-        assert image["shown"]["top"] >= state["rows"][0]["bottom"]
+        assert image["shown"]["top"] >= state["rows"][1]["bottom"]
         assert image["shown"]["bottom"] <= state["panel"]["bottom"]
 
     def test_the_picture_loads_when_the_map_is_served(
@@ -601,7 +602,7 @@ class TestWmsLegend:
             # No height is no broken-image box: nothing shows.
             assert image["shown"]["height"] == 0
             assert image["graphic"]["clientHeight"] == 0
-        assert [row["text"] for row in state["rows"]] == ["Fake WMS", "Stations"]
+        assert [row["text"] for row in state["rows"]] == ["Stations", "Fake WMS"]
         for row, expected in zip(state["rows"], reference["rows"]):
             assert row["height"] == pytest.approx(expected["height"], abs=0.5)
         assert state["panel"]["height"] == pytest.approx(
