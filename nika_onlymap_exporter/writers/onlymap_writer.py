@@ -33,6 +33,7 @@ from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
     build_manifest,
     collect_attributions,
+    needs_static_legend,
     switcher_basemaps,
     texture_credit,
 )
@@ -503,14 +504,18 @@ def _widget_color_block(project: ExportProject) -> str:
     if declarations:
         blocks.append("\n".join(["      :root {", *declarations, "      }"]))
 
-    scale_block = _chrome_scale_block(settings.chrome_scale, settings)
+    # Our own static legend has no type, so the scale's transform never
+    # reaches it (`_WIDGET_ORIGINS`), and the caps it sits under are not
+    # divided by the scale either.
+    legend_scaled = not needs_static_legend(project)
+    scale_block = _chrome_scale_block(settings.chrome_scale, settings, legend_scaled)
     if scale_block:
         blocks.append(scale_block)
         stack_block = _top_left_stack_block(project)
         if stack_block:
             blocks.append(stack_block)
 
-    size_block = _panel_size_block(settings)
+    size_block = _panel_size_block(settings, legend_scaled)
     if size_block:
         blocks.append(size_block)
 
@@ -531,7 +536,7 @@ _SIZED_PANELS = {
 }
 
 
-def _panel_size_block(settings: ExportSettings) -> str:
+def _panel_size_block(settings: ExportSettings, legend_scaled: bool = True) -> str:
     """The legend's and layer switcher's set sizes, never bigger than the map.
 
     Empty when neither has one, so an Auto map is byte-identical to one built
@@ -542,7 +547,8 @@ def _panel_size_block(settings: ExportSettings) -> str:
     map less the 12px inset at each edge, and the panel yields to the slot, so
     whatever was typed the page never scrolls; on a map narrower than the
     width, the width yields the same way. Both caps are divided by
-    `chrome_scale`, because its transform grows the panel after layout. A
+    `chrome_scale`, because its transform grows the panel after layout -
+    except for a legend it does not grow (`legend_scaled` off). A
     height the contents do not fill is the panel's own colour, which the host
     wears, rather than a transparent gap under it. Print is left alone, as the
     half-the-map cap is.
@@ -560,15 +566,16 @@ def _panel_size_block(settings: ExportSettings) -> str:
         ),
     }
     scale = settings.chrome_scale
-    cap = (
-        "calc(100% - 24px)"
-        if abs(scale - 1.0) < 0.01
-        else f"calc((100% - 24px) / {round(scale, 3)})"
-    )
     rules: list[str] = []
     for panel, (shown, width, height) in sizes.items():
         if not shown or (width is None and height is None):
             continue
+        scaled = panel != "legend" or legend_scaled
+        cap = (
+            f"calc((100% - 24px) / {round(scale, 3)})"
+            if scaled and abs(scale - 1.0) >= 0.01
+            else "calc(100% - 24px)"
+        )
         selectors, slot = _SIZED_PANELS[panel]
         slot_rules = []
         panel_rules = []
@@ -614,7 +621,9 @@ _WIDGET_ORIGINS = {
 }
 
 
-def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
+def _chrome_scale_block(
+    scale: float, settings: ExportSettings, legend_scaled: bool = True
+) -> str:
     """Scale the map chrome with a transform, not a font size.
 
     **The runtime exposes no size property.** Its theming surface is six custom
@@ -687,11 +696,15 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
     # grows the panel in it after layout: at 2x a crowded legend reached past
     # the map's foot by the corner's inset and the page scrolled. The cap is
     # divided by the scale, so the panel is at most half the map at any size.
+    # Not the legend's corner when it holds our static legend, which the
+    # transform does not grow: divided, it stopped at a quarter of the map.
+    slots = ['[data-om-widget-slot="top-start"]']
+    if legend_scaled:
+        slots.append('[data-om-widget-slot="top-end"]')
     rules.extend(
         [
             "      @media not print {",
-            '        [data-om-widget-slot="top-start"],',
-            '        [data-om-widget-slot="top-end"] {',
+            ",\n".join(f"        {slot}" for slot in slots) + " {",
             f"          max-height: calc(50% / {round(scale, 3)});",
             "        }",
             "      }",

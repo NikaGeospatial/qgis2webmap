@@ -25,6 +25,7 @@ from nika_onlymap_exporter.core.export_ir import (
     RendererSpec,
     SourceKind,
     SymbolSpec,
+    TileSpec,
 )
 from nika_onlymap_exporter.ui.live_server import PreviewServer
 from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
@@ -70,10 +71,25 @@ PANELS = """
 """
 
 
-def _export(runtime, directory, layers: int, **settings):
+# A tile layer makes the legend our own static one (`needs_static_legend`),
+# which Appearance > Size does not scale. Its tiles never load: nothing listens
+# on port 9, and the legend does not wait for them.
+TILES = ExportLayer(
+    layer_id="tiles",
+    name="Tiles",
+    geometry_kind=GeometryKind.RASTER,
+    source_kind=SourceKind.SERVICE,
+    renderer=RendererSpec(kind=RendererKind.UNSUPPORTED),
+    tiles=TileSpec("http://127.0.0.1:9/{z}/{x}/{y}.png"),
+)
+STATIC_LEGEND = 'om-widget[position="top-right"]:not([type])'
+
+
+def _export(runtime, directory, layers: int, tiles: bool = False, **settings):
     project = ExportProject(
         title="Panel sizes",
-        layers=tuple(
+        layers=(TILES,) * tiles
+        + tuple(
             ExportLayer(
                 layer_id=f"layer{i}",
                 name=f"Layer {i}",
@@ -212,3 +228,32 @@ class TestNeverBiggerThanTheMap:
         assert state["page"][1] <= state["page"][3]
         assert state["legend"]["bottom"] <= state["map"]["bottom"] - 11
         assert state["switcher"]["bottom"] <= state["map"]["bottom"] - 11
+
+
+class TestAStaticLegend:
+    @pytest.mark.parametrize("scale", [1.0, 2.0])
+    def test_at_any_size_it_takes_up_to_half_the_map(
+        self, page, runtime, tmp_path, scale
+    ) -> None:
+        """Our own legend, for a tile layer, is not grown by the Size's
+        transform, so its corner keeps the half-the-map cap: divided by the
+        Size, a long legend stopped at a quarter of the map at 2x."""
+        entry = _export(runtime, tmp_path, 30, tiles=True, chrome_scale=scale)
+        page.set_viewport_size({"width": 1280, "height": 700})
+        open_map(page, entry)
+        page.wait_for_function(
+            """(selector) => document.querySelector(selector)
+                 ?.shadowRoot?.querySelector('.omni-panel')""",
+            arg=STATIC_LEGEND,
+            timeout=30_000,
+        )
+        legend = page.locator(STATIC_LEGEND).bounding_box()
+        map_box = page.locator("om-map").bounding_box()
+        assert legend is not None and map_box is not None
+        # Half the map, near enough: a quarter is what the bug left it.
+        assert map_box["height"] * 0.45 <= legend["height"] <= map_box["height"] / 2 + 1
+        assert legend["y"] + legend["height"] <= map_box["y"] + map_box["height"] - 11
+        overflow = page.locator(STATIC_LEGEND).evaluate(
+            "el => el.scrollHeight - el.clientHeight"
+        )
+        assert overflow > 100
