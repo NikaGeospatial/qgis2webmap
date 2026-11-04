@@ -50,7 +50,7 @@ for exactly what is and isn't sent.
 
 | Mode | What the recipient does | When it is used |
 |---|---|---|
-| **Standalone HTML** | Double-click one file | Default. All resources embed and no remote resource is required |
+| **Standalone HTML** | Double-click one file | Default. Everything the map carries is embedded; a basemap, relief, live web layers and web popup pictures load as it is used |
 | **Share ZIP** | Extract, then open `index.html` | Data too large for one practical HTML file, or a mail filter that quarantines `.html` |
 | **Folder** | Copy to a web server, or open `index.html` | Publishing the result yourself |
 
