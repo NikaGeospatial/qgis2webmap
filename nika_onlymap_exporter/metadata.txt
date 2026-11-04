@@ -46,7 +46,7 @@ changelog=0.3.2
     - Map readers get a measure tool, an optional basemap switcher and per-layer Filter by panels
     - Legend and layer switcher can be given a width and height (Appearance > Map controls)
     - WMS and WMTS layers show the service's own legend picture
-    - OGC API Features and SensorThings layers, time-enabled WMS (as a snapshot) and Cloud Optimized GeoTIFFs read over the web export
+    - Time-enabled WMS (as a snapshot) and Cloud Optimized GeoTIFFs read over the web export
     - A guide to batch and headless exports; Processing now exports what the dialog would for the saved project
     Fixed
     - A WMS made of several sublayers stacked them in reverse
