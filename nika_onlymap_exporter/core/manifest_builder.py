@@ -2003,9 +2003,10 @@ WIDGET_POSITIONS = {
 # Widths measured at Normal size in chromium: measure tool 214px (compacted by
 # `templates/measure-tool.html` to the runtime's own 200px minimum; its
 # readout wraps rather than widen it), basemap switcher 164px (its panel's own
-# minimum is 140px), scale bar 72-115px (it picks a round distance in the
-# chosen units, so it changes as the map zooms, but stays under 140px), zoom
-# controls 30px (44px on a touch screen).
+# minimum is 140px), scale bar 66-116px (it picks a round distance in the
+# chosen units, so it changes as the map zooms, but stays under 140px; re-
+# measured on OnlyMap 0.13.4, whose fix to the distance it reads left that
+# range as it was), zoom controls 30px (44px on a touch screen).
 # Every Size scales them alike, so the order holds at each one, and a control
 # left off leaves the rest in order.
 BOTTOM_LEFT_ORDER = {
