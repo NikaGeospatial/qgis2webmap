@@ -508,6 +508,34 @@ class TestPanelSizes:
         finally:
             dialog.close()
 
+    def test_both_rows_boxes_start_in_one_column(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """ "Layer switcher" is longer than "Legend", and each row's boxes
+        used to start right after its own label."""
+        from qgis.PyQt.QtCore import QPoint
+
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            dialog.show()
+            titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
+            dialog.tabs.setCurrentIndex(titles.index("Appearance"))
+            qgis_app.processEvents()
+            starts = {}
+            for key, (width, height) in dialog.widget_sizes.items():
+                check = dialog.widget_checks[key]
+                group = check.parentWidget()
+                at = width.mapTo(group, QPoint(0, 0))
+                check_at = check.mapTo(group, QPoint(0, 0))
+                # Beside its own switch: on its row, past its label.
+                assert abs(at.y() - check_at.y()) < check.height(), key
+                assert at.x() >= check_at.x() + check.sizeHint().width(), key
+                assert height.mapTo(group, QPoint(0, 0)).x() > at.x(), key
+                starts[key] = at.x()
+            assert starts["legend"] == starts["layerSwitcher"]
+        finally:
+            dialog.close()
+
     @pytest.mark.parametrize(
         ("typed", "expected"),
         [("320", 320), ("50", 140), ("9000", 600), ("", None)],

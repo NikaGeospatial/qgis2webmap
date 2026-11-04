@@ -74,6 +74,7 @@ from qgis.PyQt.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -2526,6 +2527,10 @@ class MainDialog(QDialog):
         # Width and height boxes beside the two panels whose size is theirs to
         # set; zoom controls, scale bar and measure tool have fixed sizes.
         self.widget_sizes: dict[str, tuple[_PanelSizeBox, _PanelSizeBox]] = {}
+        # One grid for those two rows, so both rows' boxes start in one column
+        # whichever switch's label is the longer.
+        sizes_grid = QGridLayout()
+        sizes_grid.setColumnStretch(4, 1)
         for key, label, current in (
             ("legend", tr("Legend"), self.state.show_legend),
             ("layerSwitcher", tr("Layer switcher"), self.state.show_layer_switcher),
@@ -2538,7 +2543,9 @@ class MainDialog(QDialog):
             check.toggled.connect(lambda v, k=key: self._on_widget_toggled(k, v))
             self.widget_checks[key] = check
             if key in _PANEL_SIZE_ATTRIBUTES:
-                chrome_layout.addLayout(self._panel_size_row(key, check, page))
+                if not sizes_grid.count():
+                    chrome_layout.addLayout(sizes_grid)
+                self._add_panel_size_row(sizes_grid, key, check, page)
             else:
                 chrome_layout.addWidget(check)
         layout.addWidget(chrome)
@@ -2707,9 +2714,11 @@ class MainDialog(QDialog):
         layout.addLayout(highlight_row)
         return box
 
-    def _panel_size_row(self, key: str, check: QCheckBox, page: QWidget) -> QHBoxLayout:
+    def _add_panel_size_row(
+        self, grid: QGridLayout, key: str, check: QCheckBox, page: QWidget
+    ) -> None:
         """`check` with the panel's width and height beside it, shown while
-        the panel is on the map."""
+        the panel is on the map, as the next row of `grid`."""
         width_attribute, height_attribute = _PANEL_SIZE_ATTRIBUTES[key]
         width = _PanelSizeBox(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH, page)
         height = _PanelSizeBox(MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT, page)
@@ -2743,15 +2752,13 @@ class MainDialog(QDialog):
             )
         )
         times = QLabel("\N{MULTIPLICATION SIGN}", page)
-        row = QHBoxLayout()
-        row.addWidget(check)
-        for widget in (width, times, height):
-            row.addWidget(widget)
+        row = grid.rowCount() if grid.count() else 0
+        grid.addWidget(check, row, 0)
+        for column, widget in enumerate((width, times, height), start=1):
+            grid.addWidget(widget, row, column)
             widget.setVisible(check.isChecked())
             check.toggled.connect(widget.setVisible)
-        row.addStretch(1)
         self.widget_sizes[key] = (width, height)
-        return row
 
     def _on_widget_toggled(self, key: str, value: bool) -> None:
         attribute = {
