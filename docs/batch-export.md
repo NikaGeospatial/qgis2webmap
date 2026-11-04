@@ -46,18 +46,39 @@ saved on this computer is used. See
 | Parameter | What it is |
 |---|---|
 | `MODE` | `0` Standalone HTML (the default), `1` Share ZIP, `2` Folder |
-| `TITLE` | The map title; blank uses the project title |
+| `TITLE` | The map title; blank uses the map name saved in the dialog, then the project title |
 | `LICENSE_KEY` | Optional; see above |
-| `LEGEND`, `LAYER_SWITCHER`, `ZOOM_CONTROLS`, `SCALE_BAR`, `MEASURE` | The map controls, all on by default; `0` leaves one off |
+| `LEGEND`, `LAYER_SWITCHER`, `ZOOM_CONTROLS`, `SCALE_BAR`, `MEASURE` | The map controls: `1` shows one and `0` leaves it off; left out, the dialog's saved choice stands (all on in a project never opened in the dialog) |
 | `EXPORT_BLOCKED` | Off by default, so a **Blocked** item stops the run and names it; on, the map is written without it and each one is a warning in the log |
 | `OUTPUT` | Where to write the map: an `.html` file, a `.zip` file, or a folder |
 
-The algorithm takes only these parameters. Choices made in the dialog and saved
-with the project - which layers to include, each layer's popup, labels and
-clustering, the basemap and the rest of the Appearance tab - are not used:
-every layer in the project is exported, hidden ones hidden, with the dialog's
-defaults. The Fidelity report goes to the Processing log instead of a tab, one
-line per item.
+## What a run exports
+
+A run exports what the dialog would for the same project. The choices made in
+**Web → QGIS2WebMap by NIKA** are saved in the project - which layers to
+include, each layer's popup, labels and clustering, the map name, the basemap
+and the rest of the Appearance tab - and the algorithm reads them from there. A
+project never opened in the dialog exports every layer, hidden ones hidden,
+with the dialog's defaults.
+
+The dialog writes its choices into the project when it exports and when it
+closes. `qgis_process` and the folder loop below read the project file, so save
+the project after that.
+
+A parameter you pass replaces the saved choice: `TITLE` the map name, and
+`LEGEND`, `LAYER_SWITCHER`, `ZOOM_CONTROLS`, `SCALE_BAR` and `MEASURE` each its
+control. Leave one out, as the commands below do, and the saved choice stands.
+The toolbox's own window always sends all five, as its tick boxes show. `MODE`
+and `OUTPUT` are always the run's own: the dialog's **Export as** and map file
+are not used.
+
+Two dialog choices follow the QGIS view, which a Processing run does not have:
+**Open the map on** *the current QGIS view*, and **Export only the features in
+this view**. A run opens such a map on its data and exports every feature, and
+says so in the log.
+
+The Fidelity report goes to the Processing log instead of a tab, one line per
+item.
 
 ## From the Processing toolbox
 

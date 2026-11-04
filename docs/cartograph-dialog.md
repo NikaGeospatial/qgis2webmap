@@ -436,13 +436,22 @@ export as the dialog, once, with these parameters:
 | **Print layout** | The layout to export |
 | **Frames** | **Automatic** (interactive where it matches QGIS, image otherwise - the dialog's default), **All interactive** or **All image** |
 | **Image frame resolution (dpi)** | 72 to 600; 200 by default, as in the dialog |
-| **Title** | Replaces the project title; blank keeps it |
+| **Title** | Replaces the page's title; blank uses the layout's title, then the project title |
 | **Export even if some items are blocked** | Off by default, so a **Blocked** item - an atlas on an image map, say - stops the run and names it. Pages after the first are *Not exported*, not Blocked: they are logged and page 1 is written |
 | **Cartograph** | Where to write the `.html` |
 
-Every check is written to the log. Print settings, the Browser appearance fields, per-map
-choices from Map frames and the Layers section's popup and label choices are
-not used: the algorithm takes only its own parameters.
+The choices the dialog saved in the project for the layout are used too, so a
+run writes what the dialog would: each map's choice in Map frames and its
+resolution, the Layers section's popup and label choices, Print settings and
+the Browser appearance fields. **Frames** and **Image frame resolution**
+replace every map's saved choice when they are passed; a script or
+`qgis_process` run that leaves one out keeps the saved choices, while the
+toolbox's own window always sends both. A layout never set up in the dialog
+uses the defaults above. One difference from the dialog: without saved Print
+settings, an image frame is drawn at its own resolution, where the dialog's
+Save draws it at least at the 300 dpi the page is saved at.
+
+Every check is written to the log.
 
 On a computer that has never downloaded the OnlyMap runtime, the algorithm
 stops and says so - it cannot show the licence in a batch run. Save one

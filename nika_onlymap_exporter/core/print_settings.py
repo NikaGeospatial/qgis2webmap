@@ -192,6 +192,17 @@ class PrintSettings:
         return cls.from_dict(data)[0]
 
     @classmethod
+    def saved(cls, text: str | None) -> PrintSettings | None:
+        """The settings saved for a layout (`DialogState.cartograph_print`),
+        or None when there are none or they cannot be read at all."""
+        if not text:
+            return None
+        try:
+            return cls.from_json(text)
+        except ValueError:
+            return None
+
+    @classmethod
     def from_dict(
         cls, data: dict[str, object]
     ) -> tuple[PrintSettings, tuple[str, ...]]:

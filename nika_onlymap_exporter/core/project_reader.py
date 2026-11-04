@@ -67,7 +67,7 @@ from .manifest_builder import (
     terrain_note,
 )
 from .popup_media import attach_popup_media
-from .settings import LayerSettings
+from .settings import DialogState, LayerSettings
 from .widget_colors import resolve_widget_colors
 from .zoom_range import CSS_PIXEL_METRES, translate_scale_range
 
@@ -521,6 +521,42 @@ def prepare_project(
         abstract=project.metadata().abstract() or "",
         source_crs=project.crs().authid() if project.crs().isValid() else None,
         report_map_title=report_map_title,
+    )
+
+
+def available_layer_ids(project: QgsProject) -> list[str]:
+    """The ids of the layers in `project`'s layer tree, top first."""
+    return [
+        tree_layer.layer().id()
+        for tree_layer in project.layerTreeRoot().findLayers()
+        if tree_layer.layer() is not None
+    ]
+
+
+def prepare_from_state(
+    project: QgsProject,
+    report: FidelityReportBuilder,
+    state: DialogState,
+    canvas_extent: Extent | None = None,
+    map_time: MapTime | None = None,
+) -> PendingProject:
+    """`prepare_project` for the web map `state` describes. **GUI thread only.**
+
+    The one place the dialog's choices become an export: the dialog reads its
+    live state through it, and the Processing algorithm the state saved in the
+    project (`settings.load_state`), so a batch run exports what the dialog
+    would. A project never opened in the dialog has the default state, which
+    exports every layer with the defaults.
+    """
+    return prepare_project(
+        project,
+        report,
+        settings=state.to_export_settings(),
+        title_override=state.map_name or None,
+        selected_layer_ids=state.selected_layer_ids(available_layer_ids(project)),
+        layer_settings=state.layers,
+        canvas_extent=canvas_extent,
+        map_time=map_time,
     )
 
 

@@ -66,8 +66,12 @@ def _qgis_process() -> str:
     pytest.skip("qgis_process is not installed beside this QGIS")
 
 
-def _towns_project(project, folder: Path, name: str = "towns") -> Path:
-    """A saved project with one file-backed layer, which `qgis_process` reopens."""
+def _towns_project(project, folder: Path, name: str = "towns", choose=None) -> Path:
+    """A saved project with one file-backed layer, which `qgis_process` reopens.
+
+    `choose(project, layer)`, when given, makes the dialog's choices in it
+    before it is saved, as a user who exported from the dialog first would.
+    """
     folder.mkdir(parents=True, exist_ok=True)
     data = folder / f"{name}.geojson"
     data.write_text(
@@ -88,6 +92,8 @@ def _towns_project(project, folder: Path, name: str = "towns") -> Path:
     layer = qgis_core.QgsVectorLayer(str(data), "Towns", "ogr")
     assert layer.isValid()
     project.addMapLayer(layer)
+    if choose is not None:
+        choose(project, layer)
     path = folder / f"{name}.qgz"
     assert project.write(str(path))
     project.clear()
@@ -178,6 +184,55 @@ class TestQgisProcess:
         assert done.returncode == 0, done.stdout + done.stderr
         html = output.read_text(encoding="utf-8")
         assert "<om-map" in html
+        assert "<title>Towns</title>" in html
+
+    def test_the_documented_command_keeps_the_choices_saved_in_the_project(
+        self, project, tmp_path, qgis_app
+    ) -> None:
+        """What "What a run exports" promises: the dialog's choices saved in the
+        file reach a `qgis_process` run, and a control the command leaves out
+        keeps its saved value rather than the parameter's default."""
+        if discover_runtime_dir() is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        from nika_onlymap_exporter.core.settings import load_state, save_state
+
+        def choose(project, towns) -> None:
+            hidden = qgis_core.QgsVectorLayer(
+                "Point?crs=EPSG:4326", "Villages", "memory"
+            )
+            project.addMapLayer(hidden)
+            state = load_state(project)
+            state.for_layer(hidden.id()).include = False
+            state.for_layer(towns.id()).popup = False
+            state.show_legend = False
+            state.basemap = "positron"
+            save_state(project, state)
+
+        binary = _qgis_process()
+        source = _towns_project(project, tmp_path / "data", choose=choose)
+        output = tmp_path / "web" / "towns.html"
+        env = _process_env(tmp_path)
+        enabled = _run([binary, "plugins", "enable", PLUGIN], env, tmp_path)
+        assert enabled.returncode == 0, enabled.stdout + enabled.stderr
+
+        command = []
+        for token in _run_command()[1:]:
+            if token.startswith("--PROJECT_PATH="):
+                token = f"--PROJECT_PATH={source}"
+            elif token.startswith("OUTPUT="):
+                token = f"OUTPUT={output}"
+            command.append(token)
+        assert not any(token.startswith("LEGEND=") for token in command)
+        done = _run([binary, *command], env, tmp_path)
+
+        assert done.returncode == 0, done.stdout + done.stderr
+        html = output.read_text(encoding="utf-8")
+        assert 'label="Towns"' in html
+        assert 'label="Villages"' not in html
+        assert 'class="om-popup-title"' not in html
+        assert '<om-widget type="legend"' not in html
+        assert 'basemap="positron"' in html
+        # The command's own TITLE still wins over the saved map name.
         assert "<title>Towns</title>" in html
 
     def test_without_the_runtime_it_refuses_and_says_what_to_do(

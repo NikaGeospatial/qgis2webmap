@@ -72,7 +72,26 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   carries an access key is left out. A cartograph's legend still lists the
   layer by name; the Checks tab says so.
 
+### Changed
+- **The Processing algorithm exports what the dialog would.** *Export to
+  OnlyMap web map* now uses the choices the dialog saved in the project -
+  which layers to include, each layer's popup, field and label choices,
+  clustering and point names, the map name, the basemap and the rest of the
+  Appearance tab - where it used to export every layer with the defaults. A
+  title or map control passed to the algorithm still replaces the saved one,
+  and a project never opened in the dialog exports as before. *Export print
+  layout to cartograph (Beta)* likewise uses the layout's saved Map frames
+  choices and resolutions, the Layers section's popup and label choices,
+  Print settings and Browser appearance fields; *Frames* and *Image frame
+  resolution*, when passed, replace every map's saved choice.
+
 ### Fixed
+- A long popup value with nowhere to wrap - a file path, a web address, an
+  ID - breaks onto the next line inside the popup instead of running past its
+  edge. Text with spaces still wraps between its words.
+- A WMS layer made of several sublayers stacks them as QGIS draws them. The
+  web map asked the service for them in the reverse order, so the one QGIS
+  draws at the bottom covered the others; each sublayer's style stays with it.
 - Labels on multi-part features land where QGIS draws them
   ([qgis2web#1095](https://github.com/qgis2web/qgis2web/issues/1095)): every
   point of a multipoint is labelled, not only the first; a multi-part line is

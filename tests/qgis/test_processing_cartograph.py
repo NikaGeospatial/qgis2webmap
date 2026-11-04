@@ -171,3 +171,92 @@ class TestExport:
             {"LAYOUT": "survey-utm", "DPI": 100, "OUTPUT": str(tmp_path / "plain")},
         )
         assert result["OUTPUT"].endswith("plain.html")
+
+
+@needs_runtime
+class TestSavedDialogChoices:
+    """A run builds what the dialog would for the layout: the choices the
+    dialog saved in the project, under any parameter that is passed."""
+
+    @staticmethod
+    def _save(survey, *, static_main=False, attribution="", popups=True, prints=None):
+        from nika_onlymap_exporter.core.settings import (
+            FrameChoice,
+            load_state,
+            save_state,
+        )
+
+        state = load_state(survey.project)
+        name = survey.layout.name()
+        if static_main:
+            state.frame_choices(name)[survey.main_map.uuid()] = FrameChoice(
+                mode="static", dpi=72
+            )
+        state.page_choice(name).attribution = attribution
+        for layer_id in survey.project.mapLayers():
+            state.for_layer(layer_id).popup = popups
+        if prints is not None:
+            state.cartograph_print[name] = prints.to_json()
+        save_state(survey.project, state)
+
+    def test_a_frame_saved_as_an_image_stays_an_image(self, survey, tmp_path) -> None:
+        survey.layout.pageCollection().deletePage(1)
+        self._save(survey, static_main=True)
+        destination = tmp_path / "survey.html"
+
+        _run(survey.project, {"LAYOUT": "survey-utm", "OUTPUT": str(destination)})
+
+        html = destination.read_text(encoding="utf-8")
+        assert html.count('mode="static"') == 1
+        assert html.count("<om-map") == 1
+
+    def test_frames_passed_replace_the_saved_choice(self, survey, tmp_path) -> None:
+        survey.layout.pageCollection().deletePage(1)
+        self._save(survey, static_main=True)
+        destination = tmp_path / "survey.html"
+
+        _run(
+            survey.project,
+            {"LAYOUT": "survey-utm", "FRAMES": 1, "OUTPUT": str(destination)},
+        )
+
+        html = destination.read_text(encoding="utf-8")
+        assert 'mode="static"' not in html
+        assert html.count("<om-map") == 2
+
+    def test_the_saved_page_layers_and_print_settings_reach_the_page(
+        self, survey, tmp_path
+    ) -> None:
+        from qgis.core import QgsField
+        from qgis.PyQt.QtCore import QMetaType
+
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+
+        survey.layout.pageCollection().deletePage(1)
+        parcels = survey.parcels
+        parcels.dataProvider().addAttributes(
+            [QgsField("owner", QMetaType.Type.QString)]
+        )
+        parcels.updateFields()
+        feature = next(parcels.getFeatures())
+        parcels.dataProvider().changeAttributeValues({feature.id(): {0: "Ms Tan"}})
+        default = tmp_path / "default.html"
+        _run(survey.project, {"LAYOUT": "survey-utm", "OUTPUT": str(default)})
+        before = default.read_text(encoding="utf-8")
+        assert "Ms Tan" in before
+        assert 'attribution="Saved credit"' not in before
+
+        self._save(
+            survey,
+            attribution="Saved credit",
+            popups=False,
+            prints=PrintSettings(bleed="5mm", dpi=150),
+        )
+        destination = tmp_path / "survey.html"
+        _run(survey.project, {"LAYOUT": "survey-utm", "OUTPUT": str(destination)})
+
+        html = destination.read_text(encoding="utf-8")
+        assert 'attribution="Saved credit"' in html
+        assert "Ms Tan" not in html
+        assert 'bleed="5"' in html
+        assert 'dpi="150"' in html

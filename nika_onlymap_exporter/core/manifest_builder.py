@@ -1548,8 +1548,12 @@ POPUP_STYLES = """.om-popup {
 .om-popup-label {
   color: #6b7280;
 }
+/* A value with no space to wrap at (a path, an address, an ID) breaks where it
+   must rather than run past the popup's edge; text with spaces still wraps at
+   them first. */
 .om-popup-value {
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 /* "Label above value": the name gets its own line. */
 .om-popup-row-header {

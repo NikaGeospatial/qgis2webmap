@@ -1638,7 +1638,13 @@ def read_map_service(
         return _map_service_layer(layer, tiles, dependency, group_path, visible)
 
     parsed = map_services.parse_wms_capabilities(capabilities)
+    # Top first, as the source string lists them. QGIS's GetMap names them the
+    # other way round, bottom first, since a WMS draws the first one at the
+    # bottom: QGIS 3.44 and 4.2 both ask in the reverse of `layer.source()`
+    # (4.2 also reverses the source string itself when it loads one, so a
+    # project read back stacks the other way in QGIS too). Styles stay paired.
     layers = map_services.values(pairs, "layers")
+    styles = map_services.values(pairs, "styles")
     source_crs = map_services.value(pairs, "crs")
     request_crs = map_services.web_mercator_code(source_crs) or (
         parsed.offered_web_mercator(layers) if parsed is not None else None
@@ -1680,8 +1686,8 @@ def read_map_service(
     template = map_services.wms_get_map_template(
         map_services.prepare_url(get_map).rstrip("?&"),
         version,
-        layers,
-        map_services.values(pairs, "styles"),
+        layers[::-1],
+        styles[::-1],
         image_format,
         request_crs,
         extra,
@@ -1691,11 +1697,12 @@ def read_map_service(
     host = urlsplit(template).netloc
     # The legend pictures QGIS's legend shows, from the same capabilities;
     # none without them, since nothing else says where the service draws one.
+    # Top first, as a legend lists layers: the reverse of the GetMap's order.
     legend = (
         map_services.wms_legend_urls(
             parsed,
             layers,
-            map_services.values(pairs, "styles"),
+            styles,
             image_format,
             url=url if "IgnoreGetMapUrl" in (key for key, _ in pairs) else None,
         )
