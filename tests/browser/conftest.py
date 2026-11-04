@@ -526,11 +526,7 @@ def stacked_popups_map(runtime, tmp_path_factory):
     return result.entry_path
 
 
-@pytest.fixture(scope="session")
-def crowded_controls_map(runtime, tmp_path_factory):
-    """Thirty layers, so the legend and the layer switcher are each taller than
-    half of a laptop-height map: they used to run past its bottom edge and make
-    the whole page scroll."""
+def _crowded_controls_project(**settings) -> ExportProject:
     layers = tuple(
         ExportLayer(
             layer_id=f"crowd{i}",
@@ -548,14 +544,43 @@ def crowded_controls_map(runtime, tmp_path_factory):
         )
         for i in range(30)
     )
-    project = ExportProject(
+    return ExportProject(
         title="Crowded controls",
         layers=layers,
         extent=Extent(west=-0.5, south=50.7, east=0.5, north=51.3),
+        settings=ExportSettings(**settings),
     )
+
+
+@pytest.fixture(scope="session")
+def crowded_controls_map(runtime, tmp_path_factory):
+    """Thirty layers, so the legend and the layer switcher are each taller than
+    half of a laptop-height map: they used to run past its bottom edge and make
+    the whole page scroll."""
     destination = tmp_path_factory.mktemp("crowded")
-    result = OnlyMapWriter(runtime_provider=runtime).write(project, destination)
+    result = OnlyMapWriter(runtime_provider=runtime).write(
+        _crowded_controls_project(), destination
+    )
     return result.entry_path
+
+
+@pytest.fixture(scope="session")
+def crowded_controls_map_at(runtime, tmp_path_factory):
+    """`crowded_controls_map` at an Appearance > Size step: `at(2.0)`, each
+    written once."""
+    written = {}
+
+    def at(scale: float):
+        if scale not in written:
+            destination = tmp_path_factory.mktemp("crowded-sized")
+            written[scale] = (
+                OnlyMapWriter(runtime_provider=runtime)
+                .write(_crowded_controls_project(chrome_scale=scale), destination)
+                .entry_path
+            )
+        return written[scale]
+
+    return at
 
 
 # Straddles the antimeridian the way the QGIS Alaska sample does (-179.13 to

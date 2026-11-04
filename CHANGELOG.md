@@ -127,6 +127,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   thousands in French). The text is worked out at export.
 
 ### Fixed
+- At Appearance > Size **Largest**, a long legend or layer list no longer
+  makes the page scroll: on Auto each panel stops at half the map's height at
+  every Size, where the larger Sizes grew it past the half and, at Largest,
+  past the map's foot.
 - The Fidelity tab and the export's list of network dependencies name
   cartocdn.com, the domain the Dark Matter and Voyager basemaps really load
   from. They named carto.com, which the map never contacts.

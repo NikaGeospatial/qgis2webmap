@@ -206,16 +206,9 @@ class TestNeverBiggerThanTheMap:
 
     def test_a_scaled_panel_still_fits(self, page, runtime, tmp_path) -> None:
         """The Size setting's transform grows the panel after layout, so the
-        cap allows for it. The switcher is off: on Auto at this scale it
-        reaches 12px past the map's foot, as it did before sizes existed."""
-        entry = _export(
-            runtime,
-            tmp_path,
-            30,
-            legend_height=1000,
-            chrome_scale=2.0,
-            show_layer_switcher=False,
-        )
-        state = _panels(page, entry, 1280, 700, switcher=False)
+        cap allows for it - the set legend's, and the switcher's on Auto."""
+        entry = _export(runtime, tmp_path, 30, legend_height=1000, chrome_scale=2.0)
+        state = _panels(page, entry, 1280, 700)
         assert state["page"][1] <= state["page"][3]
         assert state["legend"]["bottom"] <= state["map"]["bottom"] - 11
+        assert state["switcher"]["bottom"] <= state["map"]["bottom"] - 11

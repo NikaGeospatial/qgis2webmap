@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from nika_onlymap_exporter.core.manifest_builder import RASTER_TEXTURE_TEMPLATES
+from nika_onlymap_exporter.ui.dialog_labels import CHROME_SCALE_LABELS
 
 # The runtime's telemetry endpoint, observed rather than documented - the
 # licence names the reports but not the host. Matched as a prefix so a path
@@ -1485,6 +1486,33 @@ class TestTallControls:
                 "el => el.scrollHeight - el.clientHeight"
             )
             assert overflow > 100, (selector, overflow)
+
+    @pytest.mark.parametrize("scale", sorted(CHROME_SCALE_LABELS))
+    def test_at_every_size_each_panel_takes_at_most_half_the_map(
+        self, page, crowded_controls_map_at, scale
+    ) -> None:
+        """Appearance > Size grows each panel with a transform, after layout:
+        at Largest the half-the-map corners reached past the map's foot by
+        their 12px inset, and the page scrolled."""
+        self._open(page, crowded_controls_map_at(scale))
+        sizes = page.evaluate(
+            """() => [document.documentElement.scrollHeight, innerHeight,
+                      document.documentElement.scrollWidth, innerWidth]"""
+        )
+        assert sizes[0] <= sizes[1] and sizes[2] <= sizes[3], sizes
+        map_box = page.locator("om-map").bounding_box()
+        assert map_box is not None
+        for selector in self.PANELS:
+            box = page.locator(selector).bounding_box()
+            assert box is not None
+            assert box["height"] <= map_box["height"] / 2 + 1, selector
+            assert box["y"] + box["height"] <= map_box["y"] + map_box["height"] - 11, (
+                selector
+            )
+            overflow = page.locator(selector).evaluate(
+                "el => el.scrollHeight - el.clientHeight"
+            )
+            assert overflow > 0, (selector, overflow)
 
     def test_the_wheel_scrolls_the_legend_not_the_map(
         self, page, crowded_controls_map

@@ -557,9 +557,11 @@ class TestBasemapSwitcher:
             '[data-om-widget-slot="top-start"] > om-widget {\n        transform: none;'
             in block
         )
-        # Without the switcher the corner keeps the rules it always had.
+        # Without the switcher the corner keeps the rules it always had: its
+        # panel scaled alone, the corner itself not.
         alone = _widget_color_block(make_project(basemap="positron", chrome_scale=2.0))
-        assert 'data-om-widget-slot="top-start"' not in alone
+        assert '[data-om-widget-slot="top-start"] {' not in alone
+        assert "transform: none;" not in alone
 
 
 class TestChromeScale:
@@ -621,6 +623,16 @@ class TestChromeScale:
 
         block = _widget_color_block(make_project(chrome_scale=2.0, show_measure=False))
         assert 'om-widget[type="measure"] {\n        bottom' not in block
+
+    def test_the_top_corners_cap_allows_for_the_scale(self) -> None:
+        """`map.html` caps each top corner at half the map, and the transform
+        grows the panel after layout: at 2x a crowded legend ran past the
+        map's foot and the page scrolled."""
+        from nika_onlymap_exporter.ui.dialog_labels import CHROME_SCALE_LABELS
+
+        for scale in CHROME_SCALE_LABELS:
+            if scale != 1.0:
+                assert f"max-height: calc(50% / {scale});" in self._block(scale)
 
     def test_the_caption_scales_as_type(self) -> None:
         """It is our own element, so it can reflow rather than be stretched."""

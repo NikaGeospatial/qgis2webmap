@@ -683,6 +683,21 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
             ]
         )
 
+    # `map.html` caps each top corner at half the map, and the transform
+    # grows the panel in it after layout: at 2x a crowded legend reached past
+    # the map's foot by the corner's inset and the page scrolled. The cap is
+    # divided by the scale, so the panel is at most half the map at any size.
+    rules.extend(
+        [
+            "      @media not print {",
+            '        [data-om-widget-slot="top-start"],',
+            '        [data-om-widget-slot="top-end"] {',
+            f"          max-height: calc(50% / {round(scale, 3)});",
+            "        }",
+            "      }",
+        ]
+    )
+
     # The caption is our own element, so it scales by type rather than by
     # transform - sharper text, and it reflows instead of overflowing.
     rules.extend(
