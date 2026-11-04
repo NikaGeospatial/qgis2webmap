@@ -124,9 +124,17 @@ def _read_every_field(layer, monkeypatch, **kwargs):
     real = layer_reader.snapshot_features
 
     def every_field(
-        layer, clip_extent, display_names=None, keep=None, scans=None, label=None
+        layer,
+        clip_extent,
+        display_names=None,
+        keep=None,
+        scans=None,
+        label=None,
+        rules=None,
     ):
-        return real(layer, clip_extent, display_names, scans=scans, label=label)
+        return real(
+            layer, clip_extent, display_names, scans=scans, label=label, rules=rules
+        )
 
     with monkeypatch.context() as patch:
         patch.setattr(layer_reader, "snapshot_features", every_field)
@@ -331,9 +339,17 @@ def test_joins_value_relations_and_unsaved_edits_read_alike(
     real = layer_reader.snapshot_features
 
     def every_field(
-        layer, clip_extent, display_names=None, keep=None, scans=None, label=None
+        layer,
+        clip_extent,
+        display_names=None,
+        keep=None,
+        scans=None,
+        label=None,
+        rules=None,
     ):
-        return real(layer, clip_extent, display_names, scans=scans, label=label)
+        return real(
+            layer, clip_extent, display_names, scans=scans, label=label, rules=rules
+        )
 
     with monkeypatch.context() as patch:
         patch.setattr(layer_reader, "snapshot_features", every_field)
@@ -439,9 +455,17 @@ def test_unsaved_edits_through_joins_and_expression_fields_read_alike(
     real = layer_reader.snapshot_features
 
     def every_field(
-        layer, clip_extent, display_names=None, keep=None, scans=None, label=None
+        layer,
+        clip_extent,
+        display_names=None,
+        keep=None,
+        scans=None,
+        label=None,
+        rules=None,
     ):
-        return real(layer, clip_extent, display_names, scans=scans, label=label)
+        return real(
+            layer, clip_extent, display_names, scans=scans, label=label, rules=rules
+        )
 
     try:
         pending = layer_reader.prepare_layer(
@@ -566,9 +590,17 @@ def test_an_atlas_on_fields_left_out_of_the_export(
     real = layer_reader.snapshot_features
 
     def every_field(
-        layer, clip_extent, display_names=None, keep=None, scans=None, label=None
+        layer,
+        clip_extent,
+        display_names=None,
+        keep=None,
+        scans=None,
+        label=None,
+        rules=None,
     ):
-        return real(layer, clip_extent, display_names, scans=scans, label=label)
+        return real(
+            layer, clip_extent, display_names, scans=scans, label=label, rules=rules
+        )
 
     with monkeypatch.context() as patch:
         patch.setattr(layer_reader, "snapshot_features", every_field)
