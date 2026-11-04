@@ -29,7 +29,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   style QGIS kept no copy of. Vector tile layers were not exported before.
 
 ### Changed
-- The map runtime is OnlyMap 0.13.4.
+- The map runtime is OnlyMap 0.13.4. What readers will notice: the scale bar
+  now reads the true distance - it read twice the distance it covered, so a
+  bar labelled 50 km spanned 25 km - and clicking a cluster bubble zooms in
+  exactly as far as it takes for the bubble to split.
 
 ## [0.3.2] - Unreleased
 
