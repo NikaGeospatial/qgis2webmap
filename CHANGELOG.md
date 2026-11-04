@@ -6,6 +6,27 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 
 ## [Unreleased]
 
+### Added
+- **Live features from WFS, OGC API Features and ArcGIS FeatureServer
+  layers.** Such a layer now loads live first: the reader's browser asks the
+  service for the features in view, and again when the map moves elsewhere,
+  following its paging up to 10,000 at a time, and switches to the copy
+  embedded at export whenever the service cannot be read (it refuses maps on
+  other sites, is down, or the reader is offline). A layer whose look is
+  worked out from its features at export - a rule-based style, classes
+  switched off, labels, Value Map or Value Relation values in its popup, a
+  filter panel, count bubbles, popup pictures, virtual or joined fields - or
+  that QGIS filters, needs a login or is a WFS 1.x, stays embedded as
+  before; one over 20 MB is live only. A **Features** choice on the layer's
+  *This layer only* row on the Layers tab picks live first, embedded or live
+  only, is saved with the project and is used by Processing. The Fidelity tab
+  names each live layer's host, and the map lists it among its network
+  requests. Cartograph frames still embed.
+- **A notice for a layer that cannot load.** When a layer fails in the
+  reader's browser and has nothing to show instead - a live-only feature
+  layer, or a tile or map service layer - a small "Could not load" notice at
+  the foot of the map names it, and goes once the layer loads again.
+
 ### Changed
 - The map runtime is OnlyMap 0.13.4.
 

@@ -256,6 +256,29 @@ merged into count bubbles, because the map's filter cannot count the bubbles
 again, and its labels stay on for features the filter hides. Cartograph frames
 carry no filter panel.
 
+### Features
+
+A WFS, OGC API Features or ArcGIS FeatureServer layer's **This layer only** row
+also has **Features**, on *automatic* to start:
+
+- **live first** - the reader's browser loads the features in view from the
+  service, and again when the map moves elsewhere; the copy carried in the map
+  is shown instead whenever the service cannot be read;
+- **embedded** - the features as they are when you export, and the map asks
+  the service for nothing, as every such layer did before 0.3.3;
+- **live only** - no copy is carried; without the service the layer is empty,
+  and the map says it could not be loaded;
+- **automatic** is live first, embedded when the layer's look is worked out
+  from its features at export (a rule-based style, labels, a Value Map or
+  Value Relation in the popup, a filter, count bubbles - the Fidelity tab
+  names which), and live only when its features are over 20 MB.
+
+A layer whose look needs its features at export stays embedded whatever is
+chosen, and the Fidelity tab says why. Other layers have no Features choice.
+The choice is saved with the project, and a
+[Processing run](batch-export.md) uses it. Cartograph frames always carry the
+features.
+
 ### Set every field to … Apply to all layers
 
 A bulk action for the tedium of setting a dozen layers by hand. It is a button

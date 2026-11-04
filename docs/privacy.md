@@ -90,8 +90,17 @@ browser asks that layer's own server for what it draws, so that server sees the
 requests and the area being looked at. A WMS or WMTS layer's legend picture is
 loaded from the service the same way when the map opens. An address that
 carries an access key is never written into the map: such a layer is refused,
-and such a legend picture left out. Vector layers from a web service (WFS, OGC
-API Features, SensorThings) are not live: their features are read once at
+and such a legend picture left out.
+
+A vector layer from a WFS, OGC API Features or ArcGIS FeatureServer is live
+too, unless it stays embedded (see
+[supported features](supported-features.md)): the reader's browser asks that
+service for the features in the area being looked at, and again when the map
+moves somewhere else, so the service's host sees those requests and the area.
+The Fidelity tab names the host for each such layer, under *Live features*,
+and says whether the copy embedded at export is there to fall back on. Set the
+layer's **Features** to *embedded* on the Layers tab and the map sends nothing
+for it. SensorThings layers are never live: their features are read once at
 export and carried in the file.
 
 ## Popup pictures that are web addresses
@@ -175,7 +184,9 @@ did. It sends nothing of yours, and never downloads the raster itself.
 The second: a vector layer QGIS reads from a web service (WFS, OGC API
 Features, SensorThings, an ArcGIS feature service): the export reads its
 features through QGIS, as QGIS reads them to draw the layer, so that service
-may be asked for them again. Nothing of yours is sent to it.
+may be asked for them again. Nothing of yours is sent to it. (A map in which
+such a layer loads live then asks the service itself, from its reader's
+browser - see [live web layers](#live-web-layers-and-their-legends).)
 
 ## If you publish or host a map
 
