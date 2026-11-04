@@ -328,7 +328,10 @@ leave them that way and a default export is unchanged.
 
 **Size** scales the legend, layer switcher, zoom controls, scale bar, measure
 tool and title together — Small through to *Largest, for presentations and big screens*. The
-credit stays fixed, so attribution cannot be shrunk out of legibility.
+credit stays fixed, so attribution cannot be shrunk out of legibility. On a
+narrow screen the controls fold into drawers; above Normal they fold on a
+proportionally wider map, so they keep the room they have at Normal, and in a
+drawer they are at their Normal size.
 
 ### Behaviour
 

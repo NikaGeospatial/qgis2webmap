@@ -597,6 +597,23 @@ class TestChromeScale:
         block = _widget_color_block(make_project(chrome_scale=2.0, show_measure=False))
         assert 'om-widget[type="measure"] {\n        bottom' not in block
 
+    def test_a_bigger_size_folds_at_a_proportionally_wider_map(self) -> None:
+        """The runtime folds at 640px, a width for controls at their own size;
+        at Largest the measure tool ran past the map on a phone."""
+        assert "--om-widget-fold-breakpoint: 1280px;" in self._block(2.0)
+        assert "--om-widget-fold-breakpoint: 800px;" in self._block(1.25)
+        assert "--om-widget-fold-breakpoint" not in self._block(0.85)
+
+    def test_a_folded_control_is_at_its_own_size(self) -> None:
+        """A scaled control overflowed the drawer, out of reach of its scroll.
+        Last in the block, so it outranks the lifts it matches as closely."""
+        for scale in (0.85, 1.5, 2.0):
+            block = self._block(scale)
+            drawer = block.index("[data-om-fold-panel] > om-widget {")
+            assert "transform: none !important;" in block[drawer:]
+            assert "bottom: auto !important;" in block[drawer:]
+            assert block.rindex("!important") < block.index("}", drawer)
+
     def test_the_caption_scales_as_type(self) -> None:
         """It is our own element, so it can reflow rather than be stretched."""
         block = self._block(2.0)

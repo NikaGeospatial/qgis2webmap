@@ -160,6 +160,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   credit is long, from about 540px wide down. The credit moves up clear of
   the badge and of whatever else is in the bottom row, and back down when
   there is room.
+- At a Size above Normal on the Appearance tab, the map controls fold into
+  their drawers in time: at Largest the measure tool reached under the
+  legend and past the edge of a phone's screen. A bigger size folds them at
+  a proportionally wider map, and in a drawer every control is at its Normal
+  size, which the drawer has room for - a scaled control overflowed it, and
+  the measure tool could not be reached at all.
 - The legend lists the top layer first, as QGIS's Layers panel does, with a
   layer's labels right under it. It listed them bottom first, in the order
   the map draws them. The layer switcher's order is still OnlyMap's.

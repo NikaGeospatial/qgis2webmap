@@ -386,3 +386,42 @@ class TestTheBadgeAndTheCreditChip:
         assert chip[0]["right"] <= width and chip[0]["bottom"] <= 700
 
 
+class TestTheMeasureToolAtEverySize:
+    @pytest.mark.parametrize("how", HOW)
+    @pytest.mark.parametrize("scale", (0.85, 1.0, 1.25, 1.5, 2.0))
+    def test_it_stays_on_screen_and_off_the_other_controls(
+        self, opener, runtime, tmp_path, scale, how
+    ) -> None:
+        entry = _write(
+            runtime,
+            tmp_path,
+            ExportProject(
+                title="Measure",
+                layers=(_layer("sites", "Sites", [(0.1, 51.1)]),),
+                extent=Extent(west=-1.0, south=50.9, east=1.0, north=51.9),
+                settings=ExportSettings(chrome_scale=scale),
+            ),
+        )
+        for width, height in ((640, 800), (600, 800), (430, 932), (390, 844)):
+            page = opener(entry, how, (width, height))
+            toggle = page.locator('[data-om-fold-toggle="bottom"]')
+            if toggle.count():
+                # Folded: the tool is in the drawer, so open it, as a reader would.
+                toggle.click(timeout=10_000)
+                page.wait_for_timeout(200)
+            boxes = page.evaluate(
+                BOXES, "om-widget, .om-credit, [data-om-badge], [data-om-fold-toggle]"
+            )
+            tool = next((b for b in boxes if b["name"] == "measure"), None)
+            assert tool is not None, f"no measure tool at {width}px, size {scale}"
+            assert (
+                tool["left"] >= 0
+                and tool["top"] >= 0
+                and tool["right"] <= width
+                and tool["bottom"] <= height
+            ), f"at {width}px and size {scale} the measure tool leaves the map: {tool}"
+            for other in boxes:
+                if other is not tool:
+                    assert not _overlap(tool, other), (
+                        f"at {width}px and size {scale} it covers {other['name']}"
+                    )

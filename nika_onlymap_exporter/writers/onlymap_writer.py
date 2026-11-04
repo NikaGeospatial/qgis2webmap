@@ -637,6 +637,10 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
     The credit component is deliberately absent. Attribution carries licence
     obligations, and a control that can shrink it towards illegibility is a
     control for quietly failing to attribute.
+
+    A narrow map folds the controls into the runtime's drawers, and both the
+    width it folds at and the controls in a drawer follow the size - see
+    `_fold_rules`.
     """
     if abs(scale - 1.0) < 0.01:
         return ""
@@ -697,7 +701,48 @@ def _chrome_scale_block(scale: float, settings: ExportSettings) -> str:
             "      }",
         ]
     )
+
+    # Last: in a drawer these outrank the rules above, which they match as
+    # specifically.
+    rules.extend(_fold_rules(scale))
     return "\n".join(rules)
+
+
+def _fold_rules(scale: float) -> list[str]:
+    """Fold the controls in time for their size, and keep them whole folded.
+
+    The runtime folds the controls into a drawer per side at 640px - a width
+    set for controls at their own size. Scaled up, they ran out of room long
+    before it: at Largest the 558px measure tool reached under the legend on
+    a phone, and past the edge of the map. So a bigger size folds at a
+    proportionally wider map, which leaves each control the room it had at
+    Normal. A smaller one keeps the runtime's width.
+
+    A drawer is the runtime's own panel, no wider than 360px, nor 80% of the
+    screen, and it scrolls what it cannot show. A transform moves nothing out
+    of the way, so a scaled control overflowed it, out of reach of the
+    scroll: the measure tool grew up past the top of the screen. In a drawer
+    the controls are therefore at their own size, and the lifts that clear
+    them of one another in the corner do not apply.
+    """
+    rules: list[str] = []
+    if scale > 1.0:
+        rules.extend(
+            [
+                "      :root {",
+                f"        --om-widget-fold-breakpoint: {round(640 * scale)}px;",
+                "      }",
+            ]
+        )
+    rules.extend(
+        [
+            "      [data-om-fold-panel] > om-widget {",
+            "        transform: none !important;",
+            "        bottom: auto !important;",
+            "      }",
+        ]
+    )
+    return rules
 
 
 def _top_left_stack_block(project: ExportProject) -> str:
@@ -709,8 +754,8 @@ def _top_left_stack_block(project: ExportProject) -> str:
     the corner's slot is scaled from its corner instead, and the panels in it
     are not scaled again.
     A narrow map that folds them into a drawer takes them out of the slot,
-    where each keeps its own scale. Empty for a corner with the switcher alone,
-    which keeps the rules it always had.
+    where each is at its own size (`_fold_rules`). Empty for a corner with the
+    switcher alone, which keeps the rules it always had.
     """
     if not switcher_basemaps(project.settings) and not any(
         layer.filter is not None for layer in project.exportable_layers
