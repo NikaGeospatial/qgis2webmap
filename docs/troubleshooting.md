@@ -191,8 +191,8 @@ way.
 Note this is not the same as extruded polygons. Extrusion reads a height from an
 *attribute* and leaves the geometry flat, and those layers were never affected.
 
-Fixed in the next release. Until then, either switch labelling off for that
-layer, or give it flat geometry — **Processing Toolbox → Vector geometry → Drop
+Fixed in 0.2.0: update the plugin. If you cannot, either switch labelling off
+for that layer, or give it flat geometry — **Processing Toolbox → Vector geometry → Drop
 M/Z values**, which writes a new layer with the elevation removed. Dropping Z
 does not affect extrusion, because extrusion never reads the geometry's height.
 
