@@ -105,6 +105,7 @@ from ..core.cartograph_export import expression_reuse_key
 from ..core.export_ir import (
     ExportProject,
     ExtentSource,
+    LiveMode,
     OutputMode,
     OverlayCorner,
     PopupFieldMode,
@@ -116,7 +117,7 @@ from ..core.fidelity_summary import (
     strip_message,
     summarise,
 )
-from ..core.layer_reader import filter_kind
+from ..core.layer_reader import filter_kind, is_live_capable
 from ..core.license_policy import (
     default_policy,
     report_verdict,
@@ -2158,14 +2159,16 @@ class MainDialog(QDialog):
     def _add_layer_options_row(
         self, parent: QTreeWidgetItem, layer: QgsVectorLayer, settings: LayerSettings
     ) -> None:
-        """Per-layer overrides of three map-wide settings, and a filter.
+        """Per-layer overrides of three map-wide settings, a filter, and for a
+        web feature service layer where its features come from.
 
         Every control starts on "Same as map", so a project that never touches
         this row behaves exactly as before. qgis2web has carried these three as
         global-only since 2015 - its issues #131, #132 and #133 each ask for
         this and each is still open - and the reason it matters is that "all
         layers alike except one" otherwise means configuring every layer. The
-        filter starts on none, for the same reason.
+        filter starts on none, and the features on automatic, for the same
+        reason.
         """
         layer_id = layer.id()
         item = QTreeWidgetItem(parent)
@@ -2230,6 +2233,8 @@ class MainDialog(QDialog):
         layout.addWidget(highlight)
 
         layout.addWidget(self._filter_combo(row, layer, settings))
+        if is_live_capable(layer):
+            layout.addWidget(self._live_combo(row, layer, settings))
 
         layout.addStretch(1)
         self.layer_tree.setItemWidget(item, 0, row)
@@ -2264,6 +2269,41 @@ class MainDialog(QDialog):
             lambda _i, lid=layer_id, box=combo: self._on_layer_filter_changed(lid, box)
         )
         return combo
+
+    def _live_combo(
+        self, row: QWidget, layer: QgsVectorLayer, settings: LayerSettings
+    ) -> QComboBox:
+        """ "Features": where a WFS, OGC API Features or ArcGIS FeatureServer
+        layer's features come from in the map (`core.live_features`)."""
+        combo = QComboBox(row)
+        combo.setToolTip(
+            tr(
+                "Live first loads the features in view from the service in the "
+                "reader's browser, and shows the copy embedded in the map when "
+                "the service cannot be reached. Embedded carries the features "
+                "as they are now, and contacts nothing. Live only carries no "
+                "copy. Automatic is live first, embedded when the layer's style, "
+                "labels, popup or filter are worked out from its features, and "
+                "live only when they are too big to carry."
+            )
+        )
+        for text, value in (
+            (tr("Features: automatic"), None),
+            (tr("Features: live first"), LiveMode.LIVE_FIRST.value),
+            (tr("Features: embedded"), LiveMode.EMBEDDED.value),
+            (tr("Features: live only"), LiveMode.LIVE_ONLY.value),
+        ):
+            combo.addItem(text, value)
+        combo.setCurrentIndex(max(0, combo.findData(settings.live_features)))
+        layer_id = layer.id()
+        combo.currentIndexChanged.connect(
+            lambda _i, lid=layer_id, box=combo: self._on_layer_live_changed(lid, box)
+        )
+        return combo
+
+    def _on_layer_live_changed(self, layer_id: str, combo: QComboBox) -> None:
+        self.state.for_layer(layer_id).live_features = combo.currentData()
+        self._fidelity_is_stale = True
 
     def _on_layer_filter_changed(self, layer_id: str, combo: QComboBox) -> None:
         self.state.for_layer(layer_id).filter_field = combo.currentData()
