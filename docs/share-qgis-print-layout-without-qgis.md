@@ -44,8 +44,10 @@ sheet for the next parcel, you are back in QGIS exporting again.
   [atlas cartographs](cartograph-atlas.md).
 
 What they need: a web browser. Not QGIS, not an account, and - unless a live
-map draws an online tile layer - not an internet connection. An interactive map needs
-JavaScript and WebGL, which practically every current browser has. A page of
+map draws an online tile layer or a Cloud Optimized GeoTIFF read from a web
+address, or a popup shows a link or a picture from a web address - not an
+internet connection. Popup pictures carried in the file show offline. An
+interactive map needs JavaScript and WebGL, which practically every current browser has. A page of
 only image frames needs neither: it reads even in a mail or file preview.
 
 ## What travels in the file
@@ -62,8 +64,10 @@ To keep attributes out, use the **Layers** section of the **Layout** tab - the
 same list as the web map's Layers tab: untick
 **Popups** on a layer, or set a field to *Do not show this field*, and those
 values are not written into the file at all. A field the map draws with - the
-one a categorised style or a label reads - stays, since it is visible on the
-map anyway. To keep the features themselves out, set the frame to **Image**:
+one a categorised style or a field's label reads - stays, since it is visible
+on the map anyway. A label from an expression, and a rule-based style, carry only
+their result - the text, or which rule draws the feature - not the fields
+they read. To keep the features themselves out, set the frame to **Image**:
 then the file holds only a picture. Database passwords and service
 credentials are never written into the file in either case.
 
