@@ -342,6 +342,7 @@ class TestTopics:
         assert topic_of("Scale visibility of 'Roads'") is Topic.SYMBOLOGY
         assert topic_of("Labels on 'Roads'") is Topic.LABELS
         assert topic_of("Popup fields of 'Roads'") is Topic.POPUPS
+        assert topic_of("Popups of 'Roads'") is Topic.POPUPS
         assert topic_of("Layer 'Roads'") is Topic.DATA
         assert topic_of("Feature count in 'Roads'") is Topic.DATA
         assert topic_of("Layer count") is Topic.MAP
