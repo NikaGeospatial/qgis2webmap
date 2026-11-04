@@ -233,6 +233,10 @@ def _pressed(page, button: str) -> str | None:
     return page.locator(button).get_attribute("aria-pressed", timeout=10_000)
 
 
+def _scale_label(page) -> str:
+    return page.locator('om-widget[type="scale-bar"] .label').inner_text(timeout=10_000)
+
+
 def _hint_shown(page) -> bool:
     return page.locator(HINT).is_visible()
 
@@ -388,6 +392,26 @@ class TestTheUnits:
         assert float(match.group(1).replace(",", "")) == pytest.approx(
             expected, rel=0.02
         )
+        # The scale bar reads in the same units.
+        assert re.fullmatch(rf"[\d.,]+\s*(ft|{unit})", _scale_label(page))
+
+    @pytest.mark.parametrize(
+        ("units", "pattern"),
+        [("metric", r"m|km"), ("imperial", r"ft|mi"), ("nautical", r"nmi")],
+    )
+    def test_the_scale_bar_reads_in_them_without_the_measure_tool(
+        self, page, runtime, tmp_path, units, pattern
+    ) -> None:
+        _open(
+            page,
+            OnlyMapWriter(runtime_provider=runtime).write(
+                _project(ExportSettings(show_measure=False, measure_units=units)),
+                tmp_path,
+            ),
+        )
+
+        label = _scale_label(page)
+        assert re.fullmatch(rf"[\d.,]+\s*({pattern})", label), label
 
     def test_the_panel_has_no_units_of_its_own(self, page, measure_map) -> None:
         _open(page, measure_map)
@@ -548,12 +572,19 @@ class TestClosingAnArea:
 class TestACompactPanel:
     def test_it_is_smaller_than_the_runtimes_own(self, page, measure_map) -> None:
         """The runtime's panel measured 279x146 at Normal size, its Units row
-        and a full-width Clear button under the readout."""
+        and a full-width Clear button under the readout; this one 214x76."""
         _open(page, measure_map)
 
         box = page.locator(MEASURE).bounding_box()
         assert box is not None
-        assert box["width"] <= 250 and box["height"] <= 80, box
+        assert box["width"] <= 220 and box["height"] <= 80, box
+        # Short names on the buttons, the full ones for a screen reader.
+        for button, text, name in (
+            (DISTANCE, "Distance", "Measure distance"),
+            (AREA, "Area", "Measure area"),
+        ):
+            assert page.locator(button).inner_text() == text
+            assert page.get_by_role("button", name=name, exact=True).count() == 1
         # Clear is still a button of its own, beside the readout, big enough
         # to hit and reached by the keyboard.
         clear = page.locator(f"{MEASURE} button[data-act='clear']")

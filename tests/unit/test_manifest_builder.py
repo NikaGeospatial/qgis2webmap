@@ -561,6 +561,16 @@ class TestManifest:
             make_project(settings=ExportSettings(measure_units=units))
         )
         assert f'<om-widget type="measure" units="{units}" ' in markup
+        assert f'<om-widget type="scale-bar" units="{units}" ' in markup
+
+    def test_the_scale_bar_keeps_the_units_without_the_measure_tool(self) -> None:
+        markup = build_manifest(
+            make_project(
+                settings=ExportSettings(show_measure=False, measure_units="nautical")
+            )
+        )
+        assert '<om-widget type="scale-bar" units="nautical" ' in markup
+        assert 'type="measure"' not in markup
 
     def test_units_the_runtime_does_not_know_are_metric(self) -> None:
         """The runtime would ignore them and show metric anyway; saying so
@@ -569,6 +579,7 @@ class TestManifest:
             make_project(settings=ExportSettings(measure_units='x" onclick="y'))
         )
         assert '<om-widget type="measure" units="metric" ' in markup
+        assert '<om-widget type="scale-bar" units="metric" ' in markup
         assert "onclick" not in markup
 
     def test_the_measure_tool_can_be_switched_off(self) -> None:

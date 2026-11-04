@@ -1339,8 +1339,8 @@ class ExportLayer:
         return data
 
 
-# The measure tool's unit systems, as the runtime's `units` attribute names
-# them (`UnitSystem` in OnlyMap's `units.d.ts`). Metric first: it is the
+# The measure tool's and scale bar's unit systems, as the runtime's `units`
+# attribute names them (`UnitSystem` in OnlyMap's `units.d.ts`). Metric first: it is the
 # runtime's own default, and so what every map before the choice existed used.
 MEASURE_UNITS = ("metric", "imperial", "nautical")
 
@@ -1361,7 +1361,8 @@ class ExportSettings:
     show_scale_bar: bool = True
     show_measure: bool = True
     # One of `MEASURE_UNITS`: what the measure tool reads distances and areas
-    # in. The reader no longer picks it on the map.
+    # in, and the scale bar its length. The reader no longer picks it on the
+    # map.
     measure_units: str = "metric"
     quantize_precision: int | None = None
     simplify_tolerance: float | None = None

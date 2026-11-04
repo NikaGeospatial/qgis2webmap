@@ -432,7 +432,9 @@ class TestTheMeasureToolAtEverySize:
 BOTTOM_LEFT = ("measure", "basemap-switcher", "scale-bar", "zoom-controls")
 
 
-def _corner_map(runtime, destination: Path, scale: float) -> Path:
+def _corner_map(
+    runtime, destination: Path, scale: float, units: str = "metric"
+) -> Path:
     """Every bottom-left control, and a layer switcher over three layers in the
     top-left corner for the stack to stay clear of."""
     return _write(
@@ -445,7 +447,10 @@ def _corner_map(runtime, destination: Path, scale: float) -> Path:
             ),
             extent=Extent(west=-1.0, south=50.9, east=1.0, north=51.9),
             settings=ExportSettings(
-                basemap="positron", basemap_switcher=True, chrome_scale=scale
+                basemap="positron",
+                basemap_switcher=True,
+                chrome_scale=scale,
+                measure_units=units,
             ),
         ),
     )
@@ -489,18 +494,20 @@ class TestTheBottomLeftCorner:
                 f"{where}: bottom to top {[b['name'] for b in rising]} {widths}"
             )
 
+    @pytest.mark.parametrize("units", ("metric", "imperial", "nautical"))
     @pytest.mark.parametrize("scale", (1.0, 1.25))
     def test_the_area_hint_takes_its_room_in_the_stack(
-        self, opener, runtime, tmp_path, scale
+        self, opener, runtime, tmp_path, scale, units
     ) -> None:
         """While an area is drawn the measure tool carries its Ctrl + click
         hint above it, inside its own box, so the stack makes room for it as
-        for any taller control - and a narrow map's drawer holds it too."""
-        entry = _corner_map(runtime, tmp_path, scale)
+        for any taller control - and a narrow map's drawer holds it too. In
+        each unit system, which changes the scale bar's width."""
+        entry = _corner_map(runtime, tmp_path, scale, units)
         selector = "om-widget, .om-credit, [data-om-badge], [data-om-fold-toggle]"
         for size in ((1280, 800), (390, 844)):
             page = opener(entry, "file", size)
-            where = f"at size {scale}, {size[0]}x{size[1]}"
+            where = f"at size {scale}, {units}, {size[0]}x{size[1]}"
             toggle = page.locator('[data-om-fold-toggle="bottom"]')
             if toggle.count():
                 toggle.click(timeout=10_000)

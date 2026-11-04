@@ -357,8 +357,8 @@ def _read_scale(raw: Any) -> float:
 
 
 def _read_measure_units(raw: Any) -> str:
-    """A persisted measure unit system; anything not one of `MEASURE_UNITS`
-    is metric, the runtime's own default."""
+    """A persisted unit system for the measure tool and scale bar; anything
+    not one of `MEASURE_UNITS` is metric, the runtime's own default."""
     return raw if isinstance(raw, str) and raw in MEASURE_UNITS else "metric"
 
 
@@ -527,7 +527,8 @@ class DialogState:
     show_zoom_controls: bool = True
     show_scale_bar: bool = True
     show_measure: bool = True
-    # One of `MEASURE_UNITS`, chosen beside the Measure tool switch.
+    # One of `MEASURE_UNITS`, chosen beside the Measure tool switch; the
+    # scale bar reads in it too.
     measure_units: str = "metric"
     popup_on_hover: bool = False
     # On by default: a map that does not say what it is arrives with no context,

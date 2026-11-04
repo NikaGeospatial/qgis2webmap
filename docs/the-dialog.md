@@ -282,10 +282,10 @@ Five switches — **Legend**, **Layer switcher**, **Zoom controls**, **Scale bar
 **Measure tool**. Untick one to leave that control off the exported map.
 
 The **measure tool** lets whoever opens the map measure on it. They pick
-**Measure distance** or **Measure area**, click points on the map, and read the
+**Distance** or **Area**, click points on the map, and read the
 total. A distance is two points: the second click ends it, the line and its
 total stay on the map, and clicks go back to the map - popups, panning - until
-**Measure distance** is pressed again for a new one. An area takes as many
+**Distance** is pressed again for a new one. An area takes as many
 points as needed and closes on **Ctrl + click** (**Cmd + click** on a Mac),
 which places its last point; a double-click, a double-tap on a touch screen or
 **Enter** close it too. While an area is being drawn a small hint above the
@@ -299,10 +299,11 @@ tool, then the basemap panel, the scale bar and the zoom controls on top. On a
 window too short for the corner its controls fold into a drawer, as they do on
 a narrow one, rather than reach the panels in the top-left corner.
 
-Beside **Measure tool**, while it is ticked, **Metric**, **Imperial** and
-**Nautical** choose the units it reads in (with Nautical, areas stay metric).
-Metric is the default. The choice is saved with the project, and the exported
-map has no units control of its own: it measures in what you chose.
+Beside **Measure tool**, while it or **Scale bar** is ticked, **Metric**,
+**Imperial** and **Nautical** choose the units both read in (with Nautical,
+measured areas stay metric). Metric is the default. The choice is saved with
+the project, and the exported map has no units control of its own: it
+measures, and its scale bar reads, in what you chose.
 
 Beside **Legend** and **Layer switcher**, while each is ticked, two boxes set
 that panel's width and height in pixels — width 140 to 600, height 100 to

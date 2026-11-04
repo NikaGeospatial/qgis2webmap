@@ -23,14 +23,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   uses. On by default, like the other map controls; untick **Measure tool**
   on the Appearance tab, or the Processing algorithm's *Measure tool*
   parameter, to leave it off. Its units - **Metric**, **Imperial** or
-  **Nautical** - are chosen beside that switch and saved with the project;
-  the map has no units control of its own. A distance is two points: the
-  second ends it, and clicks go back to the map (popups, panning) until
-  **Measure distance** is pressed again. An area closes on **Ctrl + click**
-  (**Cmd + click** on a Mac) at its last point, as well as on a double-click,
-  a double-tap or Enter, and a hint above the tool says so while one is
-  being drawn. The panel is compact, its Clear button beside the readout. It
-  sits bottom left, just above the licence notice, and is not drawn in a
+  **Nautical** - are chosen beside that switch and saved with the project,
+  and the scale bar reads in them too; the map has no units control of its
+  own. A distance is two points: the second ends it, and clicks go back to
+  the map (popups, panning) until **Distance** is pressed again. An area
+  closes on **Ctrl + click** (**Cmd + click** on a Mac) at its last point, as
+  well as on a double-click, a double-tap or Enter, and a hint above the tool
+  says so while one is being drawn. The panel is compact: its buttons read
+  **Distance** and **Area**, and Clear sits beside the readout. It sits
+  bottom left, just above the licence notice, and is not drawn in a
   cartograph's interactive frames.
 - **Filter by**, a new choice on a vector layer's *This layer only* row in
   the Layers tab: the web map gets a panel, top left, that filters the layer

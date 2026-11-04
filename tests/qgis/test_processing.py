@@ -601,6 +601,7 @@ class TestSavedDialogChoices:
         assert '<om-widget type="legend"' not in batch
         assert "--om-widget-bg: #40e0d0" in batch
         assert '<om-widget type="measure" units="nautical" ' in batch
+        assert '<om-widget type="scale-bar" units="nautical" ' in batch
         assert "<title>Saved name</title>" in batch
 
     def test_a_parameter_that_is_passed_wins_over_the_saved_choice(

@@ -1877,11 +1877,12 @@ WIDGET_POSITIONS = {
 # one above it narrower. The runtime stacks the corner's slot by `order`,
 # lowest at the top, and its licence badge - the widest of all, 346px - stays
 # under everything: it is mandated chrome, which the runtime always puts last.
-# Widths measured at Normal size in chromium: measure tool 241px (compacted by
-# `templates/measure-tool.html`; its readout and its area hint wrap rather
-# than widen it), basemap switcher 164px (its panel's own minimum is 140px),
-# scale bar 89-115px (it picks a round distance, so it changes as the map
-# zooms, but stays under 140px), zoom controls 30px (44px on a touch screen).
+# Widths measured at Normal size in chromium: measure tool 214px (compacted by
+# `templates/measure-tool.html` to the runtime's own 200px minimum; its
+# readout wraps rather than widen it), basemap switcher 164px (its panel's own
+# minimum is 140px), scale bar 72-115px (it picks a round distance in the
+# chosen units, so it changes as the map zooms, but stays under 140px), zoom
+# controls 30px (44px on a touch screen).
 # Every Size scales them alike, so the order holds at each one, and a control
 # left off leaves the rest in order.
 BOTTOM_LEFT_ORDER = {
@@ -2344,15 +2345,15 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
         for layer in project.exportable_layers
         if layer.filter is not None
     )
+    # The units are the author's, the measure tool's and the scale bar's
+    # alike: the page's `templates/measure-tool.html` takes the measure
+    # widget's own Units row away, so this is the only say in them.
+    units = (
+        settings.measure_units
+        if settings.measure_units in MEASURE_UNITS
+        else MEASURE_UNITS[0]
+    )
     if settings.show_measure:
-        # The units are the author's: the page's `templates/measure-tool.html`
-        # takes the widget's own Units row away, so this is the only say in
-        # them.
-        units = (
-            settings.measure_units
-            if settings.measure_units in MEASURE_UNITS
-            else MEASURE_UNITS[0]
-        )
         widgets.append(
             f'{indent}<om-widget type="measure" units="{units}" '
             f'order="{BOTTOM_LEFT_ORDER["measure"]}" '
@@ -2366,7 +2367,7 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
         )
     if settings.show_scale_bar:
         widgets.append(
-            f'{indent}<om-widget type="scale-bar" '
+            f'{indent}<om-widget type="scale-bar" units="{units}" '
             f'order="{BOTTOM_LEFT_ORDER["scale-bar"]}" '
             f'position="{WIDGET_POSITIONS["scale-bar"]}"></om-widget>'
         )

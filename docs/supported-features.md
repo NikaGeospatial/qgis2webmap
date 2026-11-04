@@ -520,8 +520,8 @@ map draws them, bottom first.
 
 The measure tool measures distances and areas on the ground, whatever CRS
 the project uses, in the units chosen beside its switch on the Appearance tab:
-metric, imperial or nautical (nautical areas are in metric). The reader does
-not pick the units. A distance ends at its second point and hands clicks back
+metric, imperial or nautical (nautical areas are in metric). The scale bar
+reads in the same units, and the reader does not pick them. A distance ends at its second point and hands clicks back
 to the map; an area closes on Ctrl + click (Cmd + click on a Mac), a
 double-click, a double-tap or Enter, with a hint above the tool while it is
 being drawn. It works in a map opened from a file, served from a website and

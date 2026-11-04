@@ -15,9 +15,10 @@
         as before. Closed, it lets go of the map too. A hint above the panel
         says so while an area is being drawn.
       - The units are the author's, set on the Appearance tab and written on
-        the widget as `units`, so the panel's own Units row is removed; and
-        the Clear button sits beside the readout, smaller, to keep the panel
-        compact.
+        the widget as `units` (the scale bar's too), so the panel's own Units
+        row is removed. To keep the panel compact the mode buttons read
+        Distance and Area, named in full for a screen reader, and the Clear
+        button sits beside the readout, smaller.
 
       The last point is placed the way the runtime closes a shape on a
       double-click: `draw-commit` ends it at the pointer, which the runtime
@@ -53,6 +54,7 @@
         // A touch has no hover to end the shape at: the points it placed do.
         var NO_HOVER_MS = 400;
         var NEEDED = { distance: 2, area: 3 };
+        var SHORT = { distance: "Distance", area: "Area" };
         var mac = /Mac|iPhone|iPad|iPod/.test(
           navigator.platform || navigator.userAgent || ""
         );
@@ -63,7 +65,9 @@
           ? "Double-tap to place the last point"
           : (mac ? "Cmd" : "Ctrl") + " + click to place the last point";
         var STYLE =
-          ".omni-measure { padding: 6px; min-width: 0; font-size: 12px; }" +
+          // The runtime's own 200px minimum stays: it keeps the hint on one
+          // line and the readout on two beside Clear.
+          ".omni-measure { padding: 6px; font-size: 12px; }" +
           ".omni-measure .row.modes { margin-bottom: 0; gap: 4px; flex-wrap: nowrap; }" +
           ".omni-measure .row.modes button { padding: 4px 8px; }" +
           ".q2w-measure-foot { display: flex; align-items: center; gap: 4px;" +
@@ -143,6 +147,13 @@
           var style = document.createElement("style");
           style.textContent = STYLE;
           root.appendChild(style);
+          var modes = panel.querySelectorAll("button[data-act='mode']");
+          for (var i = 0; i < modes.length; i++) {
+            var short = SHORT[modes[i].getAttribute("data-mode")];
+            if (!short) continue;
+            modes[i].setAttribute("aria-label", modes[i].textContent.trim());
+            modes[i].textContent = short;
+          }
           var units = panel.querySelector(".units");
           if (units && units.parentElement !== panel) units.parentElement.remove();
           var readout = panel.querySelector(".readout");

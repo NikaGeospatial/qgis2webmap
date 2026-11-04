@@ -2774,9 +2774,10 @@ class MainDialog(QDialog):
     def _add_measure_units_row(
         self, grid: QGridLayout, check: QCheckBox, page: QWidget
     ) -> None:
-        """The Measure tool switch with its units beside it, shown while the
-        tool is on the map, as the next row of `grid`: where the panels have
-        their size boxes. The map's reader no longer picks the units."""
+        """The Measure tool switch with its units beside it, as the next row
+        of `grid`: where the panels have their size boxes. The scale bar reads
+        in them too, so they show while either is on the map. The map's reader
+        no longer picks the units."""
         row = _next_row(grid)
         grid.addWidget(check, row, 0)
         units_row = QHBoxLayout()
@@ -2787,11 +2788,14 @@ class MainDialog(QDialog):
             button = QRadioButton(tr(label), page)
             button.setChecked(units == self.state.measure_units)
             button.setToolTip(
-                tr("The units the measure tool reads distances and areas in.")
+                tr(
+                    "The units the measure tool reads distances and areas in, "
+                    "and the scale bar its length."
+                )
             )
             button.setAccessibleName(
-                tr("{control} units: {units}").format(
-                    control=check.text(), units=button.text()
+                tr("Measure tool and scale bar units: {units}").format(
+                    units=button.text()
                 )
             )
 
@@ -2800,12 +2804,20 @@ class MainDialog(QDialog):
                     self.state.measure_units = value
 
             button.toggled.connect(chosen)
-            button.setVisible(check.isChecked())
-            check.toggled.connect(button.setVisible)
             self.measure_units_group.addButton(button)
             units_row.addWidget(button)
             self.measure_unit_buttons[units] = button
         units_row.addStretch(1)
+        scale_bar = self.widget_checks["scaleBar"]
+
+        def show_units() -> None:
+            shown = check.isChecked() or scale_bar.isChecked()
+            for button in self.measure_unit_buttons.values():
+                button.setVisible(shown)
+
+        show_units()
+        check.toggled.connect(show_units)
+        scale_bar.toggled.connect(show_units)
         # Across the size boxes' columns and the stretch after them, so the
         # radio buttons widen none of the columns the boxes are in.
         grid.addLayout(units_row, row, 1, 1, 4)

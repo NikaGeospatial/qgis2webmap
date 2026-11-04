@@ -468,12 +468,15 @@ class TestMeasureUnits:
     """Metric, Imperial and Nautical beside the Measure tool switch, where the
     panels have their size boxes."""
 
-    def test_they_show_only_while_the_tool_is_on(
+    def test_they_show_while_the_tool_or_the_scale_bar_is_on(
         self, qgis_app, project, make_memory_layer
     ) -> None:
+        """The scale bar reads in them too, so they are there for either."""
         dialog = TestTabCorner()._dialog(project, make_memory_layer)
         try:
             buttons = dialog.measure_unit_buttons
+            measure = dialog.widget_checks["measure"]
+            scale_bar = dialog.widget_checks["scaleBar"]
             assert [b.text() for b in buttons.values()] == [
                 "Metric",
                 "Imperial",
@@ -481,9 +484,14 @@ class TestMeasureUnits:
             ]
             assert buttons["metric"].isChecked()
             assert not any(b.isHidden() for b in buttons.values())
-            dialog.widget_checks["measure"].setChecked(False)
+            measure.setChecked(False)
+            assert not any(b.isHidden() for b in buttons.values())
+            scale_bar.setChecked(False)
             assert all(b.isHidden() for b in buttons.values())
-            dialog.widget_checks["measure"].setChecked(True)
+            measure.setChecked(True)
+            assert not any(b.isHidden() for b in buttons.values())
+            measure.setChecked(False)
+            scale_bar.setChecked(True)
             assert not any(b.isHidden() for b in buttons.values())
         finally:
             dialog.close()
