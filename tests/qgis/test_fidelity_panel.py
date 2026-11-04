@@ -544,6 +544,7 @@ class TestFacts:
         dialog._cached_export = export
         dialog._cached_report = report
         dialog._cached_signature = signature
+        dialog._cached_expressions = dialog._expression_key()
         dialog._show_fidelity(report, signature)
         return export
 

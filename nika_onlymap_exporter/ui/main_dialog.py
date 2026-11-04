@@ -101,6 +101,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from ..core.attribute_filter import CATEGORY_LIMIT
+from ..core.cartograph_export import expression_reuse_key
 from ..core.export_ir import (
     ExportProject,
     ExtentSource,
@@ -717,6 +718,7 @@ class MainDialog(QDialog):
         self._cached_signature: str | None = None
         self._cached_canvas_extent = None
         self._cached_map_time = None
+        self._cached_expressions: str | None = None
         # Captured on this thread before each job starts; see `_ensure_export`.
         self._pending_canvas_extent = None
         self._pending_map_time = None
@@ -4255,11 +4257,14 @@ class MainDialog(QDialog):
         # pan only costs a re-read when the export actually depends on it.
         canvas_extent = self._canvas_extent()
         map_time = self._canvas_time()
+        expressions = self._expression_key()
         if (
             self._cached_export is not None
             and self._cached_signature == signature
             and self._cached_canvas_extent == canvas_extent
             and self._cached_map_time == map_time
+            and expressions is not None
+            and self._cached_expressions == expressions
         ):
             # The read is reused, but the settings it carries are the ones it
             # was taken with: a colour or control changed since would never
@@ -4308,6 +4313,7 @@ class MainDialog(QDialog):
             self._cached_signature = signature
             self._cached_canvas_extent = canvas_extent
             self._cached_map_time = map_time
+            self._cached_expressions = expressions
             self._show_fidelity(report, signature)
             self._update_size_note()
             then(export, report)
@@ -4319,6 +4325,20 @@ class MainDialog(QDialog):
             self._begin_fidelity_check()
         return started
 
+    def _expression_key(self) -> str | None:
+        """What the exported layers' expressions read beside the layers, which
+        a reused read must match. **GUI thread only.**
+
+        The layer watcher follows the layers, not what their expressions read
+        beside them: a project variable a rule or label reads, or the clock.
+        None when one reads what no key can vouch for, so such a read is never
+        reused (`cartograph_export.expression_reuse_key`).
+        """
+        return expression_reuse_key(
+            self.project,
+            self.state.selected_layer_ids(available_layer_ids(self.project)),
+        )
+
     def _invalidate_export_cache(self) -> None:
         """Forget the last read. Called whenever the data could have changed."""
         self._cached_export = None
@@ -4326,6 +4346,7 @@ class MainDialog(QDialog):
         self._cached_signature = None
         self._cached_canvas_extent = None
         self._cached_map_time = None
+        self._cached_expressions = None
         # Tells a read or write already running that it started on the old
         # project, so it must not record itself as current when it lands.
         self._project_generation += 1

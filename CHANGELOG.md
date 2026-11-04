@@ -170,6 +170,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - OGC API Features and SensorThings layers are described as web services in
   the export, like WFS layers: their features are downloaded once and
   embedded. They were described as read from a database.
+- An export after a preview carries the labels and rule classes of now when
+  their expressions read a project or layer variable that has changed since,
+  and reads again whenever one reads the clock, chance or another layer
+  (`now()`, `rand()`, `aggregate()` and the like). The preview's read was
+  reused, with the variable's old value and the preview's time.
 
 ## [0.3.1] - 2026-11-03
 

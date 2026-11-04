@@ -784,6 +784,7 @@ class TestTimeInTheReadCache:
         dialog._cached_signature = dialog.state.data_snapshot()
         dialog._cached_canvas_extent = dialog._canvas_extent()
         dialog._cached_map_time = dialog._canvas_time()
+        dialog._cached_expressions = dialog._expression_key()
 
         reads: list[str] = []
         dialog._start_job = lambda *a, **k: reads.append("read") or False
