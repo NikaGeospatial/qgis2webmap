@@ -103,7 +103,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   layout to cartograph (Beta)* likewise uses the layout's saved Map frames
   choices and resolutions, the Layers section's popup and label choices,
   Print settings and Browser appearance fields; *Frames* and *Image frame
-  resolution*, when passed, replace every map's saved choice.
+  resolution*, when passed, replace every map's saved choice. Like the
+  dialog's Save, it draws an image frame at least at the resolution the page
+  is saved at - the saved Print settings', else 300 dpi - where it used to
+  draw it at the frame's own resolution, 200 dpi by default.
 
 - **Line labels repeat along long lines.** With **Repeat** set in a line
   layer's label placement, labels repeat where QGIS repeats them: the line cut

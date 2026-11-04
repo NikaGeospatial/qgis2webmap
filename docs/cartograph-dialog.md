@@ -447,9 +447,9 @@ the Browser appearance fields. **Frames** and **Image frame resolution**
 replace every map's saved choice when they are passed; a script or
 `qgis_process` run that leaves one out keeps the saved choices, while the
 toolbox's own window always sends both. A layout never set up in the dialog
-uses the defaults above. One difference from the dialog: without saved Print
-settings, an image frame is drawn at its own resolution, where the dialog's
-Save draws it at least at the 300 dpi the page is saved at.
+uses the defaults above. As in the dialog, an image frame is drawn at least at
+the resolution the page is saved at - the saved Print settings', or 300 dpi
+without them - so **Image frame resolution** can only raise it.
 
 Every check is written to the log.
 

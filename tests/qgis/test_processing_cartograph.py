@@ -260,3 +260,48 @@ class TestSavedDialogChoices:
         assert "Ms Tan" not in html
         assert 'bleed="5"' in html
         assert 'dpi="150"' in html
+
+    def test_an_image_frame_is_drawn_at_least_at_the_page_resolution(
+        self, survey, tmp_path
+    ) -> None:
+        """As the dialog's Save draws it: never below the resolution the page
+        is saved at - the saved Print settings', else 300 dpi - however low
+        the frame's own choice, or the picture is enlarged there and goes
+        soft."""
+        import base64
+
+        from qgis.PyQt.QtGui import QImage
+
+        from nika_onlymap_exporter.core.print_settings import PrintSettings
+
+        survey.layout.pageCollection().deletePage(1)
+        width_mm = survey.main_map.sizeWithUnits().width()
+
+        def drawn(name: str) -> tuple[str, int]:
+            destination = tmp_path / f"{name}.html"
+            _run(
+                survey.project,
+                {
+                    "LAYOUT": "survey-utm",
+                    "FRAMES": 2,  # all image
+                    "DPI": 72,
+                    "OUTPUT": str(destination),
+                },
+            )
+            html = destination.read_text(encoding="utf-8")
+            frame = re.search(
+                r'<om-frame\b[^>]*mode="static"[^>]*>\s*'
+                r'<img src="data:image/png;base64,([^"]+)"',
+                html,
+            )
+            assert frame is not None
+            dpi = re.search(r'\bdpi="([^"]+)"', frame.group(0))
+            assert dpi is not None
+            image = QImage.fromData(base64.b64decode(frame.group(1)), "PNG")
+            return dpi.group(1), image.width()
+
+        # No saved Print settings: the page is saved at 300 dpi.
+        assert drawn("default") == ("300", round(width_mm / 25.4 * 300))
+
+        self._save(survey, prints=PrintSettings(dpi=150))
+        assert drawn("saved") == ("150", round(width_mm / 25.4 * 150))

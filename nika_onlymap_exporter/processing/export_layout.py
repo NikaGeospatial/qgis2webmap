@@ -33,6 +33,7 @@ from qgis.core import (
 
 from ..core.atomic_write import write_text_atomic
 from ..core.cartograph_export import export_layout_to_cartograph
+from ..core.export_resolution import DEFAULT_EXPORT_DPI
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.layout_reader import default_mode_for_map
 from ..core.license_policy import default_policy
@@ -213,9 +214,10 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
                 frame_modes=frame_modes,
                 frame_dpis=frame_dpis,
                 static_dpi=dpi,
-                # The saved Print settings' resolution, as the dialog's Save
-                # uses; with none, each frame keeps its own.
-                export_dpi=print_settings.dpi if print_settings else None,
+                # The resolution the page is saved at, as the dialog's Save
+                # uses it: the saved Print settings', else the runtime's
+                # default. An image frame is drawn at least that sharp.
+                export_dpi=print_settings.dpi if print_settings else DEFAULT_EXPORT_DPI,
                 title_override=title,
                 # Same key resolution as the web-map algorithm: environment,
                 # then whatever the dialog stored on this computer.
