@@ -1,12 +1,15 @@
-"""A WMS layer, exported and drawn by the real runtime from a local fake WMS.
+"""WMS, WMTS and tile layers, exported and drawn by the real runtime from a
+local fake service.
 
 The fake service (`tests/fake_map_services.py`) draws one crimson rectangle,
-given in Web Mercator metres, into whatever bbox it is asked for. So a tile
-shows the rectangle in the right place only when the bbox the map asked for
-is that tile's own extent - which these tests check twice: in the request log,
-against the tile's Web Mercator bounds, and on screen, where the crimson must
-cover exactly the rectangle's projected corners. A service sending no CORS
-header must leave only its own layer empty and say why.
+given in Web Mercator metres, into whatever bbox it is asked for - in Web
+Mercator or in EPSG:25832, for a WMS and a WMTS grid in their own CRS. So a
+tile shows the rectangle in the right place only when the bbox the map asked
+for is that tile's own extent - which these tests check twice: in the request
+log, against the tile's Web Mercator bounds, and on screen, where the crimson
+must cover exactly the rectangle's projected corners. A service sending no
+CORS header still shows, as plain pictures the map's snapshot leaves out; a
+WMS-T's time slider asks every tile for each time it steps to.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -15,6 +18,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import replace
 
 import pytest
@@ -72,14 +76,16 @@ def services():
         yield running
 
 
-def _wms_layer(url: str, layers=("target",), time: str | None = None) -> ExportLayer:
+def _wms_layer(
+    url: str, layers=("target",), time: str | None = None, crs: str = "EPSG:3857"
+) -> ExportLayer:
     template = wms_get_map_template(
         url,
         "1.3.0",
         list(layers),
         [""] * len(layers),
         "image/png",
-        "EPSG:3857",
+        crs,
         time=time,
     )
     return ExportLayer(
@@ -137,10 +143,13 @@ async () => {
 }
 """
 
+# Measured on the map's own snapshot, or with `screen` (a page screenshot,
+# base64 PNG) on what the reader sees: the snapshot leaves out tiles drawn
+# as plain pictures (`cors-fallback`).
 MEASURE = """
-async ([west, south, east, north]) => {
+async ([west, south, east, north, screen]) => {
   const el = document.querySelector('om-map');
-  const url = await el.snapshot();
+  const url = screen ? 'data:image/png;base64,' + screen : await el.snapshot();
   const img = new Image();
   await new Promise((resolve, reject) => {
     img.onload = resolve;
@@ -154,7 +163,8 @@ async ([west, south, east, north]) => {
   ctx.drawImage(img, 0, 0);
   const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const box = el.getBoundingClientRect();
-  const ratio = img.width / box.width;
+  const ratio = screen ? img.width / innerWidth : img.width / box.width;
+  const [left, top] = screen ? [box.left, box.top] : [0, 0];
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   let crimson = 0, blue = 0;
   for (let y = 0; y < canvas.height; y++) {
@@ -182,7 +192,8 @@ async ([west, south, east, north]) => {
     crimson,
     blue,
     found: crimson
-      ? [minX / ratio, minY / ratio, (maxX + 1) / ratio, (maxY + 1) / ratio]
+      ? [minX / ratio - left, minY / ratio - top, (maxX + 1) / ratio - left,
+         (maxY + 1) / ratio - top]
       : null,
     expected: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
   };
@@ -194,14 +205,35 @@ def _checks(page):
     return page.evaluate("() => window.__omChecks")
 
 
-def _open(page, entry):
+@pytest.fixture
+def served():
+    """Serves an export's folder over http, as the Preview does."""
+    from nika_onlymap_exporter.ui.live_server import PreviewServer
+
+    servers: list[PreviewServer] = []
+
+    def serve(entry) -> str:
+        server = PreviewServer(entry.parent)
+        server.start()
+        servers.append(server)
+        return f"http://127.0.0.1:{server.port}/{entry.name}"
+
+    yield serve
+    for server in servers:
+        server.stop()
+
+
+def _open(page, entry, url: str | None = None):
     page.set_viewport_size({"width": 900, "height": 700})
     page.add_init_script(
         "window.__omChecks = [];"
         "document.addEventListener('om-validation-error',"
         " (e) => window.__omChecks.push(e.detail), true);"
+        "window.__omLayerErrors = [];"
+        "document.addEventListener('om-layer-error',"
+        " (e) => window.__omLayerErrors.push(e.detail), true);"
     )
-    page.goto(entry.as_uri())
+    page.goto(url or entry.as_uri())
     page.wait_for_function(
         "() => customElements.get('om-map') !== undefined", timeout=30_000
     )
@@ -213,11 +245,14 @@ def _open(page, entry):
     return _measure(page)
 
 
-def _measure(page):
-    return page.evaluate(MEASURE, [WEST, SOUTH, EAST, NORTH])
+def _measure(page, screen: bool = False):
+    import base64
+
+    shot = base64.b64encode(page.screenshot()).decode() if screen else None
+    return page.evaluate(MEASURE, [WEST, SOUTH, EAST, NORTH, shot])
 
 
-def _measure_drawn(page, timeout_s: float = 20.0):
+def _measure_drawn(page, timeout_s: float = 20.0, screen: bool = False):
     """Measure once the service's tiles have drawn.
 
     `whenSettled` resolves before the runtime has drawn tiles it fetches
@@ -228,10 +263,10 @@ def _measure_drawn(page, timeout_s: float = 20.0):
     import time
 
     deadline = time.monotonic() + timeout_s
-    measured = _measure(page)
+    measured = _measure(page, screen)
     while measured["crimson"] == 0 and time.monotonic() < deadline:
         page.wait_for_timeout(250)
-        measured = _measure(page)
+        measured = _measure(page, screen)
     return measured
 
 
@@ -342,17 +377,40 @@ class TestWmsFailures:
         (message,) = {error["message"] for error in _tile_errors(page)}
         return message
 
-    def test_a_service_without_cors_leaves_only_its_layer_empty(
+    @pytest.mark.parametrize("how", ["file", "http"])
+    def test_a_service_without_cors_still_shows_as_plain_pictures(
+        self, page, runtime, services, tmp_path, served, how
+    ) -> None:
+        """OnlyMap 0.13.4's `cors-fallback`, left at its default: the tiles
+        the browser will not let WebGL read are shown as plain pictures,
+        in place, under the map - and left out of the map's own snapshot.
+        The Sachsen-Anhalt case of issue #2: no CORS for a file or http page."""
+        entry = _export(runtime, tmp_path, _wms_layer(services.url("nocors/wms")))
+        _open(page, entry, served(entry) if how == "http" else None)
+
+        assert "cors-fallback" not in entry.read_text(encoding="utf-8")
+        seen = _measure_drawn(page, screen=True)
+        assert _get_maps(services, "/nocors/wms"), "the map never asked"
+        assert seen["crimson"] > 0, "the plain pictures did not show"
+        assert seen["found"] == pytest.approx(seen["expected"], abs=2.5)
+        assert seen["blue"] > 0
+        snapshot = _measure(page)
+        assert snapshot["crimson"] == 0
+        assert snapshot["blue"] > 0
+
+    def test_a_warped_layer_without_cors_stays_empty_and_says_why(
         self, page, runtime, services, tmp_path
     ) -> None:
-        entry = _export(runtime, tmp_path, _wms_layer(services.url("nocors/wms")))
-        _open(page, entry)
+        """No plain-picture fallback for a picture the map must warp (a WMS
+        in its own CRS), as the Fidelity row says: empty, and reported."""
+        layer = _wms_layer(services.url("nocors/wms"), ("utm_only",), crs=UTM32)
+        _open(page, _export(runtime, tmp_path, layer))
 
         assert "Access-Control-Allow-Origin" in self._failure(page)
-        assert _get_maps(services, "/nocors/wms"), "the map never asked"
-        measured = _measure(page)
-        assert measured["crimson"] == 0
-        assert measured["blue"] > 0
+        page.wait_for_timeout(1500)
+        seen = _measure(page, screen=True)
+        assert seen["crimson"] == 0
+        assert seen["blue"] > 0
 
     def test_a_service_exception_is_quoted(
         self, page, runtime, services, tmp_path
@@ -398,6 +456,190 @@ class TestWmtsTiles:
         assert measured["crimson"] > 0
         assert measured["found"] == pytest.approx(measured["expected"], abs=1.5)
         assert any(r["params"].get("REQUEST") == "GetTile" for r in services.requests)
+
+
+class TestWmsInItsOwnCrs:
+    """OnlyMap 0.13.4: a WMS with no Web Mercator, asked in its own CRS with
+    `{bbox-epsg-25832}`; the runtime warps each picture into its tile."""
+
+    @pytest.mark.parametrize("projected", [False, True])
+    def test_a_utm_only_layer_draws_in_place(
+        self, page, runtime, services, tmp_path, projected
+    ) -> None:
+        settings = (
+            ExportSettings(basemap="none", map_crs=UTM32, map_crs_def=UTM32_DEF)
+            if projected
+            else None
+        )
+        layer = _wms_layer(services.url("cors/wms"), ("utm_only",), crs=UTM32)
+        before = len(services.requests)
+        _open(page, _export(runtime, tmp_path, layer, settings))
+        measured = _measure_drawn(page)
+
+        requests = [
+            r["params"]
+            for r in services.requests[before:]
+            if r["params"].get("REQUEST") == "GetMap"
+        ]
+        assert requests and {p["CRS"] for p in requests} == {UTM32}
+        assert _tile_errors(page) == []
+        assert measured["crimson"] > 0
+        assert measured["found"] == pytest.approx(measured["expected"], abs=3)
+        assert measured["blue"] > 0
+
+
+class TestWmtsOnANationalGrid:
+    """OnlyMap 0.13.4: a WMTS on its own grid (`UTM32`), addressed by
+    `{TileMatrix}`/`{TileRow}`/`{TileCol}` with the grid the capabilities
+    state, warped into place."""
+
+    @pytest.mark.parametrize("projected", [False, True])
+    def test_utm_grid_tiles_draw_in_place(
+        self, page, runtime, services, tmp_path, projected
+    ) -> None:
+        from urllib.request import urlopen
+
+        from nika_onlymap_exporter.core.map_services import WmtsTiles, wmts_tiles
+
+        url = services.url("cors/wmts") + "?SERVICE=WMTS&REQUEST=GetCapabilities"
+        with urlopen(url) as response:  # the local fake service
+            found = wmts_tiles(
+                response.read(), "target", "default", "image/png", "UTM32", {}
+            )
+        assert isinstance(found, WmtsTiles) and found.tile_matrix_set
+        layer = replace(
+            _wms_layer(services.url("cors/wms")),
+            tiles=TileSpec(
+                found.template,
+                found.min_zoom,
+                found.max_zoom,
+                tile_matrix_set=found.tile_matrix_set,
+            ),
+        )
+        settings = (
+            ExportSettings(basemap="none", map_crs=UTM32, map_crs_def=UTM32_DEF)
+            if projected
+            else None
+        )
+        before = len(services.requests)
+        _open(page, _export(runtime, tmp_path, layer, settings))
+        measured = _measure_drawn(page)
+
+        asked = [
+            r["params"]
+            for r in services.requests[before:]
+            if r["params"].get("REQUEST") == "GetTile"
+        ]
+        assert asked and {p["TILEMATRIXSET"] for p in asked} == {"UTM32"}
+        assert _tile_errors(page) == []
+        assert measured["crimson"] > 0
+        assert measured["found"] == pytest.approx(measured["expected"], abs=3)
+
+
+class TestTileAddressesWithoutAnExtension:
+    """OnlyMap 0.13.4 draws addresses that do not say "image" (an ArcGIS
+    cache's `/tile/{z}/{y}/{x}`) and TMS `{-y}` rows; 0.13.3 showed nothing."""
+
+    @pytest.mark.parametrize("path", ["cors/xyz/{z}/{x}/{y}", "cors/tms/{z}/{x}/{-y}"])
+    def test_they_draw_in_place(self, page, runtime, services, tmp_path, path):
+        layer = replace(
+            _wms_layer(services.url("cors/wms")),
+            source_kind=SourceKind.FILE,
+            tiles=TileSpec(services.url(path), 0, 19),
+        )
+        _open(page, _export(runtime, tmp_path, layer))
+        measured = _measure_drawn(page)
+        assert measured["crimson"] > 0
+        # 256-pixel tiles, filtered at the rectangle's edges.
+        assert measured["found"] == pytest.approx(measured["expected"], abs=2.5)
+
+
+SLIDER = """
+() => {
+  const widget = document.querySelector('om-widget[type="time-slider"]');
+  const root = widget && widget.shadowRoot;
+  const scrub = root && root.querySelector('.omni-time-scrub');
+  if (!scrub) return null;
+  return {
+    value: scrub.value, max: scrub.max,
+    shown: root.querySelector('.omni-time-val').textContent,
+    label: root.querySelector('.omni-time-label').textContent,
+    time: document.querySelector('om-layer#wms').getAttribute('time'),
+  };
+}
+"""
+
+
+class TestWmsTimeSlider:
+    """A WMS-T opens at the time QGIS draws, and the runtime's time slider
+    steps it through the service's times: each step asks every tile anew."""
+
+    TIMES = "2020-03-01T00:00:00Z/2020-03-10T00:00:00Z/P1D"
+
+    def _layer(self, services):
+        layer = _wms_layer(services.url("cors/wms"), time="{time}")
+        assert layer.tiles is not None
+        tiles = replace(layer.tiles, time="2020-03-05T00:00:00Z", times=self.TIMES)
+        return replace(layer, tiles=tiles)
+
+    def _times_asked(self, services, before: int) -> set[str | None]:
+        return {
+            r["params"].get("TIME")
+            for r in services.requests[before:]
+            if r["params"].get("REQUEST") == "GetMap"
+        }
+
+    @pytest.mark.parametrize("how", ["file", "http"])
+    def test_it_opens_at_qgis_time_and_scrubs(
+        self, page, runtime, services, tmp_path, served, how
+    ) -> None:
+        entry = _export(runtime, tmp_path, self._layer(services))
+        before = len(services.requests)
+        _open(page, entry, served(entry) if how == "http" else None)
+        measured = _measure_drawn(page)
+        page.wait_for_function(SLIDER, timeout=15_000)
+        state = page.evaluate(SLIDER)
+        assert state == {
+            "value": "4",
+            "max": "9",
+            "shown": "2020-03-05T00:00:00Z",
+            "label": "Fake WMS",
+            "time": "2020-03-05T00:00:00Z",
+        }
+        assert self._times_asked(services, before) == {"2020-03-05T00:00:00Z"}
+        assert measured["crimson"] > 0
+
+        # Scrub as a reader does: focus the slider and step it twice.
+        before = len(services.requests)
+        scrub = page.locator('om-widget[type="time-slider"] .omni-time-scrub')
+        scrub.focus()
+        page.keyboard.press("ArrowRight")
+        page.keyboard.press("ArrowRight")
+        page.wait_for_function(
+            "() => document.querySelector('om-layer#wms').getAttribute('time')"
+            " === '2020-03-07T00:00:00Z'",
+            timeout=10_000,
+        )
+        measured = _measure_drawn(page)
+        assert "2020-03-07T00:00:00Z" in self._times_asked(services, before)
+        assert page.evaluate(SLIDER)["shown"] == "2020-03-07T00:00:00Z"
+        assert measured["crimson"] > 0
+
+    def test_play_steps_to_the_end(self, page, runtime, services, tmp_path) -> None:
+        _open(page, _export(runtime, tmp_path, self._layer(services)))
+        page.wait_for_function(SLIDER, timeout=15_000)
+        before = len(services.requests)
+        page.locator('om-widget[type="time-slider"] .omni-time-play').click()
+        page.wait_for_function(
+            "() => document.querySelector('om-layer#wms').getAttribute('time')"
+            " === '2020-03-10T00:00:00Z'",
+            timeout=20_000,
+        )
+        wanted = {"2020-03-06T00:00:00Z", "2020-03-10T00:00:00Z"}
+        deadline = time.monotonic() + 15
+        while not wanted <= self._times_asked(services, before):
+            assert time.monotonic() < deadline, self._times_asked(services, before)
+            page.wait_for_timeout(250)
 
 
 def _legend_layer(services, service="cors/wms", layers=("target",), styles=None):

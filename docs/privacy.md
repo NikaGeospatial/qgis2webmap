@@ -94,6 +94,15 @@ and such a legend picture left out. Vector layers from a web service (WFS, OGC
 API Features, SensorThings) are not live: their features are read once at
 export and carried in the file.
 
+A WMS layer asked in a coordinate system other than Web Mercator, or a WMTS
+layer on a national tile grid, needs that coordinate system's definition to
+place its pictures. The map carries the UTM zones and the common national
+grids itself; for any other, the reader's browser fetches the definition
+once from `https://epsg.io/<code>.proj4` when the map opens, so epsg.io sees
+that request, and which coordinate system it is for. The Fidelity tab says
+which layers do this. Exporting itself still contacts no service: the tile
+grid comes from the capabilities QGIS stored when it loaded the layer.
+
 ## Popup pictures that are web addresses
 
 A picture a popup shows from a web address (an Attachment field set to show

@@ -8,7 +8,8 @@ down to a 320px phone; and the measure tool, at every Size, stays on the
 screen and off the other controls - folded into a drawer where the map is too
 narrow for it; and the bottom-left corner narrows upward, the widest control
 at the bottom, and folds away rather than reach the top-left corner on a short
-window.
+window; and a WMS-T's time slider sits under the layer switcher, covering no
+other control.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -19,6 +20,7 @@ from __future__ import annotations
 import ast
 import re
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -559,3 +561,118 @@ class TestTheBottomLeftCorner:
                       .closest('[data-om-widget-slot="bottom-start"]')""",
             timeout=10_000,
         )
+
+
+def _time_slider_map(runtime, destination: Path, scale: float, filtered: bool) -> Path:
+    """`_corner_map`'s controls and a WMS-T with its time slider, which joins
+    the layer switcher (and a filter panel, with `filtered`) top left. The
+    service is never reached: the slider is drawn from the markup."""
+    from nika_onlymap_exporter.core.export_ir import (
+        FilterKind,
+        LayerFilterSpec,
+        TileSpec,
+    )
+
+    wmst = ExportLayer(
+        layer_id="wmst",
+        name="Radar over time",
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.SERVICE,
+        renderer=RendererSpec(kind=RendererKind.UNSUPPORTED),
+        tiles=TileSpec(
+            "http://127.0.0.1:9/wms?SERVICE=WMS&REQUEST=GetMap&TIME={time}"
+            "&CRS=EPSG:3857&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-3857}",
+            0,
+            19,
+            512,
+            time="2020-03-05T00:00:00Z",
+            times="2020-01-01T00:00:00Z/2020-12-31T00:00:00Z/P1D",
+        ),
+    )
+    layers = [_layer(f"layer{n}", f"Layer {n}", [(0.1 * n, 51.1)]) for n in range(3)]
+    if filtered:
+        layers[0] = replace(
+            layers[0],
+            filter=LayerFilterSpec(
+                field_name="name",
+                title="Name",
+                kind=FilterKind.TEXT,
+                categories=("Point 0",),
+            ),
+        )
+    return _write(
+        runtime,
+        destination,
+        ExportProject(
+            title="Time",
+            layers=(wmst, *layers),
+            extent=Extent(west=-1.0, south=50.9, east=1.0, north=51.9),
+            settings=ExportSettings(
+                basemap="positron", basemap_switcher=True, chrome_scale=scale
+            ),
+        ),
+    )
+
+
+class TestTheTimeSlider:
+    """A WMS-T's time slider sits top left under the layer switcher (and any
+    filter panel), and covers nothing at 1280x800 and 1280x700, at every
+    Size, from a file and over http - or, folded for room, sits whole in
+    its drawer."""
+
+    @staticmethod
+    def _boxes(page):
+        return page.evaluate(
+            BOXES,
+            "om-widget, .om-credit, [data-om-badge], [data-om-fold-toggle], "
+            ".om-caption",
+        )
+
+    @pytest.mark.parametrize("how", HOW)
+    @pytest.mark.parametrize("filtered", (False, True))
+    @pytest.mark.parametrize("scale", (0.85, 1.0, 1.25, 1.5, 2.0))
+    def test_it_covers_no_other_control(
+        self, opener, runtime, tmp_path, scale, filtered, how
+    ) -> None:
+        entry = _time_slider_map(runtime, tmp_path, scale, filtered)
+        for height in (800, 700):
+            page = opener(entry, how, (1280, height))
+            page.wait_for_function(
+                """() => { const w = document.querySelector(
+                       'om-widget[type="time-slider"]');
+                     return w && w.shadowRoot
+                       && w.shadowRoot.querySelector('.omni-time-scrub'); }""",
+                timeout=15_000,
+            )
+            where = f"at size {scale}, 1280x{height}, filtered={filtered}"
+            boxes = self._boxes(page)
+            if "time-slider" not in [box["name"] for box in boxes]:
+                # Folded for room, as a bigger Size folds sooner: the reader
+                # opens the drawer, which holds the slider whole.
+                toggles = page.locator("[data-om-fold-toggle]")
+                assert toggles.count() > 0, f"{where}: no slider and no drawer"
+                for index in range(toggles.count()):
+                    toggles.nth(index).click(timeout=10_000)
+                    page.wait_for_timeout(200)
+                    boxes = self._boxes(page)
+                    if "time-slider" in [box["name"] for box in boxes]:
+                        break
+                slider = next((b for b in boxes if b["name"] == "time-slider"), None)
+                assert slider is not None, f"{where}: not in any drawer"
+                assert slider["left"] >= 0 and slider["top"] >= 0, where
+                assert slider["right"] <= 1280 and slider["bottom"] <= height, where
+                continue
+            for box in boxes:
+                assert box["left"] >= 0 and box["top"] >= 0, f"{where}: {box}"
+                assert box["right"] <= 1280 and box["bottom"] <= height, (
+                    f"{where}: {box}"
+                )
+            for place, box in enumerate(boxes):
+                for other in boxes[place + 1 :]:
+                    assert not _overlap(box, other), (
+                        f"{where}: {box['name']} covers {other['name']}"
+                    )
+            slider = next(b for b in boxes if b["name"] == "time-slider")
+            switcher = next(b for b in boxes if b["name"] == "layer-switcher")
+            assert slider["top"] >= switcher["bottom"], where
+            assert slider["left"] == pytest.approx(switcher["left"], abs=1), where

@@ -41,11 +41,15 @@ notes below are the things that are commonly assumed wrong.
   with layer order, groups and opacity. A GeoTIFF on disk travels in its QGIS
   colours - inside a single HTML file up to 100 MB of imagery, otherwise in a
   Folder or Share ZIP. XYZ, WMTS and WMS layers stay live and need a
-  connection; a WMS only when it offers Web Mercator (EPSG:3857), a WMTS only
-  on a Web Mercator tile grid, and the service must allow web pages to load
-  its images (CORS). A WMS or WMTS layer's legend shows the service's legend
-  picture, loaded live. A time-enabled WMS (WMS-T) that follows QGIS's time is
-  a fixed snapshot of the time QGIS draws at export, with no time slider. A
+  connection; a WMS is asked in Web Mercator (EPSG:3857) when it offers it
+  and otherwise in the coordinate system QGIS asks it in, a WMTS on its own
+  tile grid, national grids included. A service that does not allow web
+  pages to read its images (CORS) still shows its Web Mercator tiles, as
+  plain pictures under the other layers; warped ones (another CRS, a
+  national grid) stay empty without CORS. A WMS or WMTS layer's legend shows the service's legend
+  picture, loaded live. A time-enabled WMS (WMS-T) that follows QGIS's time
+  opens at the time QGIS draws, with a time slider over the service's times
+  (a fixed snapshot when that time is not one of them). A
   Cloud Optimized GeoTIFF QGIS reads from an `https://` address is a live
   layer only when it is a 3-band colour composite in Web Mercator, compressed
   with DEFLATE, JPEG, WEBP or nothing (not LZW, ZSTD or LERC), on a server

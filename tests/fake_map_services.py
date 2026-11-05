@@ -18,14 +18,20 @@ serves both, on 127.0.0.1 and a free port, from a thread:
 * `wmts` offers layer `target` on the `GoogleMapsCompatible` grid and on a
   `UTM32` grid, by KVP GetTile and by a RESTful `ResourceURL`; its `default`
   style's LegendURL is the same `legends/outlined.png`.
+* `xyz/{z}/{x}/{y}` serves Web Mercator tiles at an address with no file
+  extension, as an ArcGIS cache does, and `tms/{z}/{x}/{y}` the same tiles
+  with rows counted from the south, as a TMS `{-y}` address asks for them.
 
 Every image draws one thing: `TARGET_3857`, a rectangle given in Web
 Mercator metres, opaque crimson, on transparency. A tile therefore shows the
 rectangle where it truly is only if the bbox it was asked for is the one it
-covers - which is what a placement test needs. A request in any other CRS
-gets the whole image half-transparent blue, enough to show that QGIS itself
-drew the layer. `requests` records every request, decoded, so a test can
-compare the BBOX the map asked for with the tile it wanted.
+covers - which is what a placement test needs. A WMS request in EPSG:25832,
+and a tile of the `UTM32` grid, draw the same rectangle where it falls in
+that CRS (`draw_target_utm32`), so a map that warps them can be checked the
+same way. A request in any other CRS gets the whole image half-transparent
+blue, enough to show that QGIS itself drew the layer. `requests` records
+every request, decoded, so a test can compare the BBOX the map asked for with
+the tile it wanted.
 
 Stdlib only, so it runs in the QGIS tier, the browser tier and QGIS 3.44's
 container alike.
@@ -113,6 +119,94 @@ def draw_target(
         height,
         lambda c, r: TARGET_RGBA if columns[c] and rows[r] else clear,
     )
+
+
+def utm32(lon: float, lat: float) -> tuple[float, float]:
+    """ETRS89 / UTM zone 32N (EPSG:25832) from longitude/latitude, by the
+    transverse Mercator series (Snyder, *Map Projections*, 8-9 to 8-10):
+    millimetres off over this zone, far below a pixel."""
+    a, f, k0 = 6378137.0, 1 / 298.257222101, 0.9996
+    e2 = f * (2 - f)
+    ep2 = e2 / (1 - e2)
+    phi, lam = math.radians(lat), math.radians(lon - 9.0)
+    n = a / math.sqrt(1 - e2 * math.sin(phi) ** 2)
+    t = math.tan(phi) ** 2
+    c = ep2 * math.cos(phi) ** 2
+    big_a = lam * math.cos(phi)
+    m = a * (
+        (1 - e2 / 4 - 3 * e2**2 / 64 - 5 * e2**3 / 256) * phi
+        - (3 * e2 / 8 + 3 * e2**2 / 32 + 45 * e2**3 / 1024) * math.sin(2 * phi)
+        + (15 * e2**2 / 256 + 45 * e2**3 / 1024) * math.sin(4 * phi)
+        - (35 * e2**3 / 3072) * math.sin(6 * phi)
+    )
+    x = 500000.0 + k0 * n * (
+        big_a
+        + (1 - t + c) * big_a**3 / 6
+        + (5 - 18 * t + t**2 + 72 * c - 58 * ep2) * big_a**5 / 120
+    )
+    y = k0 * (
+        m
+        + n
+        * math.tan(phi)
+        * (
+            big_a**2 / 2
+            + (5 - t + 9 * c + 4 * c**2) * big_a**4 / 24
+            + (61 - 58 * t + t**2 + 600 * c - 330 * ep2) * big_a**6 / 720
+        )
+    )
+    return x, y
+
+
+def _lonlat(x: float, y: float) -> tuple[float, float]:
+    lon = math.degrees(x / 6378137.0)
+    lat = math.degrees(2 * math.atan(math.exp(y / 6378137.0)) - math.pi / 2)
+    return lon, lat
+
+
+def draw_target_utm32(
+    bbox: tuple[float, float, float, float], width: int, height: int
+) -> bytes:
+    """The image a correct server returns for `bbox` in EPSG:25832 metres:
+    `TARGET_3857`'s outline projected there (its edges are all but straight
+    over a few kilometres), filled row by row."""
+    minx, miny, maxx, maxy = bbox
+    west, south = _lonlat(TARGET_3857[0], TARGET_3857[1])
+    east, north = _lonlat(TARGET_3857[2], TARGET_3857[3])
+    corners = [utm32(west, south), utm32(east, south), utm32(east, north)]
+    corners.append(utm32(west, north))
+    edges = list(zip(corners, corners[1:] + corners[:1]))
+    spans: list[tuple[float, float] | None] = []
+    for row in range(height):
+        northing = maxy - (maxy - miny) * (row + 0.5) / height
+        crossings = [
+            x1 + (x2 - x1) * (northing - y1) / (y2 - y1)
+            for (x1, y1), (x2, y2) in edges
+            if (y1 <= northing < y2) or (y2 <= northing < y1)
+        ]
+        spans.append((min(crossings), max(crossings)) if crossings else None)
+    clear = (0, 0, 0, 0)
+
+    def pixel(column: int, row: int) -> tuple[int, int, int, int]:
+        span = spans[row]
+        if span is None:
+            return clear
+        easting = minx + (maxx - minx) * (column + 0.5) / width
+        return TARGET_RGBA if span[0] <= easting <= span[1] else clear
+
+    return png(width, height, pixel)
+
+
+# The `UTM32` grid's top-left corner and its zoom-0 scale denominator.
+UTM32_ORIGIN = (-46133.17, 6301219.54)
+UTM32_SCALE = 17471320.75
+
+
+def utm32_tile_bounds(matrix: int, row: int, column: int):
+    """A `UTM32` tile's extent in EPSG:25832 metres: minx, miny, maxx, maxy."""
+    size = UTM32_SCALE / 2**matrix * 0.00028 * 256
+    west = UTM32_ORIGIN[0] + column * size
+    north = UTM32_ORIGIN[1] - row * size
+    return (west, north - size, west + size, north)
 
 
 def _styles(base: str, name: str, xlink: str = "") -> str:
@@ -208,8 +302,8 @@ def wmts_capabilities(base: str) -> str:
     )
     utm = "".join(
         f"<TileMatrix><ows:Identifier>{z}</ows:Identifier>"
-        f"<ScaleDenominator>{17471320.75 / 2**z}</ScaleDenominator>"
-        "<TopLeftCorner>-46133.17 6301219.54</TopLeftCorner>"
+        f"<ScaleDenominator>{UTM32_SCALE / 2**z}</ScaleDenominator>"
+        f"<TopLeftCorner>{UTM32_ORIGIN[0]} {UTM32_ORIGIN[1]}</TopLeftCorner>"
         "<TileWidth>256</TileWidth><TileHeight>256</TileHeight>"
         f"<MatrixWidth>{2**z}</MatrixWidth><MatrixHeight>{2**z}</MatrixHeight>"
         "</TileMatrix>"
@@ -319,6 +413,13 @@ class _Handler(BaseHTTPRequestHandler):
             if len(segments) == 7 and segments[2] == "tiles":
                 self._get_tile(*segments[3:6], segments[6].split(".")[0])
                 return
+        if service in ("xyz", "tms") and len(segments) == 5:
+            z, x, y = (int(part) for part in segments[2:])
+            if service == "tms":
+                y = 2**z - 1 - y
+            body = draw_target(tile_bounds_3857(x, y, z), 256, 256)
+            self._send(200, "image/png", body)
+            return
         self._send(400, "text/plain", b"unsupported request")
 
     def _get_map(self, params: dict[str, str], service: str) -> None:
@@ -337,6 +438,8 @@ class _Handler(BaseHTTPRequestHandler):
         bbox = tuple(float(v) for v in params.get("BBOX", "0,0,1,1").split(","))
         if crs == "EPSG:3857":
             body = draw_target(bbox, width, height)  # type: ignore[arg-type]
+        elif crs == "EPSG:25832":
+            body = draw_target_utm32(bbox, width, height)  # type: ignore[arg-type]
         else:
             body = png(width, height, lambda c, r: OTHER_CRS_RGBA)
         self._send(200, "image/png", body)
@@ -351,6 +454,10 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(200, "image/png", png(width, height, lambda c, r: LEGEND_RGBA))
 
     def _get_tile(self, matrix_set: str, matrix: str, row: str, column: str) -> None:
+        if matrix_set == "UTM32":
+            bounds = utm32_tile_bounds(int(matrix), int(row), int(column))
+            self._send(200, "image/png", draw_target_utm32(bounds, 256, 256))
+            return
         if matrix_set != "GoogleMapsCompatible":
             self._send(200, "image/png", png(256, 256, lambda c, r: OTHER_CRS_RGBA))
             return

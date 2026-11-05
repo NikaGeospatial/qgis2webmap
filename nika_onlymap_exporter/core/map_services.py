@@ -1,27 +1,32 @@
 """WMS and WMTS layers as tile templates the web map fills itself.
 
-The runtime (OnlyMap 0.13.3 and later) draws a raster `TileLayer` from a
-template it fills per tile: `{z}`/`{x}`/`{y}` for a tile grid, and
-`{bbox-epsg-3857}`, `{width}` and `{height}` for a service that is asked for an
-extent - a WMS GetMap. Each tile is a Web Mercator tile, so a WMS layer can
-travel only when the service offers Web Mercator, and a WMTS layer only when
-its tile grid *is* the Web Mercator grid.
+The runtime (OnlyMap 0.13.4) draws a raster `TileLayer` from a template it
+fills per tile: `{z}`/`{x}`/`{y}` for a tile grid, `{bbox-epsg-3857}`,
+`{width}` and `{height}` for a service that is asked for an extent - a WMS
+GetMap - and `{TileMatrix}`/`{TileRow}`/`{TileCol}` with a `tile-matrix-set`
+for a WMTS on a grid of its own. Each tile is a Web Mercator tile. A WMS that
+offers Web Mercator is asked in it; one that does not is asked in the CRS
+QGIS asks it in, with `{bbox-epsg-XXXX}`, and the runtime warps the picture
+into place. A WMTS on the Web Mercator grid is addressed by `{z}`; one on any
+other grid by its own matrices, which the runtime warps the same way.
 
 **What QGIS knows, and nothing more.** Exporting never contacts a service.
 Whether a WMS offers EPSG:3857, which WMS version QGIS speaks to it, and where
-a WMTS serves its tiles are all in the service's capabilities document, which
-QGIS fetched when the layer was loaded and kept in its network cache. The
-reader hands that cached copy in (or `None` when there is none), and this
-module decides from it. No copy and no other evidence means the layer is
-refused, with a reason, rather than exported on a guess: a WMS asked for a
-projection it does not offer draws nothing.
+a WMTS serves its tiles and on which grid are all in the service's
+capabilities document, which QGIS fetched when the layer was loaded and kept
+in its network cache. The reader hands that cached copy in (or `None` when
+there is none), and this module decides from it. No copy and no other
+evidence means a WMTS layer is refused, with a reason, rather than exported on
+a guess.
 
 The requests mirror QGIS's own (`QgsWmsProvider::createRequestUrlWMS` and
 `createTileRequestsWMTS`): the same GetMap address, parameters and
-TRANSPARENT rule, so the web map asks the service what QGIS asks it, in Web
-Mercator. The legend picture is the one QGIS's legend shows
+TRANSPARENT rule, so the web map asks the service what QGIS asks it. The
+legend picture is the one QGIS's legend shows
 (`QgsWmsProvider::getLegendGraphicUrl` and `getLegendGraphicFullURL`): the
 style's LegendURL, or a GetLegendGraphic request, from the same capabilities.
+A WMS-T's times are the time dimension QGIS read from the capabilities
+(`parse_time_dimension`).
 
 Pure Python: no PyQGIS, no Qt, unit-tested in CI.
 
@@ -31,6 +36,8 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import calendar
+import json
 import math
 import re
 
@@ -38,6 +45,7 @@ import re
 import xml.etree.ElementTree as ET  # nosec B405
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qsl, quote, unquote
 
 # Codes that name Web Mercator. A service that offers only an older alias is
@@ -157,25 +165,31 @@ def web_mercator_code(code: str) -> str | None:
     return normalized if normalized in WEB_MERCATOR_CODES else None
 
 
-_IMAGE_EXTENSION_RE = re.compile(r"\.(png|jpe?g|webp|gif|avif)(\?|$)", re.IGNORECASE)
-# A service that names its format as a parameter: a WMS or WMTS `FORMAT=image/`,
-# an ArcGIS export's `format=png`.
-_IMAGE_FORMAT_RE = re.compile(
-    r"[?&]format=(image(/|%2F)|(png|jpe?g|webp)\b)", re.IGNORECASE
+# A template that names a vector format: a vector or JSON extension on the
+# path, or a format parameter asking for one (`f=json`, `format=pbf`,
+# `outputFormat=application/json`).
+_VECTOR_EXTENSION_RE = re.compile(
+    r"\.(pbf|mvt|json|geojson|topojson)(\?|$)", re.IGNORECASE
+)
+_VECTOR_FORMAT_RE = re.compile(
+    r"[?&](f|format|outputformat)=(pbf|mvt|json|geojson|application(/|%2F)"
+    r"[\w.+%-]*(json|protobuf|vector-tile))(&|$)",
+    re.IGNORECASE,
 )
 
 
 def is_image_tile_template(url: str) -> bool:
     """Whether the runtime draws `url`'s tiles as images.
 
-    The runtime's own test (0.13.3, `isImageTileTemplate`): an image extension
-    on the path or a format parameter. Any other raster template is decoded
-    as data and fails, and only image tiles can be warped into a projected
-    map's plane.
+    The runtime's own test (0.13.4, `isImageTileTemplate` and
+    `isVectorTileTemplate`): every template counts unless it names a vector
+    format, so an address that says nothing about its format - an ArcGIS
+    cache's `.../MapServer/tile/{z}/{y}/{x}`, a Google-style `...&x={x}` -
+    is imagery. Only image tiles can be warped into a projected map's plane.
     """
     return (
-        _IMAGE_EXTENSION_RE.search(url) is not None
-        or _IMAGE_FORMAT_RE.search(url) is not None
+        _VECTOR_EXTENSION_RE.search(url) is None
+        and _VECTOR_FORMAT_RE.search(url) is None
     )
 
 
@@ -375,6 +389,29 @@ def _join(base: str, pairs: Sequence[tuple[str, str]]) -> str:
     return f"{base}?{query}"
 
 
+# The token the runtime fills with the layer's `time`, for a WMS-T whose
+# time a slider steps.
+TIME_TOKEN = "{time}"
+
+
+def bbox_token(crs: str) -> str | None:
+    """The extent token the runtime fills for a GetMap in `crs`, or `None`
+    when it fills none for it.
+
+    `{bbox-epsg-3857}` for any Web Mercator code, filled exactly from the
+    tile; `{bbox-epsg-XXXX}` for another EPSG code and `{bbox-crs84}` for
+    CRS:84, each the box enclosing the tile there, in the axis order the
+    request's version expects, which the runtime warps into the tile.
+    """
+    if web_mercator_code(crs) is not None:
+        return "{bbox-epsg-3857}"
+    code = crs.strip()
+    if re.fullmatch(r"(OGC:)?CRS:?84", code, re.IGNORECASE):
+        return "{bbox-crs84}"
+    match = re.fullmatch(r"EPSG:(\d+)", code, re.IGNORECASE)
+    return f"{{bbox-epsg-{match.group(1)}}}" if match else None
+
+
 def wms_get_map_template(
     url: str,
     version: str,
@@ -385,15 +422,19 @@ def wms_get_map_template(
     extra: Sequence[tuple[str, str]] = (),
     time: str | None = None,
 ) -> str:
-    """The GetMap request QGIS would send, in Web Mercator, as a tile template.
+    """The GetMap request QGIS would send, in `crs`, as a tile template.
 
     `url` is the GetMap address with any parameters of its own, which are
     kept (a MapServer `map=`, say) unless they are one this request sets.
     Layer and style names are percent-encoded one by one and joined with a
     literal comma, as the LAYERS list separator must stay. `extra` are
     further parameters QGIS sends verbatim (FILTER, OPACITIES). `time` is
-    the WMS-T `TIME` value QGIS sends, when it sends one.
+    the WMS-T `TIME` value QGIS sends, when it sends one, or `TIME_TOKEN`
+    for the time a slider steps. `crs` must be one `bbox_token` fills.
     """
+    bbox = bbox_token(crs)
+    if bbox is None:
+        raise ValueError(f"no extent token for {crs}")
     base, _, query = url.partition("?")
     reserved = _WMS_RESERVED | {"TIME"} if time is not None else _WMS_RESERVED
     pairs = [
@@ -417,12 +458,13 @@ def wms_get_map_template(
         pairs.append(("TRANSPARENT", "TRUE"))
     pairs += [(key, _query_value(found, safe=":,")) for key, found in extra]
     if time is not None:
-        pairs.append(("TIME", _query_value(time, safe=":/")))
+        written = time if time == TIME_TOKEN else _query_value(time, safe=":/")
+        pairs.append(("TIME", written))
     pairs += [
         (crs_key, crs),
         ("WIDTH", "{width}"),
         ("HEIGHT", "{height}"),
-        ("BBOX", "{bbox-epsg-3857}"),
+        ("BBOX", bbox),
     ]
     return _join(base, pairs)
 
@@ -542,12 +584,20 @@ def wms_legend_urls(
 
 @dataclass(frozen=True)
 class WmtsTiles:
-    """A WMTS layer on the Web Mercator grid, as the runtime takes it."""
+    """A WMTS layer as the runtime takes it.
+
+    On the Web Mercator grid the template names its matrix by `{z}` and the
+    zooms are the grid's. On any other grid it names it by `{TileMatrix}`,
+    `tile_matrix_set` is the grid as the capabilities state it (JSON), and
+    the zooms are the indices of its matrices, coarsest first, as the
+    runtime counts them; `tile_size` is then `None`, the grid's own.
+    """
 
     template: str
     min_zoom: int
     max_zoom: int
-    tile_size: int
+    tile_size: int | None
+    tile_matrix_set: str | None = None
 
 
 @dataclass(frozen=True)
@@ -609,6 +659,57 @@ def _web_mercator_zooms(
     return prefix, zooms, tile_size
 
 
+def _epsg_or_crs84(code: str) -> bool:
+    """Whether the runtime reads `code` as a CRS (`grid-tiles.ts`): an EPSG
+    code in any of the spellings capabilities use, or CRS84."""
+    text = code.strip()
+    return bool(
+        re.search(r"CRS84|CRS:84", text, re.IGNORECASE)
+        or re.search(r"EPSG(::?|/\d+(\.\d+)*/|/0/)(\d+)$", text, re.IGNORECASE)
+        or re.fullmatch(r"\d+", text)
+    )
+
+
+def _grid_tile_matrix_set(matrix_set: ET.Element) -> str | None:
+    """The tile matrix set as the runtime's `tile-matrix-set` takes it: the
+    WMTS TileMatrixSet as GetCapabilities states it, as JSON. `None` when its
+    CRS is one the runtime cannot read or a matrix lacks what places it.
+
+    The corner is kept as written, in the CRS's own axis order, which the
+    runtime reads that way (latitude first for a geographic CRS, as WMTS
+    writes it).
+    """
+    supported = _text(matrix_set, "SupportedCRS")
+    if not _epsg_or_crs84(supported):
+        return None
+    matrices: list[dict[str, object]] = []
+    for matrix in _children(matrix_set, "TileMatrix"):
+        try:
+            corner = _text(matrix, "TopLeftCorner")
+            if len(corner.split()) != 2:
+                return None
+            for number in corner.split():
+                float(number)
+            matrices.append(
+                {
+                    "identifier": _text(matrix, "Identifier"),
+                    "scaleDenominator": float(_text(matrix, "ScaleDenominator")),
+                    "topLeftCorner": corner,
+                    "tileWidth": int(_text(matrix, "TileWidth")),
+                    "tileHeight": int(_text(matrix, "TileHeight")),
+                    "matrixWidth": int(_text(matrix, "MatrixWidth")),
+                    "matrixHeight": int(_text(matrix, "MatrixHeight")),
+                }
+            )
+        except ValueError:
+            return None
+    if not matrices or any(not m["identifier"] for m in matrices):
+        return None
+    return json.dumps(
+        {"supportedCRS": supported, "tileMatrix": matrices}, separators=(",", ":")
+    )
+
+
 def _replace_token(template: str, token: str, replacement: str) -> str:
     return re.sub(
         r"\{" + re.escape(token) + r"\}",
@@ -629,8 +730,12 @@ def wmts_tiles(
     """The template for one WMTS layer on `matrix_set`, or why there is none.
 
     KVP GetTile when the service offers it, as QGIS prefers, otherwise the
-    layer's RESTful `ResourceURL`. Matrix identifiers must be a fixed prefix
-    and the zoom (`3`, `EPSG:3857:3`), since `{z}` is the only way to name one.
+    layer's RESTful `ResourceURL`. On the Web Mercator grid, whose matrix
+    identifiers are a fixed prefix and the zoom (`3`, `EPSG:3857:3`), the
+    matrix is named by `{z}`, as before the runtime knew other grids. Any
+    other grid - a national one, or Web Mercator named another way - is
+    named by `{TileMatrix}`, `{TileRow}` and `{TileCol}`, with the grid
+    itself in `tile_matrix_set`.
     """
     root = _parse(document)
     if root is None or _local(root.tag) != "Capabilities":
@@ -657,9 +762,22 @@ def wmts_tiles(
     if layer_element is None or set_element is None:
         return WmtsRefusal("not listed")
     grid = _web_mercator_zooms(set_element)
+    matrices: str | None = None
+    tile_size: int | None = None
     if grid is None:
-        return WmtsRefusal("grid", grid=matrix_set)
-    prefix, zooms, tile_size = grid
+        matrices = _grid_tile_matrix_set(set_element)
+        if matrices is None:
+            return WmtsRefusal("grid", grid=matrix_set)
+        prefix, first = "", 0
+        last = len(_children(set_element, "TileMatrix")) - 1
+        matrix, row, column = "{TileMatrix}", "{TileRow}", "{TileCol}"
+    else:
+        prefix, zooms, tile_size = grid
+        first, last = zooms[0], zooms[-1]
+        matrix, row, column = "{z}", "{y}", "{x}"
+
+    def tiles(template: str) -> WmtsTiles:
+        return WmtsTiles(template, first, last, tile_size, matrices)
 
     declared = [_text(d, "Identifier") for d in _children(layer_element, "Dimension")]
     for name in declared:
@@ -700,14 +818,14 @@ def wmts_tiles(
             ("STYLE", _query_value(style)),
             ("FORMAT", _query_value(image_format, safe="/")),
             ("TILEMATRIXSET", _query_value(matrix_set)),
-            ("TILEMATRIX", _query_value(prefix) + "{z}"),
+            ("TILEMATRIX", _query_value(prefix) + matrix),
         ]
         pairs += [
             (_query_value(key), _query_value(found, safe=":,"))
             for key, found in sorted(dimensions.items())
         ]
-        pairs += [("TILEROW", "{y}"), ("TILECOL", "{x}")]
-        return WmtsTiles(_join(base, pairs), zooms[0], zooms[-1], tile_size)
+        pairs += [("TILEROW", row), ("TILECOL", column)]
+        return tiles(_join(base, pairs))
 
     resource = next(
         (
@@ -735,14 +853,13 @@ def wmts_tiles(
         # A dimension the source fixes no value for: QGIS would request the
         # token literally too, so there is no address that draws.
         return WmtsRefusal("no tile address")
-    template = template.replace("\0z\0", "{z}").replace("\0y\0", "{y}")
-    template = template.replace("\0x\0", "{x}")
+    template = template.replace("\0z\0", matrix).replace("\0y\0", row)
+    template = template.replace("\0x\0", column)
     if not is_image_tile_template(template):
-        # Nothing in the address says "image", so the runtime would decode
-        # the tiles as data. The format is known, but adding a parameter the
-        # service never asked for would be a guess about its URLs.
+        # The address names a vector format, so the runtime would decode the
+        # tiles as data, whatever format the source string asks for.
         return WmtsRefusal("not imagery")
-    return WmtsTiles(template, zooms[0], zooms[-1], tile_size)
+    return tiles(template)
 
 
 def wmts_legend_url(
@@ -809,4 +926,191 @@ def parse_tile_dimensions(text: str) -> dict[str, str]:
             continue
         key, _, rest = part.partition("=")
         found[key] = rest
+    return found
+
+
+# The CRSs the runtime places with no lookup (OnlyMap 0.13.4's `crs.ts`
+# table, and the UTM zones it writes from their codes); for any other the
+# reader's browser asks `https://epsg.io/<code>.proj4` once.
+_RUNTIME_CRS_CODES = frozenset(
+    {
+        2056,
+        2154,
+        2193,
+        2326,
+        3006,
+        3035,
+        3414,
+        3577,
+        3826,
+        3857,
+        4167,
+        4258,
+        4269,
+        4283,
+        4326,
+        5070,
+        5179,
+        6668,
+        7844,
+        25832,
+        25833,
+        27700,
+        28992,
+        31254,
+        31255,
+        31256,
+        32632,
+        32633,
+    }
+)
+_RUNTIME_UTM_RANGES = (
+    (32601, 32660),
+    (32701, 32760),
+    (25828, 25838),
+    (26901, 26923),
+    (28348, 28358),
+    (7846, 7859),
+)
+
+
+def epsg_number(code: str) -> int | None:
+    """The EPSG number `code` names, in any spelling capabilities use; 4326
+    for CRS:84 and CRS84, which are the same longitude and latitude."""
+    text = code.strip()
+    if re.search(r"CRS:?84", text, re.IGNORECASE):
+        return 4326
+    match = re.search(r"EPSG\D*?(\d+)\s*$", text, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def runtime_knows_crs(code: str) -> bool:
+    """Whether the runtime places `code` without asking epsg.io for it."""
+    number = epsg_number(code)
+    if number is None:
+        return False
+    return number in _RUNTIME_CRS_CODES or any(
+        low <= number <= high for low, high in _RUNTIME_UTM_RANGES
+    )
+
+
+# --------------------------------------------------------------------------
+# WMS-T
+# --------------------------------------------------------------------------
+
+# The most instants the runtime's time slider steps through
+# (`time-dimension.ts`'s `MAX_TIME_STEPS`); it drops any after them.
+MAX_TIME_STEPS = 2000
+
+_PERIOD_RE = re.compile(
+    r"^P(?:(\d+(?:\.\d+)?)Y)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)W)?"
+    r"(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?"
+    r"(?:(\d+(?:\.\d+)?)S)?)?$",
+    re.IGNORECASE,
+)
+
+
+def parse_instant(text: str) -> datetime | None:
+    """One instant of a time dimension, in UTC, as the runtime reads it: a
+    year or a month is its first day, and a time without a zone is UTC."""
+    text = text.strip()
+    if re.fullmatch(r"\d{4}", text):
+        text += "-01-01"
+    elif re.fullmatch(r"\d{4}-\d{2}", text):
+        text += "-01"
+    if "T" in text and not re.search(r"(Z|[+-]\d{2}:?\d{2})$", text, re.IGNORECASE):
+        text += "Z"
+    try:
+        found = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if found.tzinfo is None:
+        found = found.replace(tzinfo=timezone.utc)
+    return found.astimezone(timezone.utc)
+
+
+def _period(text: str) -> tuple[int, int, float, float, float, float] | None:
+    """An ISO 8601 period as (years, months, days, hours, minutes, seconds)."""
+    match = _PERIOD_RE.match(text.strip())
+    if match is None or text.strip().upper() == "P" or text.strip().endswith("T"):
+        return None
+    years, months, weeks, days, hours, minutes, seconds = (
+        float(part) if part else 0.0 for part in match.groups()
+    )
+    if not (years.is_integer() and months.is_integer()):
+        # The runtime adds a fractional month as JavaScript dates do; no
+        # service publishes one, so such an interval is left out here.
+        return None
+    period = (int(years), int(months), weeks * 7 + days, hours, minutes, seconds)
+    return period if any(part > 0 for part in period) else None
+
+
+def _step(
+    start: datetime, period: tuple[int, int, float, float, float, float], count: int
+) -> datetime:
+    """`start` plus `count` periods, as the runtime counts them: whole months
+    first, the day kept or cut to the month's last, then the rest."""
+    years, months, days, hours, minutes, seconds = period
+    month = start.month - 1 + (years * 12 + months) * count
+    year = start.year + month // 12
+    month = month % 12 + 1
+    day = min(start.day, calendar.monthrange(year, month)[1])
+    moved = start.replace(year=year, month=month, day=day)
+    return moved + timedelta(
+        seconds=(days * 86400 + (hours * 60 + minutes) * 60 + seconds) * count
+    )
+
+
+def _written(instant: datetime, precision: str) -> str:
+    """`instant` as the runtime writes an interval's step: to the precision
+    of the interval's start, seconds dropped of zero milliseconds."""
+    text = instant.strftime("%Y-%m-%dT%H:%M:%S")
+    milliseconds = instant.microsecond // 1000
+    text += f".{milliseconds:03d}Z" if milliseconds else "Z"
+    return {"year": text[:4], "month": text[:7], "date": text[:10]}.get(precision, text)
+
+
+def parse_time_dimension(text: str, limit: int | None = None) -> list[str]:
+    """Every instant in a WMS time dimension, in order, spelled as the
+    runtime's time slider spells them (`time-dimension.ts`'s
+    `parseTimeDimension`), up to `limit`.
+
+    A comma list of single instants (kept as written) and intervals
+    `start/end/period` (WMS 1.3.0 Annex C), which step from the start to the
+    end. An item the runtime cannot read, and a `start/end` with no period,
+    is left out, as the runtime leaves it out.
+    """
+    found: list[str] = []
+    for item in (text or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        parts = item.split("/")
+        if len(parts) == 1:
+            found.append(item)
+        elif len(parts) == 3:
+            start, end = parse_instant(parts[0]), parse_instant(parts[1])
+            period = _period(parts[2])
+            if start is None or end is None or period is None:
+                continue
+            head = parts[0].strip()
+            precision = (
+                "year"
+                if re.fullmatch(r"\d{4}", head)
+                else "month"
+                if re.fullmatch(r"\d{4}-\d{2}", head)
+                else "date"
+                if re.fullmatch(r"\d{4}-\d{2}-\d{2}", head)
+                else "datetime"
+            )
+            count, instant = 0, start
+            while instant <= end and (limit is None or len(found) < limit):
+                found.append(_written(instant, precision))
+                count += 1
+                try:
+                    instant = _step(start, period, count)
+                except (OverflowError, ValueError):
+                    break  # past the last year a date can hold
+        if limit is not None and len(found) >= limit:
+            return found[:limit]
     return found

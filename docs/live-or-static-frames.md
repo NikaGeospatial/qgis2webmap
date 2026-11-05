@@ -70,8 +70,9 @@ map:
   projection - or a **geographic** one such as EPSG:4326, which is drawn as
   QGIS draws it: one scale in degrees on both axes;
 - is not rotated;
-- carries only vector layers and image tiles (an XYZ layer of `.png`, `.jpg`
-  or `.webp` tiles, or a WMS or WMTS layer).
+- carries only vector layers and image tiles (an XYZ layer whose address
+  names no vector format - `.png` tiles, or an address with no extension -
+  or a WMS or WMTS layer).
 
 The Checks tab then marks the frame **Kept**. An interactive frame has no basemap in
 a projected CRS; add an XYZ layer to the map for one.

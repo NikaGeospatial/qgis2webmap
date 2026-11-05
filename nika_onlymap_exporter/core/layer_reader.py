@@ -1559,20 +1559,26 @@ def read_map_service(
     group_path: tuple[str, ...] = (),
     visible: bool = True,
     map_time: MapTime | None = None,
+    time_slider: bool = True,
 ) -> ExportLayer | None:
     """Read a WMS or WMTS layer as a live tile layer, or refuse it with a reason.
 
-    The web map asks the service itself, tile by tile, in Web Mercator - see
+    The web map asks the service itself, tile by tile - see
     `core.map_services`, which builds the request from the layer's source
-    string and the capabilities QGIS keeps in its network cache. Like an XYZ
-    layer, nothing is embedded and a keyed address blocks the export. Refused
-    with a row saying what to do: a login, a format that is not an image, a
-    time the layer takes from QGIS's temporal controls, a WMS without Web
-    Mercator and a WMTS on another tile grid.
+    string and the capabilities QGIS keeps in its network cache: in Web
+    Mercator when the service offers it, otherwise in the CRS QGIS asks it
+    in, and a WMTS on its own tile grid. Like an XYZ layer, nothing is
+    embedded and a keyed address blocks the export. Refused with a row
+    saying what to do: a login, a format that is not an image, a time a
+    WMTS takes from QGIS's temporal controls, a WMS in a CRS the web map
+    cannot name, and a WMTS grid it cannot read.
 
-    A WMS-T layer that follows QGIS's time is a snapshot: the template asks
-    for the `TIME` QGIS sends now, worked out from `map_time` as QGIS works
-    it out (`_wms_snapshot_time`), and is refused when that cannot be told.
+    A WMS-T layer that follows QGIS's time opens at the `TIME` QGIS sends
+    now, worked out from `map_time` as QGIS works it out
+    (`_wms_snapshot_time`), and is refused when that cannot be told. A time
+    slider steps it through the service's times (`_wms_time_slider`); where
+    it cannot, or `time_slider` is off (a cartograph's frame, which has no
+    controls), the layer is a snapshot of that time.
 
     The legend pictures QGIS's legend shows for the layer travel the same
     way, as addresses the browser loads (`TileSpec.legend`).
@@ -1612,9 +1618,9 @@ def read_map_service(
         )
         return None
 
-    snapshot = _is_wmst_snapshot(pairs)
+    takes_time = _takes_qgis_time(pairs)
     time: str | None = None
-    if snapshot:
+    if takes_time:
         time, refusal = _wms_snapshot_time(layer, pairs, map_time)
         if refusal is not None:
             report.unsupported(subject, refusal, layer_id)
@@ -1655,12 +1661,19 @@ def read_map_service(
             legend=_service_legend(
                 name, [("", legend_url)] if legend_url else [], report, layer_id
             ),
+            tile_matrix_set=found.tile_matrix_set,
+        )
+        grid = (
+            f"the Web Mercator tile grid '{matrix_set}', as QGIS does"
+            if found.tile_matrix_set is None
+            else f"its tile grid '{matrix_set}', as QGIS does, and warps them "
+            "into place" + _crs_lookup_note(_grid_crs(found.tile_matrix_set))
         )
         report.approximated(
             subject,
             f"Exported as a live WMTS layer: the web map loads its tiles from "
-            f"{host} on the Web Mercator tile grid '{matrix_set}', as QGIS does. "
-            + _CORS_NOTE,
+            f"{host} on {grid}. "
+            + (_CORS_NOTE if found.tile_matrix_set is None else _WARPED_CORS_NOTE),
             layer_id,
         )
         return _map_service_layer(layer, tiles, dependency, group_path, visible)
@@ -1674,15 +1687,17 @@ def read_map_service(
     layers = map_services.values(pairs, "layers")
     styles = map_services.values(pairs, "styles")
     source_crs = map_services.value(pairs, "crs")
-    request_crs = map_services.web_mercator_code(source_crs) or (
+    # Web Mercator whenever the service offers it, as before the runtime
+    # could ask in any other CRS, so those maps stay as they were; otherwise
+    # the CRS QGIS asks in, and the runtime warps each picture into place.
+    web_mercator = map_services.web_mercator_code(source_crs) or (
         parsed.offered_web_mercator(layers) if parsed is not None else None
     )
+    request_crs = web_mercator
+    if request_crs is None and map_services.bbox_token(source_crs) is not None:
+        request_crs = source_crs.strip()
     if request_crs is None:
-        report.unsupported(
-            subject,
-            _wms_refusal(parsed is not None),
-            layer_id,
-        )
+        report.unsupported(subject, _wms_refusal(source_crs), layer_id)
         return None
 
     # What QGIS itself speaks to the service, when the layer loaded.
@@ -1711,6 +1726,14 @@ def read_map_service(
         for key in ("filter", "opacities")
         if map_services.values(pairs, key)
     ]
+    slider: tuple[str, str, int, int] | str | None = None
+    if takes_time and time is not None:
+        slider = (
+            _wms_time_slider(map_services.value(pairs, "timeDimensionExtent"), time)
+            if time_slider
+            else "it is drawn in a cartograph's interactive frame, which has no "
+            "controls"
+        )
     template = map_services.wms_get_map_template(
         map_services.prepare_url(get_map).rstrip("?&"),
         version,
@@ -1719,7 +1742,7 @@ def read_map_service(
         image_format,
         request_crs,
         extra,
-        time=time,
+        time=map_services.TIME_TOKEN if isinstance(slider, tuple) else time,
     )
     template, dependency = _live_dependency(template, name)
     host = urlsplit(template).netloc
@@ -1747,42 +1770,37 @@ def read_map_service(
         map_services.WMS_TILE_SIZE,
         legend=_service_legend(name, legend, report, layer_id),
         contextual_legend=contextual.lstrip("+-").isdigit() and int(contextual) != 0,
+        time=slider[1] if isinstance(slider, tuple) else None,
+        times=slider[0] if isinstance(slider, tuple) else None,
     )
-    projection = (
-        ""
-        if map_services.web_mercator_code(source_crs)
-        else f" rather than the {source_crs} QGIS asks for, so text and symbols "
-        "the service draws may sit or scale slightly differently"
-    )
+    if web_mercator is not None:
+        projection = (
+            ""
+            if map_services.web_mercator_code(source_crs)
+            else f" rather than the {source_crs} QGIS asks for, so text and "
+            "symbols the service draws may sit or scale slightly differently"
+        )
+        asked = f"in Web Mercator (EPSG:3857){projection}"
+    else:
+        asked = (
+            f"in {request_crs}, as QGIS does, and warps each picture into "
+            "place, so text the service draws may look slightly stretched"
+            + _crs_lookup_note(request_crs)
+        )
     report.approximated(
         subject,
         f"Exported as a live WMS layer: the web map asks {host} for each tile "
-        f"in Web Mercator (EPSG:3857){projection}. " + _CORS_NOTE,
+        f"{asked}. " + (_CORS_NOTE if web_mercator is not None else _WARPED_CORS_NOTE),
         layer_id,
     )
-    if snapshot:
-        report.approximated(
-            f"Time of '{name}'",
-            (
-                f"Exported as a fixed snapshot at {time.replace('/', ' to ')}, "
-                "the time QGIS draws now: the web map asks the service for that "
-                "time only and has no time slider. To export another time, set "
-                "it in QGIS and export again."
-            )
-            if time is not None
-            else (
-                "Exported as a fixed snapshot at the service's default time: "
-                "QGIS asks the service for no time for this layer now (no "
-                "temporal range applies to it and it has no predefined date), "
-                "and neither does the web map, which has no time slider."
-            ),
-            layer_id,
-        )
+    if takes_time:
+        report.approximated(f"Time of '{name}'", _wms_time_row(time, slider), layer_id)
     return _map_service_layer(layer, tiles, dependency, group_path, visible)
 
 
-def _is_wmst_snapshot(pairs: list[tuple[str, str]]) -> bool:
-    """Whether a WMS source string is a WMS-T layer exported as a snapshot."""
+def _takes_qgis_time(pairs: list[tuple[str, str]]) -> bool:
+    """Whether a WMS source string is a WMS-T layer that takes its time from
+    QGIS, which the web map opens at (with a time slider, or as a snapshot)."""
     from . import map_services
 
     return map_services.value(pairs, "type") == "wmst" and map_services.value(
@@ -1794,15 +1812,16 @@ def follows_map_time(layer: QgsMapLayer) -> bool:
     """Whether reading `layer` uses the time the QGIS map view draws.
 
     True only for what `_wms_snapshot_time` reads `map_time` for: a WMS-T
-    snapshot whose dynamic temporal control is on. For every other layer the
-    time is never read, so a project without one does not need it at all.
+    that takes its time from QGIS, with its dynamic temporal control on. For
+    every other layer the time is never read, so a project without one does
+    not need it at all.
     """
     from . import map_services
 
     if (layer.providerType() or "").lower() != "wms":
         return False
     pairs = map_services.source_pairs(layer.source())
-    if not _is_wmst_snapshot(pairs):
+    if not _takes_qgis_time(pairs):
         return False
     properties = layer.temporalProperties()
     return properties is not None and bool(properties.isActive())
@@ -1907,42 +1926,162 @@ def _wms_snapshot_time(
     return time, None
 
 
+# How far into a WMS-T's times the export looks for the one QGIS draws. A
+# guard, not a choice: a minutely dimension over decades would otherwise be
+# millions of steps; beyond it the layer is a snapshot.
+_TIME_SEARCH_LIMIT = 100_000
+
+
+def _wms_time_slider(extent: str, time: str) -> tuple[str, str, int, int] | str:
+    """`(times, start, shown, total)` for a WMS-T's time slider, or why it
+    gets none and stays a snapshot of `time`.
+
+    `extent` is the time dimension QGIS read from the capabilities (its
+    `timeDimensionExtent`). The slider opens at `start`, the step that is
+    `time`, the time QGIS draws, spelled as the slider spells it, so that it
+    shows where the map is. `times` is the dimension as QGIS read it, which
+    the runtime expands as `parse_time_dimension` does - unless it lists
+    more than the slider steps through (`MAX_TIME_STEPS`), when it is the
+    steps around `start`, `shown` of the `total`.
+    """
+    from . import map_services
+
+    if not extent.strip():
+        return "QGIS has no list of the service's times for this layer"
+    steps = map_services.parse_time_dimension(extent, limit=_TIME_SEARCH_LIMIT)
+    wanted = map_services.parse_instant(time)
+    index = next(
+        (
+            place
+            for place, step in enumerate(steps)
+            if wanted is not None and map_services.parse_instant(step) == wanted
+        ),
+        None,
+    )
+    if index is None:
+        if len(steps) >= _TIME_SEARCH_LIMIT:
+            return "the service lists too many times to find the one QGIS draws"
+        return "the time QGIS draws is not one of the times the service lists"
+    limit = map_services.MAX_TIME_STEPS
+    if len(steps) <= limit:
+        return extent.strip(), steps[index], len(steps), len(steps)
+    first = max(0, min(index - limit // 2, len(steps) - limit))
+    window = steps[first : first + limit]
+    total = len(steps) if len(steps) < _TIME_SEARCH_LIMIT else 0
+    return ",".join(window), steps[index], limit, total
+
+
+def _wms_time_row(
+    time: str | None, slider: tuple[str, str, int, int] | str | None
+) -> str:
+    """The Fidelity row for a WMS-T's time: its slider, or the snapshot it is
+    instead and why."""
+    if isinstance(slider, tuple):
+        _, start, shown, total = slider
+        if shown == total:
+            steps = f"the {shown} times the service lists"
+        elif total:
+            steps = (
+                f"the {shown} of the service's {total} times around it (a "
+                f"slider steps through at most {shown})"
+            )
+        else:
+            steps = (
+                f"the {shown} of the service's times around it (a slider steps "
+                f"through at most {shown})"
+            )
+        return (
+            f"Exported with a time slider: the map opens at {start}, the time "
+            f"QGIS draws now, and the slider plays or steps through {steps}, "
+            "rather than the frames of QGIS's temporal controller."
+        )
+    if time is not None:
+        return (
+            f"Exported as a fixed snapshot at {time.replace('/', ' to ')}, the "
+            "time QGIS draws now: the web map asks the service for that time "
+            f"only and has no time slider, because {slider}. To export another "
+            "time, set it in QGIS and export again."
+        )
+    return (
+        "Exported as a fixed snapshot at the service's default time: QGIS asks "
+        "the service for no time for this layer now (no temporal range applies "
+        "to it and it has no predefined date), and neither does the web map, "
+        "which has no time slider, since a slider opens at one of the "
+        "service's times. Set a time in QGIS's temporal controller and export "
+        "again for a slider."
+    )
+
+
 # The one condition of a live service that nothing in QGIS can check: QGIS is
-# not a web page, so a service that refuses web pages works there.
+# not a web page, so a service that refuses web pages works there. The
+# runtime still shows such a service's Web Mercator tiles, as plain pictures
+# (`cors-fallback`, on by default), with the limits that come with them - but
+# not on a projected map, nor pictures it must warp into place
+# (`domFallbackAllowed`): those stay empty.
+_HTTP_NOTE = (
+    "A service on http:// does not draw in a map served over https:// unless "
+    "it also answers on https://."
+)
 _CORS_NOTE = (
-    "The service must allow web pages to load its images (CORS), or this "
-    "layer stays empty while the rest of the map draws; a refused request "
-    "shows in the browser's developer tools."
+    "A service that does not allow web pages to read its images (CORS) still "
+    "shows, as plain pictures: under every other layer of the map, hidden "
+    "while the map is tilted or rotated, and left out of pictures the map "
+    "saves of itself; in a cartograph frame drawn in another projection it "
+    "stays empty. " + _HTTP_NOTE
+)
+_WARPED_CORS_NOTE = (
+    "The service must allow web pages to read its images (CORS), or this "
+    "layer stays empty while the rest of the map draws, since a picture the "
+    "map warps into place cannot be shown any other way; a refused request "
+    "shows in the browser's developer tools. " + _HTTP_NOTE
 )
 
 
-def _wms_refusal(has_capabilities: bool) -> str:
-    if has_capabilities:
-        return (
-            "This WMS does not offer Web Mercator (EPSG:3857), the only "
-            "projection the web map can ask a WMS for. If the provider also "
-            "publishes the layer as XYZ or WMTS tiles in Web Mercator, add that "
-            "instead, or save the layer as a GeoTIFF (Export > Save As...) and "
-            "add the file. The layer is omitted from the map."
-        )
+def _crs_lookup_note(code: str) -> str:
+    """`; the reader's browser looks up ...` when the runtime does not carry
+    `code`'s definition, else nothing."""
+    from . import map_services
+
+    if map_services.runtime_knows_crs(code):
+        return ""
     return (
-        "QGIS has no stored copy of this WMS's capabilities, so the export "
-        "cannot tell whether it offers Web Mercator (EPSG:3857), and exporting "
-        "never contacts the service to find out. Add the layer again from the "
-        "Data Source Manager with EPSG:3857 as its coordinate reference system "
-        "if the service lists it, and export again. The layer is omitted from "
-        "the map."
+        f"; the reader's browser looks up {code}'s definition at epsg.io once "
+        "to do so, and the layer stays empty if it cannot"
+    )
+
+
+def _grid_crs(tile_matrix_set: str) -> str:
+    """The CRS a `tile-matrix-set` JSON names."""
+    import json
+
+    supported = json.loads(tile_matrix_set).get("supportedCRS", "")
+    from . import map_services
+
+    number = map_services.epsg_number(supported)
+    return f"EPSG:{number}" if number is not None else supported
+
+
+def _wms_refusal(source_crs: str) -> str:
+    return (
+        f"This WMS layer is asked for in '{source_crs}', and the service does "
+        "not offer Web Mercator (EPSG:3857), or QGIS has no stored copy of its "
+        "capabilities to tell. The web map can ask a WMS in Web Mercator, an "
+        "EPSG coordinate system or CRS:84 only. Add the layer again from the "
+        "Data Source Manager in one of those the service lists, or save it as "
+        "a GeoTIFF (Export > Save As...) and add the file. The layer is omitted "
+        "from the map."
     )
 
 
 def _wmts_refusal(reason: str, matrix_set: str) -> str:
     if reason == "grid":
         return (
-            f"This WMTS layer uses the tile grid '{matrix_set}', and the web map "
-            "can only draw tiles on the Web Mercator grid (such as "
-            "GoogleMapsCompatible, EPSG:3857). If the service offers that grid, "
-            "add the layer again choosing it in the Data Source Manager. The "
-            "layer is omitted from the map."
+            f"This WMTS layer uses the tile grid '{matrix_set}', whose "
+            "coordinate system or tile matrices the web map cannot read (it "
+            "reads grids in an EPSG coordinate system or CRS84). If the service "
+            "offers another grid, such as GoogleMapsCompatible, add the layer "
+            "again choosing it in the Data Source Manager. The layer is omitted "
+            "from the map."
         )
     if reason == "time":
         return (
@@ -1952,11 +2091,11 @@ def _wmts_refusal(reason: str, matrix_set: str) -> str:
         )
     if reason == "not imagery":
         return (
-            "This WMTS layer's tile address has no image file extension or "
-            "format parameter, so the web map would read its tiles as data "
-            "rather than draw them as images. If the service offers a "
-            "key-value (KVP) tile address, or an address ending in .png or "
-            ".jpg, add the layer that way. The layer is omitted from the map."
+            "This WMTS layer's tile address names a vector or JSON format, so "
+            "the web map would read its tiles as data rather than draw them as "
+            "images. If the service offers a key-value (KVP) tile address, or "
+            "an address ending in .png or .jpg, add the layer that way. The "
+            "layer is omitted from the map."
         )
     if reason == "no capabilities":
         return (
@@ -1977,6 +2116,7 @@ def read_raster(
     group_path: tuple[str, ...] = (),
     visible: bool = True,
     map_time: MapTime | None = None,
+    time_slider: bool = True,
 ) -> ExportLayer | PendingRemoteRaster | None:
     """Read one raster layer into the normalized model.
 
@@ -2016,7 +2156,12 @@ def read_raster(
         return read_tile_service(layer, report, group_path=group_path, visible=visible)
     if provider_key == "wms" and _source_type(layer) in ("", "wmst", "wmts"):
         return read_map_service(
-            layer, report, group_path=group_path, visible=visible, map_time=map_time
+            layer,
+            report,
+            group_path=group_path,
+            visible=visible,
+            map_time=map_time,
+            time_slider=time_slider,
         )
 
     if provider_key == "arcgismapserver":
@@ -2720,6 +2865,7 @@ def read_layer(
     cluster: bool = True,
     map_time: MapTime | None = None,
     filter_field: str | None = None,
+    time_slider: bool = True,
 ) -> ExportLayer | None:
     """Read one layer into the normalized model, on the calling thread.
 
@@ -2743,6 +2889,7 @@ def read_layer(
         cluster=cluster,
         map_time=map_time,
         filter_field=filter_field,
+        time_slider=time_slider,
     )
     if isinstance(prepared, (PendingLayer, PendingRemoteRaster)):
         return prepared.finish(report)
@@ -2768,6 +2915,7 @@ def prepare_layer(
     map_time: MapTime | None = None,
     filter_field: str | None = None,
     map_crs: QgsCoordinateReferenceSystem | None = None,
+    time_slider: bool = True,
 ) -> ExportLayer | PendingLayer | PendingRemoteRaster | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
@@ -2801,6 +2949,9 @@ def prepare_layer(
 
     `map_crs` is the CRS QGIS draws the layer in, which its line labels are
     placed along (`translate_labeling`); `None` is the project's.
+
+    `time_slider` is off where the map has no controls (a cartograph's
+    frame): a WMS-T is then a snapshot of the time QGIS draws.
     """
     layer_id = layer.id()
     name = layer.name()
@@ -2810,7 +2961,12 @@ def prepare_layer(
         # to hide, no popup to build, no labels and no geometry to quantise.
         # Passing them along would only make the seam look wider than it is.
         return read_raster(
-            layer, report, group_path=group_path, visible=visible, map_time=map_time
+            layer,
+            report,
+            group_path=group_path,
+            visible=visible,
+            map_time=map_time,
+            time_slider=time_slider,
         )
 
     if layer.type() != QgsMapLayerType.VectorLayer:

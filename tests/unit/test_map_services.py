@@ -10,8 +10,10 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import json
 import math
 from html import escape
+from pathlib import Path
 from urllib.parse import parse_qsl
 
 import pytest
@@ -24,13 +26,17 @@ from fake_map_services import (
 
 from nika_onlymap_exporter.core.map_services import (
     HALF_WORLD,
+    TIME_TOKEN,
     WmtsRefusal,
     WmtsTiles,
+    bbox_token,
     capabilities_url,
     is_image_tile_template,
     parse_tile_dimensions,
+    parse_time_dimension,
     parse_wms_capabilities,
     prepare_url,
+    runtime_knows_crs,
     source_pairs,
     values,
     web_mercator_code,
@@ -225,7 +231,9 @@ class TestGetMapTemplate:
 
     def test_jpeg_is_not_asked_for_transparency(self) -> None:
         """QGIS's rule: some servers refuse TRANSPARENT with JPEG."""
-        jpeg = wms_get_map_template(BASE, "1.3.0", ["a"], [""], "image/jpeg", "X")
+        jpeg = wms_get_map_template(
+            BASE, "1.3.0", ["a"], [""], "image/jpeg", "EPSG:3857"
+        )
         assert "TRANSPARENT" not in jpeg
 
     def test_extra_parameters_pass_through(self) -> None:
@@ -253,6 +261,34 @@ class TestGetMapTemplate:
         assert "&TIME=2020-03-05T00:00:00Z/2020-03-06T00:00:00Z&" in template
         assert template.count("TIME=") == 1
 
+    def test_a_slider_time_is_the_runtimes_token(self) -> None:
+        template = wms_get_map_template(
+            BASE, "1.3.0", ["a"], [""], "image/png", "EPSG:3857", time=TIME_TOKEN
+        )
+        assert "&TIME={time}&" in template
+
+    @pytest.mark.parametrize(
+        ("crs", "token"),
+        [
+            ("EPSG:3857", "{bbox-epsg-3857}"),
+            # An older alias is asked as itself, in the same metres.
+            ("EPSG:900913", "{bbox-epsg-3857}"),
+            ("EPSG:25832", "{bbox-epsg-25832}"),
+            ("EPSG:4326", "{bbox-epsg-4326}"),
+            ("CRS:84", "{bbox-crs84}"),
+        ],
+    )
+    def test_the_box_is_asked_in_the_requests_own_crs(self, crs, token) -> None:
+        template = wms_get_map_template(BASE, "1.3.0", ["a"], [""], "image/png", crs)
+        assert template.endswith(
+            f"&CRS={crs}&WIDTH={{width}}&HEIGHT={{height}}&BBOX={token}"
+        )
+
+    def test_a_crs_with_no_token_is_not_written(self) -> None:
+        assert bbox_token("IGNF:LAMB93") is None
+        with pytest.raises(ValueError):
+            wms_get_map_template(BASE, "1.3.0", ["a"], [""], "image/png", "IGNF:X")
+
     def test_without_a_time_the_services_own_is_kept(self) -> None:
         template = wms_get_map_template(
             BASE + "?TIME=1999-01-01", "1.3.0", ["a"], [""], "image/png", "EPSG:3857"
@@ -278,7 +314,9 @@ def _fill(template: str, x: int, y: int, z: int) -> str:
 def test_the_bbox_token_is_the_tiles_extent() -> None:
     """The fake server draws from the bbox it is given; this pins that the
     tile it is asked for and the extent it is given are the same."""
-    template = wms_get_map_template(BASE, "1.3.0", ["t"], [""], "image/png", "X")
+    template = wms_get_map_template(
+        BASE, "1.3.0", ["t"], [""], "image/png", "EPSG:3857"
+    )
     filled = _fill(template, 34, 21, 6)
     bbox = filled.rpartition("BBOX=")[2].split(",")
     assert [float(v) for v in bbox] == pytest.approx(tile_bounds_3857(34, 21, 6))
@@ -339,9 +377,39 @@ class TestWmts:
         )
         assert (tiles.min_zoom, tiles.max_zoom, tiles.tile_size) == (0, 18, 256)
 
-    def test_another_grid_is_refused_by_name(self) -> None:
-        refusal = _wmts(matrix_set="UTM32")
-        assert refusal == WmtsRefusal("grid", grid="UTM32")
+    def test_a_national_grid_is_addressed_by_its_own_matrices(self) -> None:
+        """OnlyMap 0.13.4: `{TileMatrix}`/`{TileRow}`/`{TileCol}` and the grid
+        as the capabilities state it, which the runtime warps into place."""
+        tiles = _wmts(matrix_set="UTM32")
+        assert isinstance(tiles, WmtsTiles)
+        assert tiles.template == (
+            WMTS + "?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=target"
+            "&STYLE=default&FORMAT=image/png&TILEMATRIXSET=UTM32"
+            "&TILEMATRIX={TileMatrix}&TILEROW={TileRow}&TILECOL={TileCol}"
+        )
+        assert (tiles.min_zoom, tiles.max_zoom, tiles.tile_size) == (0, 9, None)
+        grid = json.loads(tiles.tile_matrix_set or "")
+        assert grid["supportedCRS"] == "urn:ogc:def:crs:EPSG::25832"
+        assert len(grid["tileMatrix"]) == 10
+        assert grid["tileMatrix"][0] == {
+            "identifier": "0",
+            "scaleDenominator": 17471320.75,
+            "topLeftCorner": "-46133.17 6301219.54",
+            "tileWidth": 256,
+            "tileHeight": 256,
+            "matrixWidth": 1,
+            "matrixHeight": 1,
+        }
+
+    def test_the_web_mercator_grid_carries_no_matrix_set(self) -> None:
+        tiles = _wmts()
+        assert isinstance(tiles, WmtsTiles)
+        assert tiles.tile_matrix_set is None
+
+    def test_a_grid_in_a_crs_the_map_cannot_read_is_refused(self) -> None:
+        document = _matrix_set(["0", "1"], crs="IGNF:LAMB93")
+        refusal = _wmts(document=document, layer="l", matrix_set="s")
+        assert refusal == WmtsRefusal("grid", grid="s")
 
     def test_rest_with_prefixed_identifiers(self) -> None:
         names = [f"EPSG:3857:{z}" for z in range(3, 8)]
@@ -366,14 +434,25 @@ class TestWmts:
             ["1", "2", "3"],  # names one off the zoom
         ],
     )
-    def test_identifiers_z_cannot_name_are_refused(self, identifiers) -> None:
-        refusal = _wmts(document=_matrix_set(identifiers), layer="l", matrix_set="s")
-        assert isinstance(refusal, WmtsRefusal)
+    def test_identifiers_z_cannot_name_go_by_their_matrix(self, identifiers) -> None:
+        """Web Mercator named another way: no `{z}` names its matrices, so the
+        grid is given as any other is."""
+        tiles = _wmts(document=_matrix_set(identifiers), layer="l", matrix_set="s")
+        assert isinstance(tiles, WmtsTiles)
+        assert "{TileMatrix}" in tiles.template and "{z}" not in tiles.template
+        grid = json.loads(tiles.tile_matrix_set or "")
+        assert [m["identifier"] for m in grid["tileMatrix"]] == [
+            item[1] if isinstance(item, tuple) else item for item in identifiers
+        ]
 
-    def test_a_projected_grid_is_refused(self) -> None:
+    def test_a_rest_address_on_a_projected_grid(self) -> None:
         document = _matrix_set(["0", "1"], crs="urn:ogc:def:crs:EPSG::25832")
-        refusal = _wmts(document=document, layer="l", matrix_set="s")
-        assert refusal == WmtsRefusal("grid", grid="s")
+        tiles = _wmts(document=document, layer="l", matrix_set="s")
+        assert isinstance(tiles, WmtsTiles)
+        assert tiles.template == (
+            "https://t.example/s/{TileMatrix}/{TileCol}/{TileRow}.png"
+        )
+        assert tiles.tile_matrix_set is not None
 
     def test_no_document_is_no_template(self) -> None:
         assert _wmts(document=None) == WmtsRefusal("no capabilities")
@@ -389,10 +468,16 @@ class TestWmts:
         assert isinstance(fixed, WmtsTiles)
         assert "&Time=2020&" in fixed.template
 
-    def test_a_rest_address_without_an_image_extension_is_refused(self) -> None:
-        """The runtime draws a template as images only when the address says
-        so; anything else it decodes as data, and the layer fails."""
+    def test_a_rest_address_without_an_extension_is_imagery(self) -> None:
+        """OnlyMap 0.13.4 draws any template as images unless it names a
+        vector format; 0.13.3 needed the address to say so."""
         document = _matrix_set(["0", "1"]).replace(b"{TileRow}.png", b"{TileRow}")
+        tiles = _wmts(document=document, layer="l", matrix_set="s")
+        assert isinstance(tiles, WmtsTiles)
+        assert tiles.template.endswith("/{x}/{y}")
+
+    def test_a_rest_address_naming_a_vector_format_is_refused(self) -> None:
+        document = _matrix_set(["0", "1"]).replace(b"{TileRow}.png", b"{TileRow}.pbf")
         refusal = _wmts(document=document, layer="l", matrix_set="s")
         assert refusal == WmtsRefusal("not imagery")
 
@@ -412,7 +497,7 @@ def test_the_google_scale_set_spans_the_world() -> None:
 
 
 class TestImageTemplates:
-    """The runtime's own test of what it draws as images (0.13.3)."""
+    """The runtime's own test of what it draws as images (0.13.4)."""
 
     @pytest.mark.parametrize(
         "url",
@@ -422,6 +507,10 @@ class TestImageTemplates:
             BASE + "?SERVICE=WMS&FORMAT=image/png&BBOX={bbox-epsg-3857}",
             BASE + "?SERVICE=WMS&FORMAT=image%2Fjpeg&BBOX={bbox-epsg-3857}",
             "https://h/MapServer/export?bbox={bbox-epsg-3857}&format=png",
+            # No extension: an ArcGIS cache, a Google-style address, TMS.
+            "https://h/MapServer/tile/{z}/{y}/{x}",
+            "https://mt1.example/vt/lyrs=s&x={x}&y={y}&z={z}",
+            "https://t.example/tms/{z}/{x}/{-y}",
         ],
     )
     def test_imagery(self, url: str) -> None:
@@ -430,9 +519,11 @@ class TestImageTemplates:
     @pytest.mark.parametrize(
         "url",
         [
-            "https://h/MapServer/tile/{z}/{y}/{x}",
             "https://t.example/{z}/{x}/{y}.pbf",
-            BASE + "?FORMAT=text/html&BBOX={bbox-epsg-3857}",
+            "https://t.example/{z}/{x}/{y}.mvt",
+            "https://h/FeatureServer/0/query?f=json&bbox={bbox-epsg-3857}",
+            "https://h/tiles/{z}/{x}/{y}?format=pbf",
+            "https://h/wfs?outputFormat=application/json&BBOX={bbox-epsg-3857}",
         ],
     )
     def test_not_imagery(self, url: str) -> None:
@@ -706,3 +797,95 @@ class TestWmtsLegend:
         )
         assert other_style is None
         assert wmts_legend_url(None, "l", "s", "image/png", REST_SOURCE) is None
+
+
+class TestTimeDimension:
+    """The times a WMS-T's slider steps, spelled as the runtime spells them
+    (OnlyMap 0.13.4 `parseTimeDimension`), so the step QGIS draws is found."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            (
+                "2020-01-01T00:00:00Z/2020-01-03T00:00:00Z/P1D",
+                [
+                    "2020-01-01T00:00:00Z",
+                    "2020-01-02T00:00:00Z",
+                    "2020-01-03T00:00:00Z",
+                ],
+            ),
+            # A date-only start steps in dates; month ends are kept or cut.
+            (
+                "2020-01-31/2020-04-30/P1M",
+                ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30"],
+            ),
+            ("2019/2021/P1Y", ["2019", "2020", "2021"]),
+            # Instants are kept as written; a start/end with no period is not read.
+            (
+                " 2020-05-01 ,2020-06-01/2020-06-02,2020-07-01",
+                ["2020-05-01", "2020-07-01"],
+            ),
+            (
+                "2020-01-01T00:00/2020-01-01T01:00/PT30M",
+                [
+                    "2020-01-01T00:00:00Z",
+                    "2020-01-01T00:30:00Z",
+                    "2020-01-01T01:00:00Z",
+                ],
+            ),
+            ("2020-01-01/2020-01-02/P", []),
+            ("", []),
+        ],
+    )
+    def test_steps(self, text, expected) -> None:
+        assert parse_time_dimension(text) == expected
+
+    def test_a_limit_stops_the_count(self) -> None:
+        steps = parse_time_dimension("2000-01-01/2030-01-01/P1D", limit=2000)
+        assert len(steps) == 2000
+        assert steps[-1] == "2005-06-22"
+
+
+@pytest.mark.parametrize(
+    ("code", "known"),
+    [
+        ("EPSG:25832", True),
+        ("urn:ogc:def:crs:EPSG::2056", True),
+        ("EPSG:32733", True),  # a UTM zone, written from its code
+        ("CRS:84", True),
+        ("EPSG:3067", False),
+        ("EPSG:31467", False),
+        ("IGNF:LAMB93", False),
+    ],
+)
+def test_which_crs_the_runtime_places_without_a_lookup(code, known) -> None:
+    assert runtime_knows_crs(code) is known
+
+
+# PDOK's BRT Achtergrondkaart WMTS capabilities, as served on 2026-11-04: a
+# national grid (EPSG:28992), and Web Mercator with zero-padded matrix names.
+PDOK = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "pdok-brt-wmts-capabilities.xml"
+)
+
+
+class TestARealNationalWmts:
+    def test_the_dutch_grid_travels_as_the_capabilities_state_it(self) -> None:
+        tiles = wmts_tiles(
+            PDOK.read_bytes(), "standaard", "default", "image/png", "EPSG:28992", {}
+        )
+        assert isinstance(tiles, WmtsTiles)
+        assert "&TILEMATRIXSET=EPSG%3A28992&TILEMATRIX={TileMatrix}&" in tiles.template
+        grid = json.loads(tiles.tile_matrix_set or "")
+        assert grid["supportedCRS"] == "urn:ogc:def:crs:EPSG::28992"
+        identifiers = [matrix["identifier"] for matrix in grid["tileMatrix"]]
+        assert identifiers == [f"{z:02d}" for z in range(15)]
+        assert (tiles.min_zoom, tiles.max_zoom) == (0, 14)
+
+    def test_zero_padded_web_mercator_names_now_export(self) -> None:
+        """`00`..`19`: no `{z}` names them, which 0.3.2 refused."""
+        tiles = wmts_tiles(
+            PDOK.read_bytes(), "standaard", "default", "image/png", "EPSG:3857", {}
+        )
+        assert isinstance(tiles, WmtsTiles)
+        assert tiles.tile_matrix_set is not None
