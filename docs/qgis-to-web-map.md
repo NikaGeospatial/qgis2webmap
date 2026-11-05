@@ -81,9 +81,12 @@ styles (rule-based ones approximated: a feature two rules draw shows one
 symbol), and with labels from a field or an expression. So are raster layers
 from a file on disk - a GeoTIFF travels as a Cloud-Optimized GeoTIFF, in the
 colours QGIS draws it - inside the single HTML file up to 100 MB of imagery, or
-beside the page in a Folder or Share ZIP export. XYZ, WMS and WMTS layers, and
-a Cloud Optimized GeoTIFF QGIS reads from a web address, stay live and need a
-connection. Data in any CRS is reprojected to WGS84 on the way out.
+beside the page in a Folder or Share ZIP export. XYZ, WMS, WMTS and vector
+tile layers, and a Cloud Optimized GeoTIFF QGIS reads from a web address, stay
+live and need a connection; a PMTiles archive on disk travels with the map. A
+WFS, OGC API Features or ArcGIS FeatureServer layer loads live, with the copy
+taken at export to fall back on. Data in any CRS is reprojected to WGS84 on the
+way out.
 Scale-dependent visibility survives as the matching web zoom levels, and the
 Fidelity tab shows which zooms it became.
 

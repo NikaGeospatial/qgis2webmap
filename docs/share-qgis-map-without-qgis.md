@@ -56,9 +56,11 @@ What they get:
 - 3D terrain and extrusion, if you enabled them
 
 What they need: a browser. Not QGIS, not an account, not a login, and — apart
-from a basemap, live XYZ, WMS and WMTS layers, a Cloud Optimized GeoTIFF read
-from a web address, and following a link or seeing a web picture in a popup,
-if your map has them — not an internet connection.
+from a basemap, relief, live XYZ, WMS, WMTS and vector tile layers, a Cloud
+Optimized GeoTIFF or PMTiles archive read from a web address, WFS, OGC API
+Features or ArcGIS FeatureServer layers loaded live, and following a link or
+seeing a web picture in a popup, if your map has them — not an internet
+connection.
 Pictures carried with the map show offline.
 
 What they do not get: your project file, your data files, or anything you

@@ -79,16 +79,18 @@ exactly where they bite.
 ## What it is not
 
 It is not a hosted platform, not a data editor, and not a live-data pipeline. It
-reads a saved project and writes a map. If you need viewers to edit features, or
-the map to reflect a database that changes hourly, one of the other routes above
-is the honest answer.
+reads a saved project and writes a map. A WFS, OGC API Features or ArcGIS
+FeatureServer layer can load live from its service in the reader's browser, so
+data published that way can stay current; but if you need viewers to edit
+features, or the map to reflect a database with no such service in front of
+it, one of the other routes above is the honest answer.
 
 Raster layers from a file on disk are exported in the colours QGIS draws them -
 inside a single HTML file up to 100 MB of imagery, or in a Folder or Share ZIP
 for larger ones. XYZ, WMTS and WMS layers export as live layers (WMS and WMTS
-in national coordinate systems and tile grids too), and so does a Cloud
-Optimized GeoTIFF QGIS
-reads from a web address, within the limits in
+in national coordinate systems and tile grids too), and so do a Cloud
+Optimized GeoTIFF QGIS reads from a web address and a vector tile layer in its
+publisher's style; PMTiles archives export as tiles, within the limits in
 [what gets exported](supported-features.md#layers); WCS and ArcGIS map services
 are left out.
 
