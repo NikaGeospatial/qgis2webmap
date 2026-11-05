@@ -140,6 +140,10 @@ If outside downloads are blocked entirely, install the runtime by hand:
 1. On a machine with access, download the package from
    [npm](https://www.npmjs.com/package/@nika-js/onlymap) and unpack it.
 2. Copy the `dist` folder — you need `onlymap.standalone.js` and `onlymapjs.css`.
+   For maps with PMTiles archives or vector tile layers, add `dist/mvt-worker.js`
+   from [`@loaders.gl/mvt`](https://www.npmjs.com/package/@loaders.gl/mvt)
+   4.4.3 to the same folder, or those maps load it from unpkg.com and draw only
+   online.
 3. On the offline machine, set the environment variable `ONLYMAP_RUNTIME_DIR` to
    that folder **before starting QGIS**.
 
