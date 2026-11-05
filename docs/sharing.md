@@ -22,7 +22,8 @@ Send it, copy it to a USB stick, put it on a shared drive. The recipient
 double-clicks it. They need a web browser and nothing else - no QGIS, no account,
 no internet connection. The exceptions are a basemap, relief, or a live layer
 (XYZ, WMS, WMTS - with its legend picture - or a Cloud Optimized GeoTIFF read
-from a web address), which draw only while the recipient is online, and in
+from a web address), and a PMTiles or vector tile layer, even one carried in
+the file, which draw only while the recipient is online, and in
 popups, links and pictures that are web
 addresses (see [Popups](supported-features.md#links-and-pictures)).
 The rest of the map, including the pictures it carries, works without a

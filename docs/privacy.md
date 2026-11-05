@@ -21,7 +21,8 @@ had QGIS installed.
   relief, or the map has a live web layer or a popup picture from a web
   address; see below.
 - No fonts, scripts or styles loaded from a CDN - everything is inside the
-  file, unless you switch relief on; see below.
+  file, unless you switch relief on or the map has a PMTiles or vector tile
+  layer, whose tile decoder is loaded from unpkg.com; see below.
 - No identifier of any kind for whoever opens the map.
 
 You can check this yourself: open an exported map in a browser, open the
@@ -90,7 +91,10 @@ address - is exported live: the reader's browser asks that layer's own server
 for what it draws, so that server sees the requests and the area being looked
 at. A vector tile layer drawn in its publisher's style also loads that style
 from the publisher when the map opens. A PMTiles archive on your own computer
-is carried with the map, and reading it makes no request elsewhere. A WMS or WMTS layer's legend picture is
+is carried with the map and read from it. Both kinds of vector tiles - a
+PMTiles archive, local or not, and a vector tile layer - are decoded by a
+script the reader's browser loads from unpkg.com when it draws them, so
+unpkg.com sees that request, and without it these layers stay empty. A WMS or WMTS layer's legend picture is
 loaded from the service the same way when the map opens. An address that
 carries an access key is never written into the map: such a layer is refused,
 and such a legend picture left out.
