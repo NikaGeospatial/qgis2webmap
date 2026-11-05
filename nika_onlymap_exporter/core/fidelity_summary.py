@@ -131,6 +131,10 @@ TOPIC_BY_HEAD = {
     "Raster files": Topic.DATA,
     "Feature count": Topic.DATA,
     "Time": Topic.DATA,
+    # A WFS, OGC API or FeatureServer layer read live (`live_features`).
+    "Live features": Topic.DATA,
+    # Local PMTiles archives carried with the map (`packaging/tile_archives`).
+    "Tile archives": Topic.DATA,
     "Artifact size": Topic.DATA,
     "Basemap": Topic.MAP,
     "Terrain": Topic.MAP,
