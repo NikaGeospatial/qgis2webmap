@@ -47,6 +47,20 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   only, is saved with the project and is used by Processing. The Fidelity tab
   names each live layer's host, and the map lists it among its network
   requests. Cartograph frames still embed.
+- **Clicking a WMS layer shows what the service says is there,** as QGIS's
+  Identify tool does. A click on a layer that is identifiable in QGIS
+  (Project Properties, Data Sources) asks its service about the spot, from
+  the reader's browser, about the sublayers the service says answer clicks,
+  and only while the layer shows (switched on, and inside its zoom range).
+  The answers share one popup in the look of the feature popups, the top
+  layer first: each feature's fields, and nothing when the service found
+  nothing. A service that answers only as text or as a web page has that
+  shown as it is, the page without its scripts; a click a feature popup
+  opens for stays that popup's. A service that does not allow web pages to
+  read its answers (CORS) is named once in the notice, as "Could not get
+  details from". The Fidelity tab has a *Clicks on* row for each such layer,
+  and says why for one that cannot answer on the web map. Cartograph frames
+  are not clickable.
 - **A notice for a layer that cannot load.** When a layer fails in the
   reader's browser and has nothing to show instead - a live-only feature
   layer, or a tile or map service layer - a small "Could not load" notice

@@ -91,7 +91,11 @@ for what it draws, so that server sees the requests and the area being looked
 at. A vector tile layer drawn in its publisher's style also loads that style
 from the publisher when the map opens. A PMTiles archive on your own computer
 is carried with the map, and reading it makes no request elsewhere. A WMS or WMTS layer's legend picture is
-loaded from the service the same way when the map opens. An address that
+loaded from the service the same way when the map opens. A click on a WMS
+layer that answers clicks (see [supported features](supported-features.md))
+sends that service the position clicked, as a small map around it, to ask
+what is there; nothing is sent until someone clicks, and a layer that is not
+identifiable in QGIS is never asked. An address that
 carries an access key is never written into the map: such a layer is refused,
 and such a legend picture left out.
 
