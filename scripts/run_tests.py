@@ -1161,7 +1161,7 @@ class Planner:
         wdir = self.worker_dir(name)
 
         def env() -> dict[str, str]:
-            merged = self.worker_env(dict(os.environ), "browser")
+            merged = self.worker_env(dict(os.environ), name)
             merged["PYTHONPATH"] = os.pathsep.join(
                 [str(self.snap), str(self.snap / "tests")]
             )
