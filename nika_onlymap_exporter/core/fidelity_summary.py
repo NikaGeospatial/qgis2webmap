@@ -122,6 +122,8 @@ TOPIC_BY_HEAD = {
     "Popup fields": Topic.POPUPS,
     # A popup's links and pictures (`popup_media._report`).
     "Popups": Topic.POPUPS,
+    # What a click on a WMS layer shows (`layer_reader._wms_feature_info`).
+    "Clicks": Topic.POPUPS,
     # A layer's filter panel (`layer_reader._report_filter`).
     "Filter": Topic.DATA,
     "Data": Topic.DATA,

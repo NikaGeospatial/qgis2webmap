@@ -523,8 +523,9 @@ def prepare_project(
             # control on the web map, and a frame is a map on a printed page.
             filter_field=per_layer.filter_field if layer_order is None else None,
             map_crs=map_crs,
-            # Nor is a WMS-T's time slider.
+            # Nor is a WMS-T's time slider, nor a click on a WMS.
             time_slider=layer_order is None,
+            clickable=layer_order is None,
             # Embedded in a cartograph's frames: a printed page shows the
             # features it was made with, and its frames carry no fallback.
             live_choice=(

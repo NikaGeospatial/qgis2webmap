@@ -405,6 +405,11 @@ def scan(
             remote.extend(image.url for image in layer.tiles.legend)
             report_service_legend(layer, report)
 
+        # A click on a WMS layer asks its service what is there; the reader
+        # has already said so (`layer_reader._wms_feature_info`).
+        if layer.tiles is not None and layer.tiles.feature_info is not None:
+            remote.append(layer.tiles.feature_info)
+
     # The basemap and terrain are not layers, so no layer dependency names them,
     # yet the map fetches their tiles every time it is opened. The Fidelity
     # report already explains each (`project_reader`); listing the hosts here is

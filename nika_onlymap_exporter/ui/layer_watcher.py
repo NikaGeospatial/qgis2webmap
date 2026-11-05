@@ -135,8 +135,10 @@ class LayerContentWatcher(QObject):
     | `styleChanged` | Apply in Layer Properties or the Styling panel |
     | `rendererChanged` | a renderer replaced in code, with no Apply |
     | `afterCommitChanges` | edits saved on a vector layer (not on rasters) |
+    | `flagsChanged` | a layer made identifiable or not (Project Properties) |
 
     `styleChanged` covers symbology, labels, opacity and scale range alike.
+    `flagsChanged` decides whether a WMS layer answers clicks on the map.
 
     The features themselves are read through the layer's edit buffer, so what
     an export contains changes before anything is committed. These are the
@@ -164,6 +166,7 @@ class LayerContentWatcher(QObject):
         "styleChanged",
         "rendererChanged",
         "afterCommitChanges",
+        "flagsChanged",
         "attributeValueChanged",
         "geometryChanged",
         "featureAdded",
