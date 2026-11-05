@@ -80,6 +80,12 @@ view** is not exported at all: the run stops with a message rather than export
 every feature, the ones outside the view included. Untick that box in the dialog
 and save the project to export such a project in a batch.
 
+Layers that follow QGIS's time read it from the QGIS view too. A vector layer
+that does is exported with every feature, as QGIS draws it with the temporal
+controller off, and no time slider; a time-enabled WMS (WMS-T) that does is
+left out, with a line in the log saying why. A WMS-T whose dynamic temporal
+control is off exports as its fixed snapshot, as from the dialog.
+
 The Fidelity report goes to the Processing log instead of a tab, one line per
 item.
 
