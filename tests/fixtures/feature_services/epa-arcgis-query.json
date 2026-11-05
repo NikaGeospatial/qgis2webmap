@@ -1,0 +1,90 @@
+{
+ "_note": "Recorded 2026-11-04 from the US EPA's EJScreen ArcGIS FeatureServer; geometry cut to its first points.",
+ "request": "https://services2.arcgis.com/FiaPA4ga0iQKduv3/ArcGIS/rest/services/EPA_EJ_Screen/FeatureServer/0/query?where=1%3D1&geometry=-77.04,38.89,-77.03,38.90&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=ID,STATE_NAME&outSR=4326&f=geojson&resultRecordCount=2&geometryPrecision=6",
+ "headers": {
+  "content-type": "application/json; charset=utf-8",
+  "access-control-allow-origin": "*"
+ },
+ "body": {
+  "type": "FeatureCollection",
+  "crs": {
+   "type": "name",
+   "properties": {
+    "name": "EPSG:4326"
+   }
+  },
+  "properties": {
+   "exceededTransferLimit": true
+  },
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Polygon",
+     "coordinates": [
+      [
+       [
+        -77.033647,
+        38.897353
+       ],
+       [
+        -77.033646,
+        38.898322
+       ],
+       [
+        -77.033645,
+        38.898441
+       ],
+       [
+        -77.033645,
+        38.898627
+       ],
+       [
+        -77.033647,
+        38.897353
+       ]
+      ]
+     ]
+    },
+    "properties": {
+     "ID": "110010058001",
+     "STATE_NAME": "District of Columbia"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Polygon",
+     "coordinates": [
+      [
+       [
+        -77.064698,
+        38.89186
+       ],
+       [
+        -77.064628,
+        38.891845
+       ],
+       [
+        -77.064352,
+        38.891803
+       ],
+       [
+        -77.064166,
+        38.891781
+       ],
+       [
+        -77.064698,
+        38.89186
+       ]
+      ]
+     ]
+    },
+    "properties": {
+     "ID": "110010062021",
+     "STATE_NAME": "District of Columbia"
+    }
+   }
+  ]
+ }
+}

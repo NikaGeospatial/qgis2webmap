@@ -347,6 +347,20 @@ file on `http://` is also blocked inside a map served over `https://`. If you
 cannot change the server, save a local copy (right-click the layer,
 **Export > Save As...**) and add the file instead: it is carried inside the map.
 
+### A layer says "Could not load", or a web service layer shows old features
+
+The map asks a live layer's service for what it draws from the reader's
+browser. When that fails - the service sends no `Access-Control-Allow-Origin`
+header (`*` for a map opened from a file), answers with an error, is an
+`http://` service in a map served over `https://`, or the reader is offline -
+a WFS, OGC API Features or ArcGIS FeatureServer layer exported *live first*
+shows the copy of its features carried in the map, as they were when you
+exported. A layer with no copy to show (*live only*, or a tile or map service
+layer) is named in a small "Could not load" notice in the bottom-left corner,
+which goes once the layer loads again. The browser's developer tools (Console)
+show the refused request. To send a map that never depends on the service, set
+the layer's **Features** to *embedded* on the Layers tab.
+
 ### Basemap tiles do not load for the recipient
 
 The tiles come from the provider's servers on every open, so the recipient needs

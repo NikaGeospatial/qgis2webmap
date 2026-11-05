@@ -1,0 +1,122 @@
+    <!--
+      What the reader is told when a layer cannot load. The runtime fires
+      `om-layer-error` whenever a layer's tiles or features fail (a server
+      refusing cross-origin reads, an HTTP error, a service exception, no
+      connection), for any layer id.
+
+      - A live-first web feature service layer carries the copy of its
+        features embedded at export (`data-q2w-live="live-first"`, the copy
+        under its own script type, which the runtime does not read). On its
+        first error the copy becomes the layer's inline data, which the
+        runtime reads in place of `data`: the reader sees the features, and
+        nothing is said.
+      - Any other layer that fails with an error (a warning still draws)
+        is named in a small notice, one line for every such layer, in the
+        bottom-left corner's stack just above the licence notice, which the
+        runtime lays out with the controls, so it covers none of them. It
+        is never folded into a drawer, where it would not be seen.
+      - The notice is withdrawn for a layer once the runtime no longer
+        reports it - a feature layer whose next request succeeded, or a
+        tile layer whose failure it retracted. The map's own diagnostics are
+        watched for that, switched on only once a layer has failed.
+
+      A plain script after the map, so file:// is the same.
+    -->
+    <script>
+      (function (place) {
+        var map = document.querySelector("om-map");
+        if (!map) return;
+        var FALLBACK = "@FALLBACK_TYPE@";
+        // Layer id -> { name, seen }: `seen` once a diagnostics report has
+        // listed the failure, so the report that was already on its way
+        // when the error fired cannot withdraw it.
+        var failed = {};
+        var notice = null;
+        var watching = false;
+        var layerOf = function (id) {
+          var layers = map.querySelectorAll(":scope > om-layer");
+          for (var i = 0; i < layers.length; i += 1) {
+            if (layers[i].getAttribute("id") === id) return layers[i];
+          }
+          return null;
+        };
+        var fallBack = function (layer) {
+          if (layer.getAttribute("data-q2w-live") !== "live-first") return false;
+          var copy = layer.querySelector(':scope > script[type="' + FALLBACK + '"]');
+          if (!copy) return false;
+          var json = document.createElement("script");
+          json.type = "application/json";
+          json.textContent = copy.textContent;
+          copy.replaceWith(json);
+          layer.setAttribute("data-q2w-live", "fell-back");
+          layer.removeAttribute("data");
+          return true;
+        };
+        var show = function () {
+          if (notice) notice.remove();
+          notice = null;
+          var names = Object.keys(failed).map(function (id) {
+            return failed[id].name;
+          });
+          if (!names.length) return;
+          notice = document.createElement("om-widget");
+          notice.setAttribute("position", place.position);
+          notice.setAttribute("order", String(place.order));
+          notice.setAttribute("fold", "never");
+          notice.setAttribute("data-q2w-layer-notice", "");
+          // The Appearance tab's Size, laid out by the slot as the
+          // bottom-left controls are (`_chrome_scale_block`).
+          if (place.scale !== 1) notice.style.zoom = String(place.scale);
+          var style = document.createElement("style");
+          style.textContent =
+            ".q2w-notice { box-sizing: border-box; max-width: 100%;" +
+            "  padding: 4px 10px; border-radius: 6px; font-size: 12px;" +
+            "  line-height: 1.4; color: var(--om-widget-fg, #1f2937);" +
+            "  background: var(--om-widget-bg, rgba(255, 255, 255, 0.94));" +
+            "  border-left: 3px solid #d97706;" +
+            "  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); overflow-wrap: anywhere; }";
+          var panel = document.createElement("div");
+          panel.className = "q2w-notice";
+          panel.setAttribute("role", "status");
+          panel.textContent = "Could not load: " + names.join(", ");
+          notice.appendChild(style);
+          notice.appendChild(panel);
+          map.appendChild(notice);
+        };
+        var check = function (report) {
+          var current = {};
+          ((report && report.errors) || []).forEach(function (entry) {
+            current[entry.element] = true;
+          });
+          var changed = false;
+          Object.keys(failed).forEach(function (id) {
+            if (current["om-layer#" + id]) {
+              failed[id].seen = true;
+            } else if (failed[id].seen) {
+              delete failed[id];
+              changed = true;
+            }
+          });
+          if (changed) show();
+        };
+        map.addEventListener("om-layer-error", function (event) {
+          var detail = event.detail || {};
+          var id = detail.layerId;
+          if (!id || detail.severity === "warning") return;
+          var layer = layerOf(id);
+          if (layer && fallBack(layer)) return;
+          // A layer showing its embedded copy has no request left to fail.
+          if (layer && layer.getAttribute("data-q2w-live") === "fell-back") return;
+          if (failed[id]) return;
+          failed[id] = { name: (layer && layer.getAttribute("label")) || id, seen: false };
+          show();
+          if (!watching) {
+            watching = true;
+            map.diagnostics = true;
+          }
+        });
+        map.addEventListener("om-validation-error", function (event) {
+          if (watching) check(event.detail);
+        });
+      })(@NOTICE_PLACE@);
+    </script>

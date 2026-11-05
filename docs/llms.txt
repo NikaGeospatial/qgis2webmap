@@ -53,8 +53,13 @@ notes below are the things that are commonly assumed wrong.
   Cloud Optimized GeoTIFF QGIS reads from an `https://` address is a live
   layer only when it is a 3-band colour composite in Web Mercator, compressed
   with DEFLATE, JPEG, WEBP or nothing (not LZW, ZSTD or LERC), on a server
-  allowing CORS and Range requests. WFS, OGC API Features and SensorThings
-  layers are downloaded once and embedded, a snapshot rather than a live feed.
+  allowing CORS and Range requests. WFS, OGC API Features and ArcGIS
+  FeatureServer layers load live first - the reader's browser asks the
+  service for the features in view - with the copy embedded at export as the
+  fallback; they stay embedded when their look is worked out from their
+  features (rule-based styles, labels, Value Map popups, a filter panel, count
+  bubbles), and are live only when over 20 MB. The layer's Features choice
+  overrides it. SensorThings layers are downloaded once and embedded.
   WCS and ArcGIS map services are not exported. Dense point layers cluster when
   zoomed out, and crowded labels wait for a closer zoom. Data in any CRS is
   reprojected to WGS84. **Scale-dependent visibility is exported** as a web zoom

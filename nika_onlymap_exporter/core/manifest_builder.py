@@ -42,6 +42,8 @@ from .export_ir import (
     FilterKind,
     GeometryKind,
     LayerFilterSpec,
+    LiveFeaturesSpec,
+    LiveMode,
     OutputMode,
     PopupFieldMode,
     PopupFieldSpec,
@@ -1378,6 +1380,9 @@ def build_layer_element(
             )
         )
 
+    if layer.live is not None:
+        return _live_layer_element(layer, layer.live, attributes, indent, compress_data)
+
     payload = script_safe(layer.geojson_text)
 
     lines = [f"{indent}<om-layer"]
@@ -1392,6 +1397,49 @@ def build_layer_element(
         lines.append(f'{inner}<script type="application/json">')
         lines.append(payload)
     lines.append(f"{inner}</script>")
+    lines.append(f"{indent}</om-layer>")
+    return "\n".join(lines)
+
+
+# The type of a live-first layer's embedded copy, which the runtime does not
+# read (it reads a `<script type="application/json">` child, and then ignores
+# `data`): the page's `templates/layer-notice.html` turns it into one when the
+# live features fail. Kept in the layer so it travels, and is edited, with it.
+FALLBACK_SCRIPT_TYPE = "application/x-q2w-fallback+json"
+
+
+def _live_layer_element(
+    layer: ExportLayer,
+    live: LiveFeaturesSpec,
+    attributes: list[tuple[str, str | None]],
+    indent: str,
+    compress_data: bool,
+) -> str:
+    """A web feature service layer's `<om-layer>`, loading live from `data`.
+
+    `data` is the request the runtime fills with the area in view
+    (`core.live_features`); `data-q2w-live` says which mode, for the page's
+    script. Live first carries the copy embedded at export under
+    `FALLBACK_SCRIPT_TYPE`; live only carries none.
+    """
+    inner = indent + "  "
+    attributes = [
+        *attributes,
+        ("data", live.url),
+        ("data-q2w-live", live.mode.value),
+    ]
+    lines = [f"{indent}<om-layer", _attrs_to_string(attributes, inner), f"{indent}>"]
+    if live.mode is LiveMode.LIVE_FIRST:
+        payload = script_safe(layer.geojson_text)
+        if compress_data:
+            from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, gzip_base64
+
+            lines.append(f'{inner}<script type="{GZIP_SCRIPT_TYPE}" data-q2w-fallback>')
+            lines.append(gzip_base64(payload.encode("utf-8")))
+        else:
+            lines.append(f'{inner}<script type="{FALLBACK_SCRIPT_TYPE}">')
+            lines.append(payload)
+        lines.append(f"{inner}</script>")
     lines.append(f"{indent}</om-layer>")
     return "\n".join(lines)
 
@@ -1888,6 +1936,9 @@ WIDGET_POSITIONS = {
     "zoom-controls": "bottom-left",
     "scale-bar": "bottom-left",
     "measure": "bottom-left",
+    # The page's notice of a layer that could not load
+    # (`templates/layer-notice.html`), added only when one fails.
+    "layer-notice": "bottom-left",
 }
 
 # The bottom-left corner as a pyramid: the widest control at the bottom, each
@@ -1907,6 +1958,9 @@ BOTTOM_LEFT_ORDER = {
     "scale-bar": 2,
     "basemap-switcher": 3,
     "measure": 4,
+    # Under the measure tool, right on the licence badge: a sentence, as wide
+    # as the controls allow, and only there while a layer is missing.
+    "layer-notice": 5,
 }
 
 

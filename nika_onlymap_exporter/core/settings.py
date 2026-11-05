@@ -30,6 +30,7 @@ from .export_ir import (
     Color,
     ExportSettings,
     ExtentSource,
+    LiveMode,
     OutputMode,
     OverlayCorner,
     PopupFieldMode,
@@ -254,6 +255,11 @@ class LayerSettings:
     # `None` is no filter. A filtered layer does not cluster (see
     # `project_reader._unclustered_for_its_filter`).
     filter_field: str | None = None
+    # WFS, OGC API Features and ArcGIS FeatureServer layers only: where the
+    # map's features come from, a `LiveMode` value. `None` is automatic - live
+    # first, embedded where the layer's look is worked out from its features,
+    # live only where they are too big to carry (`core.live_features`).
+    live_features: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -276,6 +282,8 @@ class LayerSettings:
             data["nameField"] = self.name_field
         if self.filter_field:
             data["filterField"] = self.filter_field
+        if self.live_features:
+            data["liveFeatures"] = self.live_features
         return data
 
     @classmethod
@@ -295,7 +303,12 @@ class LayerSettings:
             filter_field=(
                 str(data["filterField"]) if data.get("filterField") else None
             ),
+            live_features=_read_live_mode(data.get("liveFeatures")),
         )
+
+    def resolved_live(self) -> LiveMode | None:
+        """The Features choice as the reader takes it; `None` is automatic."""
+        return None if self.live_features is None else LiveMode(self.live_features)
 
     def resolved_hover(self, map_wide: bool) -> bool:
         return map_wide if self.popup_on_hover is None else self.popup_on_hover
@@ -318,6 +331,12 @@ MAX_PRECISION = 15
 
 # A per-layer "keep everything", distinct from inheriting the map-wide choice.
 PRECISION_FULL = 0
+
+
+def _read_live_mode(raw: Any) -> str | None:
+    """A saved Features choice: a `LiveMode` value, anything else automatic."""
+    values = {mode.value for mode in LiveMode}
+    return raw if isinstance(raw, str) and raw in values else None
 
 
 def _read_layer_precision(raw: Any) -> int | None:

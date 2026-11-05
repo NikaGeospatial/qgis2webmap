@@ -1060,19 +1060,19 @@ The choices made in that dialog and saved with the project - which layers to inc
       <location filename="../processing/export_project.py" line="159" />
       <location filename="../ui/cartograph/item_controls.py" line="973" />
       <location filename="../ui/cartograph/layout_items.py" line="86" />
-      <location filename="../ui/main_dialog.py" line="2595" />
+      <location filename="../ui/main_dialog.py" line="2635" />
       <source>Legend</source>
       <translation>وسيلة الإيضاح</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="160" />
-      <location filename="../ui/main_dialog.py" line="2596" />
+      <location filename="../ui/main_dialog.py" line="2636" />
       <source>Layer switcher</source>
       <translation>مبدّل الطبقات</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="161" />
-      <location filename="../ui/main_dialog.py" line="2597" />
+      <location filename="../ui/main_dialog.py" line="2637" />
       <source>Zoom controls</source>
       <translation>عناصر التكبير</translation>
     </message>
@@ -1080,13 +1080,13 @@ The choices made in that dialog and saved with the project - which layers to inc
       <location filename="../processing/export_project.py" line="162" />
       <location filename="../ui/cartograph/item_controls.py" line="974" />
       <location filename="../ui/cartograph/layout_items.py" line="87" />
-      <location filename="../ui/main_dialog.py" line="2598" />
+      <location filename="../ui/main_dialog.py" line="2638" />
       <source>Scale bar</source>
       <translation>شريط المقياس</translation>
     </message>
     <message>
       <location filename="../processing/export_project.py" line="163" />
-      <location filename="../ui/main_dialog.py" line="2599" />
+      <location filename="../ui/main_dialog.py" line="2639" />
       <source>Measure tool</source>
       <translation>أداة القياس</translation>
     </message>
@@ -1292,7 +1292,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/accessibility_dialog.py" line="279" />
-      <location filename="../ui/main_dialog.py" line="3789" />
+      <location filename="../ui/main_dialog.py" line="3829" />
       <source>Close</source>
       <translation>إغلاق</translation>
     </message>
@@ -1310,7 +1310,7 @@ Maps you have already published stay online. You will need to sign in again thro
       <location filename="../ui/cartograph/accessibility_dialog.py" line="229" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="605" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="611" />
-      <location filename="../ui/main_dialog.py" line="1847" />
+      <location filename="../ui/main_dialog.py" line="1848" />
       <source>Layer</source>
       <translation>الطبقة</translation>
     </message>
@@ -1708,14 +1708,14 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="186" />
-      <location filename="../ui/main_dialog.py" line="2688" />
-      <location filename="../ui/main_dialog.py" line="2697" />
+      <location filename="../ui/main_dialog.py" line="2728" />
+      <location filename="../ui/main_dialog.py" line="2737" />
       <source>Default</source>
       <translation>الافتراضي</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="187" />
-      <location filename="../ui/main_dialog.py" line="3644" />
+      <location filename="../ui/main_dialog.py" line="3684" />
       <source>Dark</source>
       <translation>داكن</translation>
     </message>
@@ -1746,8 +1746,8 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1628" />
-      <location filename="../ui/main_dialog.py" line="758" />
-      <location filename="../ui/main_dialog.py" line="3320" />
+      <location filename="../ui/main_dialog.py" line="759" />
+      <location filename="../ui/main_dialog.py" line="3360" />
       <source>QGIS2WebMap by NIKA</source>
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
@@ -1816,7 +1816,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1017" />
-      <location filename="../ui/main_dialog.py" line="3651" />
+      <location filename="../ui/main_dialog.py" line="3691" />
       <source>Theme</source>
       <translation>السمة</translation>
     </message>
@@ -1827,8 +1827,8 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1027" />
-      <location filename="../ui/main_dialog.py" line="829" />
-      <location filename="../ui/main_dialog.py" line="3280" />
+      <location filename="../ui/main_dialog.py" line="830" />
+      <location filename="../ui/main_dialog.py" line="3320" />
       <source>Layers</source>
       <translation>الطبقات</translation>
     </message>
@@ -1879,7 +1879,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1639" />
-      <location filename="../ui/main_dialog.py" line="1632" />
+      <location filename="../ui/main_dialog.py" line="1633" />
       <source>Web page (*.html)</source>
       <translation>صفحة ويب (*.html)</translation>
     </message>
@@ -1898,7 +1898,7 @@ Maps you have already published stay online. You will need to sign in again thro
       <location filename="../ui/cartograph/controller.py" line="3534" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
-      <location filename="../ui/main_dialog.py" line="3821" />
+      <location filename="../ui/main_dialog.py" line="3861" />
       <location filename="../ui/runtime_setup.py" line="247" />
       <source>Cancel</source>
       <translation>إلغاء</translation>
@@ -1936,7 +1936,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="2995" />
-      <location filename="../ui/main_dialog.py" line="3427" />
+      <location filename="../ui/main_dialog.py" line="3467" />
       <source>Share</source>
       <translation>مشاركة</translation>
     </message>
@@ -1948,8 +1948,8 @@ Maps you have already published stay online. You will need to sign in again thro
     <message>
       <location filename="../ui/cartograph/controller.py" line="3243" />
       <location filename="../ui/cartograph/series_export_dialog.py" line="114" />
-      <location filename="../ui/main_dialog.py" line="1123" />
-      <location filename="../ui/main_dialog.py" line="3440" />
+      <location filename="../ui/main_dialog.py" line="1124" />
+      <location filename="../ui/main_dialog.py" line="3480" />
       <source>Export</source>
       <translation>التصدير</translation>
     </message>
@@ -2323,7 +2323,7 @@ Maps you have already published stay online. You will need to sign in again thro
     <message>
       <location filename="../ui/cartograph/controller.py" line="3373" />
       <location filename="../ui/cartograph/controller.py" line="3704" />
-      <location filename="../ui/main_dialog.py" line="4680" />
+      <location filename="../ui/main_dialog.py" line="4720" />
       <source>Copied {path}</source>
       <translation>نُسخ: {path}</translation>
     </message>
@@ -2377,7 +2377,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="3395" />
-      <location filename="../ui/main_dialog.py" line="4702" />
+      <location filename="../ui/main_dialog.py" line="4742" />
       <source>Showing {name} in the file manager</source>
       <translation>جارٍ إظهار {name} في مدير الملفات</translation>
     </message>
@@ -2417,7 +2417,7 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="3398" />
-      <location filename="../ui/main_dialog.py" line="4706" />
+      <location filename="../ui/main_dialog.py" line="4746" />
       <source>Opened {path}</source>
       <translation>فُتح: {path}</translation>
     </message>
@@ -3024,7 +3024,7 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
       <location filename="../ui/cartograph/item_controls.py" line="333" />
       <location filename="../ui/cartograph/item_controls.py" line="970" />
       <location filename="../ui/cartograph/template_guide.py" line="66" />
-      <location filename="../ui/main_dialog.py" line="820" />
+      <location filename="../ui/main_dialog.py" line="821" />
       <source>Map</source>
       <translation>الخريطة</translation>
     </message>
@@ -3270,13 +3270,13 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/cartograph/layer_membership.py" line="397" />
-      <location filename="../ui/main_dialog.py" line="4226" />
+      <location filename="../ui/main_dialog.py" line="4266" />
       <source>{included} of {n} layer included</source>
       <translation>{included} من {n} طبقة مضمّنة</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/layer_membership.py" line="397" />
-      <location filename="../ui/main_dialog.py" line="4226" />
+      <location filename="../ui/main_dialog.py" line="4266" />
       <source>{included} of {n} layers included</source>
       <translation>{included} من {n} طبقات مضمّنة</translation>
     </message>
@@ -3815,7 +3815,7 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/cartograph/live_count_controls.py" line="128" />
-      <location filename="../ui/main_dialog.py" line="2628" />
+      <location filename="../ui/main_dialog.py" line="2668" />
       <source>Caption</source>
       <translation>الترويسة</translation>
     </message>
@@ -3986,7 +3986,7 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/cartograph/print_settings_dialog.py" line="218" />
-      <location filename="../ui/main_dialog.py" line="2709" />
+      <location filename="../ui/main_dialog.py" line="2749" />
       <source>Size</source>
       <translation>الحجم</translation>
     </message>
@@ -4289,8 +4289,8 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     <message>
       <location filename="../ui/cartograph/template_picker.py" line="460" />
       <location filename="../ui/cartograph/template_picker.py" line="467" />
-      <location filename="../ui/main_dialog.py" line="3404" />
-      <location filename="../ui/main_dialog.py" line="3484" />
+      <location filename="../ui/main_dialog.py" line="3444" />
+      <location filename="../ui/main_dialog.py" line="3524" />
       <source>Preview</source>
       <translation>معاينة</translation>
     </message>
@@ -4717,8 +4717,8 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="170" />
-      <location filename="../ui/main_dialog.py" line="1847" />
-      <location filename="../ui/main_dialog.py" line="2541" />
+      <location filename="../ui/main_dialog.py" line="1848" />
+      <location filename="../ui/main_dialog.py" line="2581" />
       <source>Labels</source>
       <translation>التسميات</translation>
     </message>
@@ -4729,7 +4729,7 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="172" />
-      <location filename="../ui/main_dialog.py" line="1227" />
+      <location filename="../ui/main_dialog.py" line="1228" />
       <source>Data</source>
       <translation>البيانات</translation>
     </message>
@@ -4812,7 +4812,7 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="463" />
-      <location filename="../ui/main_dialog.py" line="3686" />
+      <location filename="../ui/main_dialog.py" line="3726" />
       <source>About</source>
       <translation>حول</translation>
     </message>
@@ -4838,7 +4838,7 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="561" />
-      <location filename="../ui/main_dialog.py" line="5108" />
+      <location filename="../ui/main_dialog.py" line="5148" />
       <source>Try again</source>
       <translation>حاول مرة أخرى</translation>
     </message>
@@ -5284,7 +5284,7 @@ They are also online at &lt;{url}&gt;.
     </message>
     <message>
       <location filename="../ui/language_picker.py" line="83" />
-      <location filename="../ui/main_dialog.py" line="3642" />
+      <location filename="../ui/main_dialog.py" line="3682" />
       <source>Follow QGIS</source>
       <translation>اتباع QGIS</translation>
     </message>
@@ -5324,472 +5324,477 @@ They are also online at &lt;{url}&gt;.
       <translation>تعذّر تنزيل {language}.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="232" />
+      <location filename="../ui/main_dialog.py" line="233" />
       <source>OpenStreetMap's tile servers refuse maps opened straight from a file, so recipients who double-click this map may see 'Access blocked' tiles. Choose Liberty - the same OpenStreetMap data - or another basemap, or export as a Folder for a website.</source>
       <translation>ترفض خوادم مربعات OpenStreetMap الخرائط المفتوحة مباشرة من ملف، لذا قد يرى من ينقر نقرًا مزدوجًا على هذه الخريطة مربعات «Access blocked». اختر Liberty - بيانات OpenStreetMap نفسها - أو خريطة أساس أخرى، أو صدّر كمجلد لموقع ويب.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="450" />
+      <location filename="../ui/main_dialog.py" line="451" />
       <source>Show in file manager</source>
       <translation>إظهار في مدير الملفات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="475" />
+      <location filename="../ui/main_dialog.py" line="476" />
       <source>{n} day ago</source>
       <translation>قبل {n} يوم</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="475" />
+      <location filename="../ui/main_dialog.py" line="476" />
       <source>{n} days ago</source>
       <translation>قبل {n} أيام</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="447" />
+      <location filename="../ui/main_dialog.py" line="448" />
       <source>Reveal in Finder</source>
       <translation>إظهار في Finder</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="449" />
+      <location filename="../ui/main_dialog.py" line="450" />
       <source>Show in Explorer</source>
       <translation>إظهار في المستكشف</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="466" />
+      <location filename="../ui/main_dialog.py" line="467" />
       <source>just now</source>
       <translation>الآن</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="474" />
+      <location filename="../ui/main_dialog.py" line="475" />
       <source>{n} hour ago</source>
       <translation>قبل {n} ساعة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="474" />
+      <location filename="../ui/main_dialog.py" line="475" />
       <source>{n} hours ago</source>
       <translation>قبل {n} ساعات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="586" />
-      <location filename="../ui/main_dialog.py" line="1975" />
+      <location filename="../ui/main_dialog.py" line="587" />
+      <location filename="../ui/main_dialog.py" line="1976" />
       <source>What these columns do</source>
       <translation>ما الذي تفعله هذه الأعمدة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1690" />
+      <location filename="../ui/main_dialog.py" line="1691" />
       <source>{size} MB - {n} layer</source>
       <translation>{size} م.ب - {n} طبقة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1690" />
+      <location filename="../ui/main_dialog.py" line="1691" />
       <source>{size} MB - {n} layers</source>
       <translation>{size} م.ب - {n} طبقات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1940" />
+      <location filename="../ui/main_dialog.py" line="1941" />
       <source>&lt;b&gt;Popups&lt;/b&gt; - untick and clicking a feature does nothing. The attribute values are left out of the file entirely, so this is also how you keep data out of a map you are sending someone.&lt;br&gt;&lt;b&gt;Labels&lt;/b&gt; - untick to drop the text QGIS draws beside features. The features themselves still appear.&lt;br&gt;Unticking Popups or Labels only affects that layer; the map still works, with less on it. Expand a layer to hide single fields instead - those values leave the file too, unless the map draws with them.</source>
       <translation>&lt;b&gt;النوافذ المنبثقة&lt;/b&gt; - ألغِ التعليم فلا يفعل النقر على معلم شيئًا. تُستبعد قيم السمات من الملف تمامًا، وهذه أيضًا طريقة إبعاد البيانات عن خريطة ترسلها إلى أحد.&lt;br&gt;&lt;b&gt;التسميات&lt;/b&gt; - ألغِ التعليم لإزالة النص الذي يرسمه QGIS بجانب المعالم. تبقى المعالم نفسها ظاهرة.&lt;br&gt;إلغاء تعليم النوافذ المنبثقة أو التسميات يؤثر في تلك الطبقة فقط؛ وتبقى الخريطة تعمل بمحتوى أقل. وسّع طبقة لإخفاء حقول منفردة بدلًا من ذلك - تغادر هذه القيم الملف أيضًا، ما لم ترسم الخريطة بها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2499" />
+      <location filename="../ui/main_dialog.py" line="2539" />
       <source>This frame is an image drawn from the QGIS layout, so this has no effect on it. Your choice is kept for an interactive frame.</source>
       <translation>هذا الإطار صورة مرسومة من تخطيط QGIS، فلا أثر لهذا الخيار عليه. يُحفظ اختيارك للإطار التفاعلي.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2503" />
+      <location filename="../ui/main_dialog.py" line="2543" />
       <source>A raster layer has no popups or labels.</source>
       <translation>الطبقة النقطية بلا نوافذ منبثقة أو تسميات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="679" />
+      <location filename="../ui/main_dialog.py" line="680" />
       <source>Auto</source>
       <translation>تلقائي</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="831" />
-      <location filename="../ui/main_dialog.py" line="3638" />
+      <location filename="../ui/main_dialog.py" line="832" />
+      <location filename="../ui/main_dialog.py" line="3678" />
       <source>Appearance</source>
       <translation>المظهر</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="834" />
-      <location filename="../ui/main_dialog.py" line="3282" />
+      <location filename="../ui/main_dialog.py" line="835" />
+      <location filename="../ui/main_dialog.py" line="3322" />
       <source>Fidelity</source>
       <translation>الدقة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1083" />
+      <location filename="../ui/main_dialog.py" line="1084" />
       <source>&lt;b&gt;Source:&lt;/b&gt; the layers already open in this QGIS project. There is nothing to browse for - choose which of them to include on the Layers tab.</source>
       <translation>&lt;b&gt;المصدر:&lt;/b&gt; الطبقات المفتوحة مسبقًا في مشروع QGIS هذا. لا يوجد ما تبحث عنه - اختر ما تريد تضمينه في تبويب الطبقات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1101" />
+      <location filename="../ui/main_dialog.py" line="1102" />
       <source>The title shown on the exported map. Leave blank to use the project title.</source>
       <translation>العنوان الظاهر على الخريطة المُصدَّرة. اتركه فارغًا لاستخدام عنوان المشروع.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1107" />
+      <location filename="../ui/main_dialog.py" line="1108" />
       <source>Map name</source>
       <translation>اسم الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1149" />
+      <location filename="../ui/main_dialog.py" line="1150" />
       <source>Choose where the export is written</source>
       <translation>اختر مكان كتابة التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1153" />
+      <location filename="../ui/main_dialog.py" line="1154" />
       <source>Choose...</source>
       <translation>اختيار...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1184" />
+      <location filename="../ui/main_dialog.py" line="1185" />
       <source>Basemap</source>
       <translation>الخريطة الأساس</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1193" />
+      <location filename="../ui/main_dialog.py" line="1194" />
       <source>Show behind the map</source>
       <translation>الإظهار خلف الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1196" />
+      <location filename="../ui/main_dialog.py" line="1197" />
       <source>Let readers switch basemap</source>
       <translation>السماح للقرّاء بتبديل الخريطة الأساس</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1218" />
+      <location filename="../ui/main_dialog.py" line="1219" />
       <source>Ground surface</source>
       <translation>سطح الأرض</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1236" />
+      <location filename="../ui/main_dialog.py" line="1237" />
       <source>Open the map on</source>
       <translation>فتح الخريطة على</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1253" />
+      <location filename="../ui/main_dialog.py" line="1254" />
       <source>Export only the features in this view</source>
       <translation>تصدير معالم هذا العرض فقط</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1275" />
+      <location filename="../ui/main_dialog.py" line="1276" />
       <source>Maintain full precision</source>
       <translation>الاحتفاظ بالدقة الكاملة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1285" />
+      <location filename="../ui/main_dialog.py" line="1286" />
       <source>Rounding coordinates makes the file smaller and is irreversible. Around 6 decimal places is roughly 0.1 m at the equator.</source>
       <translation>تقريب الإحداثيات يصغّر الملف ولا يمكن التراجع عنه. نحو 6 منازل عشرية تساوي قرابة 0.1 م عند خط الاستواء.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1291" />
+      <location filename="../ui/main_dialog.py" line="1292" />
       <source>Coordinate precision</source>
       <translation>دقة الإحداثيات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1371" />
+      <location filename="../ui/main_dialog.py" line="1372" />
       <source>Export makes a zip to email or upload, carrying {n} layer.</source>
       <translation>التصدير يُنشئ ملف ZIP للإرسال بالبريد أو الرفع، يحمل {n} طبقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1371" />
+      <location filename="../ui/main_dialog.py" line="1372" />
       <source>Export makes a zip to email or upload, carrying {n} layers.</source>
       <translation>التصدير يُنشئ ملف ZIP للإرسال بالبريد أو الرفع، يحمل {n} طبقات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1433" />
+      <location filename="../ui/main_dialog.py" line="1434" />
       <source>Choose a basemap first.</source>
       <translation>اختر خريطة أساس أولًا.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1634" />
+      <location filename="../ui/main_dialog.py" line="1635" />
       <source>Zip archive (*.zip)</source>
       <translation>أرشيف ZIP (*.zip)</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1636" />
-      <location filename="../ui/main_dialog.py" line="1146" />
+      <location filename="../ui/main_dialog.py" line="1637" />
+      <location filename="../ui/main_dialog.py" line="1147" />
       <source>Save to</source>
       <translation>الحفظ في</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1819" />
+      <location filename="../ui/main_dialog.py" line="1820" />
       <source>Follows the QGIS Layers panel. Expand a layer for its fields.</source>
       <translation>يتبع لوحة طبقات QGIS. وسّع طبقة لعرض حقولها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1824" />
+      <location filename="../ui/main_dialog.py" line="1825" />
       <source>Layers come from the QGIS Layers panel and follow it live - reorder or rename them there and this list updates. Expand a layer to choose how each of its fields appears in popups.</source>
       <translation>تأتي الطبقات من لوحة الطبقات في QGIS وتتبعها مباشرة - أعد ترتيبها أو تسميتها هناك وستتحدّث هذه القائمة. وسّع طبقة لاختيار طريقة ظهور كل حقل في النوافذ المنبثقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1836" />
       <location filename="../ui/main_dialog.py" line="1837" />
+      <location filename="../ui/main_dialog.py" line="1838" />
       <source>Search layers and fields</source>
       <translation>البحث في الطبقات والحقول</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1898" />
+      <location filename="../ui/main_dialog.py" line="1899" />
       <source>Apply to all layers</source>
       <translation>تطبيق على كل الطبقات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1900" />
+      <location filename="../ui/main_dialog.py" line="1901" />
       <source>Give every popup field in every layer this setting, replacing the choices below.</source>
       <translation>تطبيق هذا الإعداد على كل حقول النوافذ المنبثقة في كل الطبقات، بدلًا من الخيارات أدناه.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1921" />
+      <location filename="../ui/main_dialog.py" line="1922" />
       <source>&lt;b&gt;Include&lt;/b&gt; - tick or untick to add the layer to or remove it from the selected map frame, and from the legends that follow that frame. It does not change the web map's selection.</source>
       <translation>&lt;b&gt;تضمين&lt;/b&gt; - علّم أو ألغِ التعليم لإضافة الطبقة إلى إطار الخريطة المحدد أو إزالتها منه، ومن وسائل الإيضاح التي تتبع ذلك الإطار. لا يغيّر هذا تحديد خريطة الويب.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1927" />
+      <location filename="../ui/main_dialog.py" line="1928" />
       <source>&lt;b&gt;Include&lt;/b&gt; - untick to leave the layer out of the map entirely. Its data is not written, so the file gets smaller.</source>
       <translation>&lt;b&gt;تضمين&lt;/b&gt; - ألغِ التعليم لاستبعاد الطبقة من الخريطة تمامًا. لا تُكتب بياناتها، فيصغر الملف.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2228" />
+      <location filename="../ui/main_dialog.py" line="2231" />
       <source>This layer only</source>
       <translation>هذه الطبقة فقط</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2246" />
+      <location filename="../ui/main_dialog.py" line="2249" />
       <source>Precision: same as map</source>
       <translation>الدقة: مثل الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2247" />
+      <location filename="../ui/main_dialog.py" line="2250" />
       <source>Precision: keep it all</source>
       <translation>الدقة: الاحتفاظ بها كاملة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2269" />
+      <location filename="../ui/main_dialog.py" line="2272" />
       <source>Highlight: same as map</source>
       <translation>التمييز: مثل الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2270" />
+      <location filename="../ui/main_dialog.py" line="2273" />
       <source>Highlight colour for this layer only.</source>
       <translation>لون التمييز لهذه الطبقة فقط.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2299" />
+      <location filename="../ui/main_dialog.py" line="2304" />
       <source>Filter by: none</source>
       <translation>التصفية حسب: بلا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2335" />
+      <location filename="../ui/main_dialog.py" line="2327" />
+      <source>Live first loads the features in view from the service in the reader's browser, and shows the copy embedded in the map when the service cannot be reached. Embedded carries the features as they are now, and contacts nothing. Live only carries no copy. Automatic is live first, embedded when the layer's style, labels, popup or filter are worked out from its features, and live only when they are too big to carry.</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="2375" />
       <source>Points</source>
       <translation>النقاط</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2341" />
+      <location filename="../ui/main_dialog.py" line="2381" />
       <source>Show each point's value of this field beside it, with a halo, without clicking. Replaces the layer's QGIS labels.</source>
       <translation>اعرض قيمة هذا الحقل بجانب كل نقطة مع هالة، دون نقر. يحلّ محل تسميات QGIS للطبقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2346" />
+      <location filename="../ui/main_dialog.py" line="2386" />
       <source>Names: off</source>
       <translation>الأسماء: إيقاف</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2355" />
+      <location filename="../ui/main_dialog.py" line="2395" />
       <source>Cluster dense points</source>
       <translation>تجميع النقاط الكثيفة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2357" />
+      <location filename="../ui/main_dialog.py" line="2397" />
       <source>Points that would pile up when zoomed out merge into count bubbles that split as you zoom in. Untick to show every point.</source>
       <translation>تندمج النقاط التي تتكدّس عند التصغير في فقاعات عدّ تنقسم عند التكبير. ألغِ التحديد لعرض كل نقطة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2580" />
+      <location filename="../ui/main_dialog.py" line="2620" />
       <source>Map controls</source>
       <translation>عناصر التحكم في الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2631" />
+      <location filename="../ui/main_dialog.py" line="2671" />
       <source>Map title</source>
       <translation>عنوان الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2646" />
+      <location filename="../ui/main_dialog.py" line="2686" />
       <source>Project description</source>
       <translation>وصف المشروع</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2667" />
+      <location filename="../ui/main_dialog.py" line="2707" />
       <source>Position</source>
       <translation>الموضع</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2683" />
+      <location filename="../ui/main_dialog.py" line="2723" />
       <source>Control colours</source>
       <translation>ألوان عناصر التحكم</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2693" />
+      <location filename="../ui/main_dialog.py" line="2733" />
       <source>Background</source>
       <translation>الخلفية</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2702" />
+      <location filename="../ui/main_dialog.py" line="2742" />
       <source>Text and icons</source>
       <translation>النصوص والأيقونات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2735" />
+      <location filename="../ui/main_dialog.py" line="2775" />
       <source>Behaviour</source>
       <translation>السلوك</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2738" />
+      <location filename="../ui/main_dialog.py" line="2778" />
       <source>Open popups on hover instead of click</source>
       <translation>فتح النوافذ المنبثقة عند التمرير بدل النقر</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2741" />
+      <location filename="../ui/main_dialog.py" line="2781" />
       <source>Hover replaces click rather than adding to it: bound together, a click on an already-open popup appears to do nothing.</source>
       <translation>التمرير يحلّ محل النقر ولا يُضاف إليه: إن اجتمعا، يبدو النقر على نافذة مفتوحة أصلًا بلا أثر.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2763" />
+      <location filename="../ui/main_dialog.py" line="2803" />
       <source>Default (white, see-through)</source>
       <translation>الافتراضي (أبيض، شفاف جزئيًا)</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2765" />
+      <location filename="../ui/main_dialog.py" line="2805" />
       <source>Shown when the cursor is over a feature. Keep some transparency: a solid colour hides whatever the feature is drawn on top of.</source>
       <translation>يظهر عند مرور المؤشر فوق معلم. أبقِ بعض الشفافية: اللون المصمت يخفي ما تحته.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2821" />
+      <location filename="../ui/main_dialog.py" line="2861" />
       <source>Back to Auto</source>
       <translation>العودة إلى تلقائي</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3089" />
+      <location filename="../ui/main_dialog.py" line="3129" />
       <source>Checking the project...</source>
       <translation>جارٍ التحقق من المشروع...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3120" />
+      <location filename="../ui/main_dialog.py" line="3160" />
       <source>That layer is no longer in the project.</source>
       <translation>لم تعد تلك الطبقة في المشروع.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3172" />
-      <location filename="../ui/main_dialog.py" line="3228" />
+      <location filename="../ui/main_dialog.py" line="3212" />
+      <location filename="../ui/main_dialog.py" line="3268" />
       <source>Settings</source>
       <translation>الإعدادات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3173" />
-      <location filename="../ui/main_dialog.py" line="3228" />
+      <location filename="../ui/main_dialog.py" line="3213" />
+      <location filename="../ui/main_dialog.py" line="3268" />
       <source>Help</source>
       <translation>المساعدة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3208" />
-      <location filename="../ui/main_dialog.py" line="3209" />
-      <location filename="../ui/main_dialog.py" line="3210" />
+      <location filename="../ui/main_dialog.py" line="3248" />
+      <location filename="../ui/main_dialog.py" line="3249" />
+      <location filename="../ui/main_dialog.py" line="3250" />
       <source>Back</source>
       <translation>رجوع</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3443" />
+      <location filename="../ui/main_dialog.py" line="3483" />
       <source>Write the map in the type and place chosen on the Map tab</source>
       <translation>كتابة الخريطة بالنوع والمكان المختارين في تبويب الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3530" />
+      <location filename="../ui/main_dialog.py" line="3570" />
       <source>Copy file path</source>
       <translation>نسخ مسار الملف</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3531" />
+      <location filename="../ui/main_dialog.py" line="3571" />
       <source>Copies the map file's path to the clipboard</source>
       <translation>ينسخ مسار ملف الخريطة إلى الحافظة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3537" />
+      <location filename="../ui/main_dialog.py" line="3577" />
       <source>Shows the map file in your file manager</source>
       <translation>يُظهر ملف الخريطة في مدير الملفات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3544" />
+      <location filename="../ui/main_dialog.py" line="3584" />
       <source>NIKA hosting</source>
       <translation>استضافة NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3547" />
+      <location filename="../ui/main_dialog.py" line="3587" />
       <source>Join NIKA hosting waitlist ↗</source>
       <translation>الانضمام إلى قائمة انتظار استضافة NIKA ↗</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3548" />
+      <location filename="../ui/main_dialog.py" line="3588" />
       <source>Hosting is not live yet. This opens a short form in your browser so we can see how many people want it - it does not publish the map.</source>
       <translation>الاستضافة غير متاحة بعد. يفتح هذا نموذجًا قصيرًا في متصفحك لنعرف عدد من يريدها - ولا ينشر الخريطة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3557" />
+      <location filename="../ui/main_dialog.py" line="3597" />
       <source>Ask on Discord ↗</source>
       <translation>اسأل على Discord ↗</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3559" />
+      <location filename="../ui/main_dialog.py" line="3599" />
       <source>Open the QGIS2WebMap channel on the NIKA Discord in your browser. Ask a question, suggest something, or report a bug - no GitHub account needed.</source>
       <translation>افتح قناة QGIS2WebMap على Discord الخاص بـ NIKA في متصفحك. اطرح سؤالًا أو اقترح شيئًا أو أبلغ عن خطأ - دون حاجة إلى حساب GitHub.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3602" />
+      <location filename="../ui/main_dialog.py" line="3642" />
       <source>NIKA account</source>
       <translation>حساب NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3607" />
+      <location filename="../ui/main_dialog.py" line="3647" />
       <source>Account</source>
       <translation>الحساب</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3620" />
+      <location filename="../ui/main_dialog.py" line="3660" />
       <source>Language</source>
       <translation>اللغة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3624" />
+      <location filename="../ui/main_dialog.py" line="3664" />
       <source>Show this dialog in</source>
       <translation>عرض هذه النافذة باللغة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3654" />
+      <location filename="../ui/main_dialog.py" line="3694" />
       <source>Saving</source>
       <translation>الحفظ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3663" />
+      <location filename="../ui/main_dialog.py" line="3703" />
       <source>Change...</source>
       <translation>تغيير...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3667" />
+      <location filename="../ui/main_dialog.py" line="3707" />
       <source>Use Documents</source>
       <translation>استخدام المستندات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3671" />
-      <location filename="../ui/main_dialog.py" line="3708" />
+      <location filename="../ui/main_dialog.py" line="3711" />
+      <location filename="../ui/main_dialog.py" line="3748" />
       <source>Save new maps in</source>
       <translation>حفظ الخرائط الجديدة في</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3689" />
+      <location filename="../ui/main_dialog.py" line="3729" />
       <source>Plugin version</source>
       <translation>إصدار المكوّن الإضافي</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3692" />
+      <location filename="../ui/main_dialog.py" line="3732" />
       <location filename="../ui/runtime_setup.py" line="252" />
       <location filename="../ui/runtime_setup.py" line="203" />
       <location filename="../ui/runtime_setup.py" line="267" />
@@ -5797,104 +5802,104 @@ They are also online at &lt;{url}&gt;.
       <translation>بيئة تشغيل OnlyMap</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3751" />
+      <location filename="../ui/main_dialog.py" line="3791" />
       <source>Open the full documentation</source>
       <translation>فتح الوثائق كاملة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3755" />
+      <location filename="../ui/main_dialog.py" line="3795" />
       <source>Join the community</source>
       <translation>الانضمام إلى المجتمع</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3757" />
+      <location filename="../ui/main_dialog.py" line="3797" />
       <source>Open the NIKA Discord in your browser. Problems, suggestions and bug reports all go to the QGIS2WebMap channel - no GitHub account needed.</source>
       <translation>افتح Discord الخاص بـ NIKA في متصفحك. المشكلات والاقتراحات وتقارير الأخطاء كلها تذهب إلى قناة QGIS2WebMap - دون حاجة إلى حساب GitHub.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3920" />
+      <location filename="../ui/main_dialog.py" line="3960" />
       <source>Stopping...</source>
       <translation>جارٍ الإيقاف...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3945" />
+      <location filename="../ui/main_dialog.py" line="3985" />
       <source>Stopped. Nothing was written.</source>
       <translation>توقّف. لم يُكتب شيء.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3970" />
+      <location filename="../ui/main_dialog.py" line="4010" />
       <source>Something went wrong</source>
       <translation>حدث خطأ ما</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4080" />
-      <location filename="../ui/main_dialog.py" line="4071" />
+      <location filename="../ui/main_dialog.py" line="4120" />
+      <location filename="../ui/main_dialog.py" line="4111" />
       <source>Live preview stopped.</source>
       <translation>توقفت المعاينة الحية.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4152" />
-      <location filename="../ui/main_dialog.py" line="4150" />
-      <location filename="../ui/main_dialog.py" line="4134" />
+      <location filename="../ui/main_dialog.py" line="4192" />
+      <location filename="../ui/main_dialog.py" line="4190" />
+      <location filename="../ui/main_dialog.py" line="4174" />
       <source>Updating the preview...</source>
       <translation>جارٍ تحديث المعاينة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4505" />
+      <location filename="../ui/main_dialog.py" line="4545" />
       <source>The OnlyMap runtime is needed to build a map. Nothing was written.</source>
       <translation>بيئة تشغيل OnlyMap مطلوبة لبناء الخريطة. لم يُكتب شيء.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4521" />
-      <location filename="../ui/main_dialog.py" line="4740" />
-      <location filename="../ui/main_dialog.py" line="4432" />
+      <location filename="../ui/main_dialog.py" line="4561" />
+      <location filename="../ui/main_dialog.py" line="4780" />
+      <location filename="../ui/main_dialog.py" line="4472" />
       <source>Reading the project...</source>
       <translation>جارٍ قراءة المشروع...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4597" />
-      <location filename="../ui/main_dialog.py" line="4542" />
+      <location filename="../ui/main_dialog.py" line="4637" />
+      <location filename="../ui/main_dialog.py" line="4582" />
       <source>Building the preview...</source>
       <translation>جارٍ بناء المعاينة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4616" />
+      <location filename="../ui/main_dialog.py" line="4656" />
       <source>Live preview could not start on this machine, so the preview opened as a file. Reload the tab after making changes.</source>
       <translation>تعذّر تشغيل المعاينة الحية على هذا الجهاز، لذا فُتحت المعاينة كملف. أعد تحميل التبويب بعد إجراء التغييرات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4726" />
+      <location filename="../ui/main_dialog.py" line="4766" />
       <source>Hosting is not live yet - the waitlist form opened in your browser.</source>
       <translation>الاستضافة لم تنطلق بعد - فُتح نموذج قائمة الانتظار في متصفحك.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4871" />
-      <location filename="../ui/main_dialog.py" line="4794" />
+      <location filename="../ui/main_dialog.py" line="4911" />
+      <location filename="../ui/main_dialog.py" line="4834" />
       <source>Writing the map...</source>
       <translation>جارٍ كتابة الخريطة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4882" />
+      <location filename="../ui/main_dialog.py" line="4922" />
       <source>This will be a large single file</source>
       <translation>سيكون هذا ملفًا واحدًا كبيرًا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4885" />
+      <location filename="../ui/main_dialog.py" line="4925" />
       <source>The map file inlines all the data into the one HTML file, which is why it is this big. Exporting as Share ZIP on the Map tab packages the same map to send more easily.</source>
       <translation>يضمّن ملف الخريطة كل البيانات في ملف HTML واحد، ولهذا هو بهذا الحجم. التصدير بصيغة ZIP للمشاركة من تبويب الخريطة يحزم الخريطة نفسها لإرسالها بسهولة أكبر.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4892" />
+      <location filename="../ui/main_dialog.py" line="4932" />
       <source>Write it anyway</source>
       <translation>اكتبه على أي حال</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4937" />
+      <location filename="../ui/main_dialog.py" line="4977" />
       <source>Choose where to save first</source>
       <translation>اختر مكان الحفظ أولًا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4938" />
+      <location filename="../ui/main_dialog.py" line="4978" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -5903,482 +5908,502 @@ Fill in Save to on the Map tab, then try again.</source>
 املأ حقل الحفظ في تبويب الخريطة، ثم حاول مرة أخرى.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4962" />
-      <location filename="../ui/main_dialog.py" line="4824" />
+      <location filename="../ui/main_dialog.py" line="5002" />
+      <location filename="../ui/main_dialog.py" line="4864" />
       <source>Cannot export</source>
       <translation>تعذّر التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5067" />
+      <location filename="../ui/main_dialog.py" line="5107" />
       <source>Saving the cartograph before closing...</source>
       <translation>جارٍ حفظ اللوحة الخرائطية قبل الإغلاق...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5082" />
+      <location filename="../ui/main_dialog.py" line="5122" />
       <source>Saving is taking longer than expected, and is not finished yet.</source>
       <translation>الحفظ يستغرق وقتًا أطول من المتوقع ولم يكتمل بعد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5098" />
+      <location filename="../ui/main_dialog.py" line="5138" />
       <source>The cartograph could not be saved</source>
       <translation>تعذّر حفظ اللوحة الخرائطية</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5101" />
+      <location filename="../ui/main_dialog.py" line="5141" />
       <source>Your latest changes are not in the cartograph file yet. Try again, keep the window open to fix the problem, or close without saving them.</source>
       <translation>آخر تغييراتك ليست في ملف اللوحة الخرائطية بعد. حاول مرة أخرى، أو أبقِ النافذة مفتوحة لإصلاح المشكلة، أو أغلق دون حفظها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="468" />
+      <location filename="../ui/main_dialog.py" line="469" />
       <source>{n} s ago</source>
       <translation>قبل {n} ث</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="471" />
+      <location filename="../ui/main_dialog.py" line="472" />
       <source>{n} min ago</source>
       <translation>قبل {n} د</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1111" />
+      <location filename="../ui/main_dialog.py" line="1112" />
       <source>Shown on the map and in the browser tab. Leave blank to use the project title.</source>
       <translation>يظهر على الخريطة وفي تبويب المتصفح. اتركه فارغًا لاستخدام عنوان المشروع.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1129" />
+      <location filename="../ui/main_dialog.py" line="1130" />
       <source>Export as</source>
       <translation>التصدير بصيغة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1240" />
+      <location filename="../ui/main_dialog.py" line="1241" />
       <source>Where the map is positioned when someone opens it. They can still pan and zoom anywhere afterwards.</source>
       <translation>موضع الخريطة عندما يفتحها أحد. يمكنه بعد ذلك التحريك والتكبير إلى أي مكان.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1261" />
+      <location filename="../ui/main_dialog.py" line="1262" />
       <source>Leaves out everything outside the current QGIS view. This is the practical way to bring a very large layer under the free plan's 25,000-feature limit. The Fidelity tab reports how many features each layer loses.</source>
       <translation>يستبعد كل ما هو خارج عرض QGIS الحالي. هذه هي الطريقة العملية لإدخال طبقة كبيرة جدًا ضمن حد 25,000 معلم في الخطة المجانية. يُظهر تبويب الدقة عدد المعالم التي تفقدها كل طبقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1278" />
+      <location filename="../ui/main_dialog.py" line="1279" />
       <source>{n} decimal place</source>
       <translation>{n} منزلة عشرية</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1278" />
+      <location filename="../ui/main_dialog.py" line="1279" />
       <source>{n} decimal places</source>
       <translation>{n} منازل عشرية</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1297" />
+      <location filename="../ui/main_dialog.py" line="1298" />
       <source>Rounding makes the file smaller and cannot be undone. 6 places is about 0.1 m at the equator.</source>
       <translation>التقريب يصغّر الملف ولا يمكن التراجع عنه. 6 منازل تساوي نحو 0.1 م عند خط الاستواء.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1377" />
+      <location filename="../ui/main_dialog.py" line="1378" />
       <source>Export makes a folder for a web server, carrying {n} layer.</source>
       <translation>التصدير يُنشئ مجلدًا لخادم ويب، يحمل {n} طبقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1377" />
+      <location filename="../ui/main_dialog.py" line="1378" />
       <source>Export makes a folder for a web server, carrying {n} layers.</source>
       <translation>التصدير يُنشئ مجلدًا لخادم ويب، يحمل {n} طبقات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1383" />
+      <location filename="../ui/main_dialog.py" line="1384" />
       <source>Export makes one HTML file that opens by double-click, carrying {n} layer.</source>
       <translation>التصدير يُنشئ ملف HTML واحدًا يُفتح بنقرة مزدوجة، يحمل {n} طبقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1383" />
+      <location filename="../ui/main_dialog.py" line="1384" />
       <source>Export makes one HTML file that opens by double-click, carrying {n} layers.</source>
       <translation>التصدير يُنشئ ملف HTML واحدًا يُفتح بنقرة مزدوجة، يحمل {n} طبقات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1435" />
+      <location filename="../ui/main_dialog.py" line="1436" />
       <source>Not with a ground surface: relief replaces the basemap with imagery draped over it, which readers cannot switch.</source>
       <translation>غير متاح مع سطح الأرض: تستبدل التضاريس الخريطة الأساس بصور مكسوّة فوقها، لا يستطيع القرّاء تبديلها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1444" />
+      <location filename="../ui/main_dialog.py" line="1445" />
       <source>Adds a panel to the map listing the other basemaps, so readers can pick one. Each loads its tiles from its own server, which the Fidelity tab names.</source>
       <translation>يضيف إلى الخريطة لوحة تسرد الخرائط الأساس الأخرى، ليختار القرّاء إحداها. تحمّل كل واحدة مربعاتها من خادمها الخاص، الذي يذكره تبويب الدقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1626" />
+      <location filename="../ui/main_dialog.py" line="1627" />
       <source>Export folder for hosting</source>
       <translation>تصدير مجلد للاستضافة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1658" />
+      <location filename="../ui/main_dialog.py" line="1659" />
       <source>Choose where to save, then press Export.</source>
       <translation>اختر مكان الحفظ، ثم اضغط تصدير.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1667" />
+      <location filename="../ui/main_dialog.py" line="1668" />
       <source>Not written yet.</source>
       <translation>لم يُكتب بعد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1781" />
+      <location filename="../ui/main_dialog.py" line="1782" />
       <source>The map file inlines every feature, so it carries all the data itself. Past about {limit} MB it gets slow to open and awkward to move around.</source>
       <translation>يضمّن ملف الخريطة كل المعالم، فهو يحمل كل البيانات بنفسه. بعد نحو {limit} م.ب يصبح بطيء الفتح وصعب النقل.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1847" />
+      <location filename="../ui/main_dialog.py" line="1848" />
       <source>Include</source>
       <translation>تضمين</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1847" />
-      <location filename="../ui/main_dialog.py" line="2541" />
+      <location filename="../ui/main_dialog.py" line="1848" />
+      <location filename="../ui/main_dialog.py" line="2581" />
       <source>Popups</source>
       <translation>النوافذ المنبثقة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1889" />
+      <location filename="../ui/main_dialog.py" line="1890" />
       <source>Set every field to</source>
       <translation>تعيين كل الحقول إلى</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1933" />
+      <location filename="../ui/main_dialog.py" line="1934" />
       <source>This frame is an image drawn from the QGIS layout, so popups and attribute fields do not apply to it and are greyed out. Labels are drawn into the image as QGIS shows them. Your popup and label choices are kept for when the frame is interactive again. Raster layers have no popups or labels.</source>
       <translation>هذا الإطار صورة مرسومة من تخطيط QGIS، لذا لا تنطبق عليه النوافذ المنبثقة وحقول السمات وهي معطّلة. تُرسم التسميات داخل الصورة كما يعرضها QGIS. يُحتفظ باختياراتك للنوافذ المنبثقة والتسميات إلى أن يصبح الإطار تفاعليًا مجددًا. الطبقات النقطية بلا نوافذ منبثقة أو تسميات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1953" />
+      <location filename="../ui/main_dialog.py" line="1954" />
       <source>Raster layers have no popups or labels.</source>
       <translation>الطبقات النقطية بلا نوافذ منبثقة أو تسميات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2234" />
+      <location filename="../ui/main_dialog.py" line="2237" />
       <source>Popups: same as map</source>
       <translation>النوافذ المنبثقة: مثل الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2235" />
+      <location filename="../ui/main_dialog.py" line="2238" />
       <source>Popups: on hover</source>
       <translation>النوافذ المنبثقة: عند التمرير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2236" />
+      <location filename="../ui/main_dialog.py" line="2239" />
       <source>Popups: on click</source>
       <translation>النوافذ المنبثقة: عند النقر</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2250" />
+      <location filename="../ui/main_dialog.py" line="2253" />
       <source>Precision: {n} decimal place</source>
       <translation>الدقة: {n} منزلة عشرية</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2250" />
+      <location filename="../ui/main_dialog.py" line="2253" />
       <source>Precision: {n} decimal places</source>
       <translation>الدقة: {n} منازل عشرية</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2572" />
+      <location filename="../ui/main_dialog.py" line="2338" />
+      <source>Features: automatic</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="2339" />
+      <source>Features: live first</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="2340" />
+      <source>Features: embedded</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="2341" />
+      <source>Features: live only</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="2612" />
       <source>These are on by default - an exported map should be useful without configuring anything.</source>
       <translation>مفعّلة افتراضيًا - ينبغي أن تكون الخريطة المُصدَّرة مفيدة دون أي إعداد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2638" />
+      <location filename="../ui/main_dialog.py" line="2678" />
       <source>Draws the map name over the map. The legend drops its own heading while this is on, so the title is not shown twice.</source>
       <translation>يرسم اسم الخريطة فوقها. تحذف وسيلة الإيضاح عنوانها ما دام هذا مفعّلًا، كي لا يظهر العنوان مرتين.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2653" />
+      <location filename="../ui/main_dialog.py" line="2693" />
       <source>The abstract from Project Properties &gt; Metadata. Nothing appears if the project has none.</source>
       <translation>الملخّص من خصائص المشروع &gt; البيانات الوصفية. لا يظهر شيء إن لم يكن للمشروع ملخّص.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2671" />
+      <location filename="../ui/main_dialog.py" line="2711" />
       <source>All four corners already hold map controls - switcher top left, legend top right, zoom and scale bottom left, credit bottom right. The centres are the only clear space.</source>
       <translation>الزوايا الأربع تضم عناصر تحكم أصلًا - المبدّل أعلى اليسار، ووسيلة الإيضاح أعلى اليمين، والتكبير ومقياس الرسم أسفل اليسار، والإسناد أسفل اليمين. المواضع الوسطى وحدها خالية.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2713" />
+      <location filename="../ui/main_dialog.py" line="2753" />
       <source>Scales the legend, layer switcher, zoom controls, scale bar, measure tool and title together. The credit stays fixed so attribution cannot be shrunk out of legibility.</source>
       <translation>يغيّر حجم وسيلة الإيضاح ومبدّل الطبقات وعناصر التكبير وشريط المقياس وأداة القياس والعنوان معًا. يبقى الإسناد ثابتًا كي لا يصغر حتى يتعذّر قراءته.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2724" />
+      <location filename="../ui/main_dialog.py" line="2764" />
       <source>Applies to the legend, layer switcher, zoom controls, scale bar and measure tool. Leave both unset to keep the map's own styling.</source>
       <translation>ينطبق على وسيلة الإيضاح ومبدّل الطبقات وعناصر التكبير وشريط المقياس وأداة القياس. اترك الاثنين دون تعيين للإبقاء على تنسيق الخريطة الخاص.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2750" />
+      <location filename="../ui/main_dialog.py" line="2790" />
       <source>Hover replaces click rather than adding to it.</source>
       <translation>التمرير يحلّ محل النقر ولا يُضاف إليه.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2760" />
+      <location filename="../ui/main_dialog.py" line="2800" />
       <source>Highlight under the cursor</source>
       <translation>التمييز تحت المؤشر</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2863" />
+      <location filename="../ui/main_dialog.py" line="2903" />
       <source>The units the measure tool reads distances and areas in, and the scale bar its length.</source>
       <translation>الوحدات التي تقرأ بها أداة القياس المسافات والمساحات، ويقرأ بها شريط المقياس طوله.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3422" />
-      <location filename="../ui/main_dialog.py" line="3469" />
+      <location filename="../ui/main_dialog.py" line="3462" />
+      <location filename="../ui/main_dialog.py" line="3509" />
       <source>Live: on</source>
       <translation>مباشر: مفعّل</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3422" />
-      <location filename="../ui/main_dialog.py" line="3469" />
+      <location filename="../ui/main_dialog.py" line="3462" />
+      <location filename="../ui/main_dialog.py" line="3509" />
       <source>Live: off</source>
       <translation>مباشر: متوقف</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3471" />
+      <location filename="../ui/main_dialog.py" line="3511" />
       <source>Live preview is on: Preview keeps the browser tab updating as you change settings. Click to turn it off.</source>
       <translation>المعاينة الحية مفعّلة: تُبقي المعاينة علامة تبويب المتصفح محدّثة كلما غيّرت الإعدادات. انقر لإيقافها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3476" />
+      <location filename="../ui/main_dialog.py" line="3516" />
       <source>Live preview is off: Preview opens the map as it is now. Click to keep the tab updating as you change settings.</source>
       <translation>المعاينة الحية متوقفة: تفتح المعاينة الخريطة كما هي الآن. انقر لإبقاء علامة التبويب محدّثة كلما غيّرت الإعدادات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3484" />
+      <location filename="../ui/main_dialog.py" line="3524" />
       <source>Stop live</source>
       <translation>إيقاف المباشر</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3486" />
+      <location filename="../ui/main_dialog.py" line="3526" />
       <source>Live preview is running. Press to stop it.</source>
       <translation>المعاينة الحية قيد التشغيل. اضغط لإيقافها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3488" />
+      <location filename="../ui/main_dialog.py" line="3528" />
       <source>Open the map in your browser.</source>
       <translation>افتح الخريطة في متصفحك.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3611" />
+      <location filename="../ui/main_dialog.py" line="3651" />
       <source>Publishing maps to NIKA needs an account. Exporting a file never does.</source>
       <translation>نشر الخرائط على NIKA يتطلب حسابًا. أما تصدير ملف فلا يتطلب ذلك أبدًا.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3628" />
+      <location filename="../ui/main_dialog.py" line="3668" />
       <source>English is built in. Other languages are a small download the first time you pick one. Follow QGIS uses the language QGIS is set to, when it is one of these.</source>
       <translation>الإنجليزية مضمّنة. اللغات الأخرى تنزيل صغير في أول مرة تختار فيها إحداها. اتباع QGIS يستخدم اللغة المضبوطة في QGIS إن كانت إحدى هذه اللغات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3643" />
+      <location filename="../ui/main_dialog.py" line="3683" />
       <source>Light</source>
       <translation>فاتح</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3675" />
+      <location filename="../ui/main_dialog.py" line="3715" />
       <source>Web maps and cartographs each get their own folder inside it, Web maps and Cartographs. Maps already saved stay where they are.</source>
       <translation>تحصل خرائط الويب واللوحات الخرائطية كل منها على مجلد خاص بداخله: Web maps و Cartographs. تبقى الخرائط المحفوظة سابقًا في مكانها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3875" />
+      <location filename="../ui/main_dialog.py" line="3915" />
       <source>Still working on the last request.</source>
       <translation>ما زال العمل جاريًا على الطلب السابق.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4090" />
+      <location filename="../ui/main_dialog.py" line="4130" />
       <source>Preview tab closed, so the preview server stopped. Press Preview to start it again.</source>
       <translation>أُغلق تبويب المعاينة، فتوقف خادم المعاينة. اضغط معاينة لتشغيله من جديد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4207" />
+      <location filename="../ui/main_dialog.py" line="4247" />
       <source>Add a vector or raster layer to the project to export.</source>
       <translation>أضف طبقة متجهة أو نقطية إلى المشروع للتصدير.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4594" />
+      <location filename="../ui/main_dialog.py" line="4634" />
       <source>Live preview open. Changes here update the tab automatically.</source>
       <translation>المعاينة الحية مفتوحة. التغييرات هنا تحدّث التبويب تلقائيًا.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4924" />
+      <location filename="../ui/main_dialog.py" line="4964" />
       <source>Folder not found</source>
       <translation>المجلد غير موجود</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4958" />
+      <location filename="../ui/main_dialog.py" line="4998" />
       <source>No layer in the selection could be read.</source>
       <translation>تعذّرت قراءة أي طبقة في التحديد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4967" />
+      <location filename="../ui/main_dialog.py" line="5007" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>أصلح هذه في QGIS ثم صدّر من جديد. يسرد تبويب الدقة كل ما جرى فحصه.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5110" />
+      <location filename="../ui/main_dialog.py" line="5150" />
       <source>Cancel closing</source>
       <translation>إلغاء الإغلاق</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5113" />
+      <location filename="../ui/main_dialog.py" line="5153" />
       <source>Close without saving</source>
       <translation>إغلاق دون حفظ</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="419" />
+      <location filename="../ui/main_dialog.py" line="420" />
       <source>&lt;p&gt;Details are in the QGIS message log, under &lt;b&gt;{tag}&lt;/b&gt;.&lt;/p&gt;&lt;p&gt;Tell us about it in the QGIS2WebMap channel on &lt;a href="{discord}"&gt;our Discord&lt;/a&gt;, or &lt;a href="{issues}"&gt;open a GitHub issue&lt;/a&gt;. Please include the log.&lt;/p&gt;</source>
       <translation>&lt;p&gt;التفاصيل في سجل رسائل QGIS، تحت &lt;b&gt;{tag}&lt;/b&gt;.&lt;/p&gt;&lt;p&gt;أخبرنا في قناة QGIS2WebMap على &lt;a href="{discord}"&gt;Discord الخاص بنا&lt;/a&gt;، أو &lt;a href="{issues}"&gt;افتح مشكلة على GitHub&lt;/a&gt;. يُرجى إرفاق السجل.&lt;/p&gt;</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1676" />
+      <location filename="../ui/main_dialog.py" line="1677" />
       <source>The map file cannot be read from here.</source>
       <translation>تتعذّر قراءة ملف الخريطة من هنا.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1746" />
+      <location filename="../ui/main_dialog.py" line="1747" />
       <source>Choose where to save on the Map tab first</source>
       <translation>اختر مكان الحفظ في تبويب الخريطة أولًا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2291" />
+      <location filename="../ui/main_dialog.py" line="2296" />
       <source>Adds a panel to the map that filters this layer by the field: a slider for a number or a date, a tick box for each value of text (up to {limit} values). A filtered layer's points are not merged into count bubbles, because the filter cannot count them again.</source>
       <translation>يضيف إلى الخريطة لوحة تصفّي هذه الطبقة حسب الحقل: منزلق للرقم أو التاريخ، ومربع اختيار لكل قيمة نصية (حتى {limit} قيمة). لا تندمج نقاط الطبقة المصفّاة في فقاعات عدّ، لأن التصفية لا تستطيع إعادة عدّها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2553" />
+      <location filename="../ui/main_dialog.py" line="2593" />
       <source>This frame is an image drawn from the QGIS layout. Popups and fields do not apply; labels are drawn into it.</source>
       <translation>هذا الإطار صورة مرسومة من تخطيط QGIS. لا تنطبق عليه النوافذ المنبثقة والحقول؛ وتُرسم التسميات داخله.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2558" />
+      <location filename="../ui/main_dialog.py" line="2598" />
       <source>This frame is interactive: popups and labels are drawn live in the browser.</source>
       <translation>هذا الإطار تفاعلي: تُرسم النوافذ المنبثقة والتسميات مباشرة في المتصفح.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2789" />
+      <location filename="../ui/main_dialog.py" line="2829" />
       <source>Width in pixels, {low} to {high}. Auto is as wide as its contents. On a narrower map it is as wide as the map.</source>
       <translation>العرض بالبكسل، من {low} إلى {high}. مع «تلقائي» تكون اللوحة بعرض محتواها. وعلى خريطة أضيق تكون بعرض الخريطة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2795" />
+      <location filename="../ui/main_dialog.py" line="2835" />
       <source>Height in pixels, {low} to {high}; what does not fit scrolls inside it. Auto grows with its contents up to half the map. On a shorter map it is as tall as the map.</source>
       <translation>الارتفاع بالبكسل، من {low} إلى {high}؛ وما لا يتسع يُمرَّر داخل اللوحة. مع «تلقائي» تكبر اللوحة مع محتواها حتى نصف الخريطة. وعلى خريطة أقصر تكون بارتفاع الخريطة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2801" />
+      <location filename="../ui/main_dialog.py" line="2841" />
       <source>{control} width</source>
       <translation>عرض {control}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2802" />
+      <location filename="../ui/main_dialog.py" line="2842" />
       <source>{control} height</source>
       <translation>ارتفاع {control}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2823" />
+      <location filename="../ui/main_dialog.py" line="2863" />
       <source>{control} size back to Auto</source>
       <translation>حجم {control}: العودة إلى تلقائي</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3938" />
+      <location filename="../ui/main_dialog.py" line="3978" />
       <source>Export failed</source>
       <translation>فشل التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3956" />
+      <location filename="../ui/main_dialog.py" line="3996" />
       <source>Live preview could not be updated ({message}) - see the QGIS log.</source>
       <translation>تعذّر تحديث المعاينة الحية ({message}) - راجع سجل QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4148" />
+      <location filename="../ui/main_dialog.py" line="4188" />
       <source>Live preview updated.</source>
       <translation>حُدّثت المعاينة الحية.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4210" />
+      <location filename="../ui/main_dialog.py" line="4250" />
       <source>Tick at least one layer to include.</source>
       <translation>حدّد طبقة واحدة على الأقل لتضمينها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4215" />
+      <location filename="../ui/main_dialog.py" line="4255" />
       <source>{n} layer will be exported.</source>
       <translation>ستُصدَّر {n} طبقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4215" />
+      <location filename="../ui/main_dialog.py" line="4255" />
       <source>{n} layers will be exported.</source>
       <translation>ستُصدَّر {n} طبقات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4559" />
-      <location filename="../ui/main_dialog.py" line="4585" />
+      <location filename="../ui/main_dialog.py" line="4599" />
+      <location filename="../ui/main_dialog.py" line="4625" />
       <source>Preview opened. Press Preview again after making changes - your position on the map is kept.</source>
       <translation>فُتحت المعاينة. اضغط معاينة مرة أخرى بعد إجراء التغييرات - يُحفظ موضعك على الخريطة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4800" />
+      <location filename="../ui/main_dialog.py" line="4840" />
       <source>Saving the map...</source>
       <translation>يجري حفظ الخريطة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4852" />
+      <location filename="../ui/main_dialog.py" line="4892" />
       <source>Exported, with warnings</source>
       <translation>صُدّرت، مع تحذيرات</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1396" />
+      <location filename="../ui/main_dialog.py" line="1397" />
       <source>To: {path}</source>
       <translation>إلى: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1704" />
+      <location filename="../ui/main_dialog.py" line="1705" />
       <source>Last written {ago} - {detail}. The project has changed since; Export writes it again.</source>
       <translation>آخر كتابة {ago} - {detail}. تغيّر المشروع منذ ذلك؛ والتصدير يكتبه من جديد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1711" />
+      <location filename="../ui/main_dialog.py" line="1712" />
       <source>Last written {ago} - {detail}</source>
       <translation>آخر كتابة {ago} - {detail}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1797" />
+      <location filename="../ui/main_dialog.py" line="1798" />
       <source>This map's data is {size} MB, past the {limit} MB where a single file starts to be unwieldy. The map file is still written - exporting as Share ZIP is the practical way to send something this size.</source>
       <translation>حجم بيانات هذه الخريطة {size} م.ب، وهو أكبر من {limit} م.ب حيث يصبح الملف الواحد مرهقًا. يُكتب ملف الخريطة رغم ذلك - التصدير بصيغة ZIP للمشاركة هو الطريقة العملية لإرسال شيء بهذا الحجم.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2348" />
+      <location filename="../ui/main_dialog.py" line="2388" />
       <source>Names: {field}</source>
       <translation>الأسماء: {field}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2869" />
+      <location filename="../ui/main_dialog.py" line="2909" />
       <source>Measure tool and scale bar units: {units}</source>
       <translation>وحدات أداة القياس وشريط المقياس: {units}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="3693" />
+      <location filename="../ui/main_dialog.py" line="3733" />
       <source>not pinned</source>
       <translation>غير محدد</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4309" />
+      <location filename="../ui/main_dialog.py" line="4349" />
       <source>Converting rasters ({percent}%)...</source>
       <translation>يجري تحويل الطبقات النقطية ({percent}%)...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4358" />
+      <location filename="../ui/main_dialog.py" line="4398" />
       <source>Reading '{name}' ({done} of {total})</source>
       <translation>جارٍ قراءة '{name}' ({done} من {total})</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4859" />
+      <location filename="../ui/main_dialog.py" line="4899" />
       <source>The Fidelity tab lists the detail.</source>
       <translation>يعرض تبويب الدقة التفاصيل.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4869" />
+      <location filename="../ui/main_dialog.py" line="4909" />
       <source>Export complete</source>
       <translation>اكتمل التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4925" />
+      <location filename="../ui/main_dialog.py" line="4965" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -6387,33 +6412,33 @@ Pick somewhere that exists, or create it first.</source>
 اختر مكانًا موجودًا، أو أنشئه أولًا.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="1809" />
+      <location filename="../ui/main_dialog.py" line="1810" />
       <source>This map's data is {size} MB.</source>
       <translation>حجم بيانات هذه الخريطة {size} م.ب.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2303" />
+      <location filename="../ui/main_dialog.py" line="2308" />
       <source>Filter by: {field}</source>
       <translation>التصفية حسب: {field}</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="2544" />
+      <location filename="../ui/main_dialog.py" line="2584" />
       <source>{column} - not used by an image frame</source>
       <translation>{column} - لا يستخدمه إطار الصورة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4708" />
+      <location filename="../ui/main_dialog.py" line="4748" />
       <source>Could not show the file in a file manager: {reason}. Use Copy file path for {path}.</source>
       <translation>تعذّر إظهار الملف في مدير الملفات: {reason}. استخدم نسخ مسار الملف لـ {path}.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4825" />
-      <location filename="../ui/main_dialog.py" line="4963" />
+      <location filename="../ui/main_dialog.py" line="4865" />
+      <location filename="../ui/main_dialog.py" line="5003" />
       <source>This map cannot be exported yet:</source>
       <translation>لا يمكن تصدير هذه الخريطة بعد:</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4855" />
+      <location filename="../ui/main_dialog.py" line="4895" />
       <source>The exported map has known limitations:</source>
       <translation>للخريطة المُصدَّرة قيود معروفة:</translation>
     </message>

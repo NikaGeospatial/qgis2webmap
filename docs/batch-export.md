@@ -56,7 +56,8 @@ saved on this computer is used. See
 
 A run exports what the dialog would for the same project. The choices made in
 **Web → QGIS2WebMap by NIKA** are saved in the project - which layers to
-include, each layer's popup, labels and clustering, the map name, the basemap
+include, each layer's popup, labels and clustering, a web service layer's
+Features, the map name, the basemap
 and the rest of the Appearance tab - and the algorithm reads them from there. A
 project never opened in the dialog exports every layer, hidden ones hidden,
 with the dialog's defaults.

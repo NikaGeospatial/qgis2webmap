@@ -1,0 +1,103 @@
+{
+ "_note": "Recorded 2026-11-04 from IGN France's Géoplateforme WFS (GeoServer), one GetFeature as the plugin builds it; geometry cut to its first ring's first points and properties to four, to stay small.",
+ "request": "https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=ADMINEXPRESS-COG-CARTO.LATEST:commune&OUTPUTFORMAT=application/json&SRSNAME=EPSG:4326&BBOX=48.80,2.25,48.90,2.42,urn:ogc:def:crs:EPSG::4326&COUNT=2",
+ "headers": {
+  "content-type": "application/json;charset=UTF-8",
+  "access-control-allow-origin": "*"
+ },
+ "body": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "id": "commune.17529",
+    "geometry": {
+     "type": "MultiPolygon",
+     "coordinates": [
+      [
+       [
+        [
+         2.41468607,
+         48.7772267
+        ],
+        [
+         2.41732784,
+         48.78072931
+        ],
+        [
+         2.41967987,
+         48.78412612
+        ],
+        [
+         2.42201703,
+         48.78791044
+        ],
+        [
+         2.41468607,
+         48.7772267
+        ]
+       ]
+      ]
+     ]
+    },
+    "geometry_name": "geometrie",
+    "properties": {
+     "cleabs": "COMMUNE_0000000000094002",
+     "nom_officiel": "Alfortville",
+     "nom_officiel_en_majuscules": "ALFORTVILLE",
+     "statut": "Commune simple"
+    }
+   },
+   {
+    "type": "Feature",
+    "id": "commune.19041",
+    "geometry": {
+     "type": "MultiPolygon",
+     "coordinates": [
+      [
+       [
+        [
+         2.41477761,
+         48.8582547
+        ],
+        [
+         2.41470169,
+         48.858704
+        ],
+        [
+         2.41437043,
+         48.86064946
+        ],
+        [
+         2.41411748,
+         48.86350723
+        ],
+        [
+         2.41477761,
+         48.8582547
+        ]
+       ]
+      ]
+     ]
+    },
+    "geometry_name": "geometrie",
+    "properties": {
+     "cleabs": "COMMUNE_0000000000093006",
+     "nom_officiel": "Bagnolet",
+     "nom_officiel_en_majuscules": "BAGNOLET",
+     "statut": "Commune simple"
+    }
+   }
+  ],
+  "totalFeatures": 34,
+  "numberMatched": 34,
+  "numberReturned": 2,
+  "timeStamp": "2026-11-04T10:31:52.824Z",
+  "crs": {
+   "type": "name",
+   "properties": {
+    "name": "urn:ogc:def:crs:EPSG::4326"
+   }
+  }
+ }
+}

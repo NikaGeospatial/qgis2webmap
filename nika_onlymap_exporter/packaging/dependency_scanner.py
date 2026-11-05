@@ -361,6 +361,11 @@ def scan(
         # has already said so in the Fidelity tab.
         remote.extend(layer.popup_remote_pictures)
 
+        # Live features are read from their service as the map is used; the
+        # reader has already said so (`core.live_features`).
+        if layer.live is not None:
+            remote.append(layer.live.host)
+
         # A map service's legend pictures are fetched from it on every open,
         # like its tiles - but only when there is a legend to show them in.
         if project.settings.show_legend and layer.tiles is not None:

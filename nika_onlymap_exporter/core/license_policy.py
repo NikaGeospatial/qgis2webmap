@@ -93,7 +93,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from .export_ir import ExportProject
+from .export_ir import ExportProject, LiveMode
 from .fidelity_report import FidelityReportBuilder
 
 # Published free-tier limits, from the runtime's own licence module.
@@ -285,7 +285,10 @@ def detect_violations(project: ExportProject) -> tuple[CapViolation, ...]:
         )
 
     for layer in layers:
-        if layer.feature_count > FREE_TIER_MAX_ROWS_PER_LAYER:
+        # A live-only layer carries no rows: the runtime loads at most its
+        # `max-features` for each view (`core.live_features`).
+        live_only = layer.live is not None and layer.live.mode is LiveMode.LIVE_ONLY
+        if layer.feature_count > FREE_TIER_MAX_ROWS_PER_LAYER and not live_only:
             violations.append(
                 CapViolation(
                     subject=f"Feature count in '{layer.name}'",

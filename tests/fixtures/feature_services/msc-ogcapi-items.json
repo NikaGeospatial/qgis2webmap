@@ -1,0 +1,192 @@
+{
+ "_note": "Recorded 2026-11-04 from Environment and Climate Change Canada's MSC GeoMet OGC API (pygeoapi).",
+ "request": "https://api.weather.gc.ca/collections/hydrometric-stations/items?f=json&bbox=-75.8,45.3,-75.6,45.5&limit=2",
+ "headers": {
+  "content-type": "application/json",
+  "access-control-allow-origin": "*"
+ },
+ "body": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "properties": {
+     "STATION_NAME": "OTTAWA RIVER AT RIDEAU LOCKS",
+     "IDENTIFIER": "02LA003",
+     "STATION_NUMBER": "02LA003",
+     "PROV_TERR_STATE_LOC": "ON",
+     "STATUS_EN": "Discontinued",
+     "STATUS_FR": "Fermée",
+     "CONTRIBUTOR_EN": "TRANSPORT CANADA",
+     "CONTRIBUTOR_FR": "TRANSPORTS CANADA",
+     "VERTICAL_DATUM": "GEODETIC SURVEY OF CANADA DATUM",
+     "REAL_TIME": 0,
+     "RHBN": 0,
+     "DRAINAGE_AREA_GROSS": 91360.0,
+     "DRAINAGE_AREA_EFFECT": null
+    },
+    "links": [
+     {
+      "type": "text/html",
+      "rel": "related",
+      "title": "Station Information for OTTAWA RIVER AT RIDEAU LOCKS (02LA003)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-stations/items?STATION_NUMBER=02LA003&f=html"
+     },
+     {
+      "type": "application/json",
+      "rel": "related",
+      "title": "Daily Mean of Water Level or Discharge for OTTAWA RIVER AT RIDEAU LOCKS (02LA003)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-daily-mean/items?STATION_NUMBER=02LA003"
+     },
+     {
+      "type": "application/json",
+      "rel": "related",
+      "title": "Monthly Mean of Water Level or Discharge for OTTAWA RIVER AT RIDEAU LOCKS (02LA003)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-monthly-mean/items?STATION_NUMBER=02LA003"
+     },
+     {
+      "type": "text/html",
+      "rel": "alternate",
+      "title": "Station Information for OTTAWA RIVER AT RIDEAU LOCKS (02LA003)",
+      "href": "https://wateroffice.ec.gc.ca/report/historical_e.html?stn=02LA003",
+      "hreflang": "en-CA"
+     },
+     {
+      "type": "text/html",
+      "rel": "alternate",
+      "title": "Informations pour la station OTTAWA RIVER AT RIDEAU LOCKS (02LA003)",
+      "href": "https://wateroffice.ec.gc.ca/report/historical_f.html?stn=02LA003",
+      "hreflang": "fr-CA"
+     },
+     {
+      "type": "application/json",
+      "rel": "related",
+      "title": "Annual Maximum and Minimum Instantaneous Water Level or Discharge for OTTAWA RIVER AT RIDEAU LOCKS (02LA003)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-annual-peaks/items?STATION_NUMBER=02LA003"
+     },
+     {
+      "type": "application/json",
+      "rel": "related",
+      "title": "Annual Maximum and Minimum Daily Water Level or Discharge for OTTAWA RIVER AT RIDEAU LOCKS (02LA003)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-annual-statistics/items?STATION_NUMBER=02LA003"
+     }
+    ],
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -75.69833374023438,
+      45.4263916015625
+     ]
+    },
+    "id": "02LA003"
+   },
+   {
+    "type": "Feature",
+    "properties": {
+     "STATION_NAME": "RIDEAU RIVER AT OTTAWA",
+     "IDENTIFIER": "02LA004",
+     "STATION_NUMBER": "02LA004",
+     "PROV_TERR_STATE_LOC": "ON",
+     "STATUS_EN": "Active",
+     "STATUS_FR": "En service",
+     "CONTRIBUTOR_EN": "WATER SURVEY OF CANADA (DOE) (CANADA)",
+     "CONTRIBUTOR_FR": "RELEVES HYDROLOGIQUES DU CANADA (MDE) (CANADA)",
+     "VERTICAL_DATUM": "ASSUMED DATUM",
+     "REAL_TIME": 1,
+     "RHBN": 0,
+     "DRAINAGE_AREA_GROSS": 3815.0,
+     "DRAINAGE_AREA_EFFECT": null
+    },
+    "links": [
+     {
+      "type": "text/html",
+      "rel": "related",
+      "title": "Station Information for RIDEAU RIVER AT OTTAWA (02LA004)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-stations/items?STATION_NUMBER=02LA004&f=html"
+     },
+     {
+      "type": "application/json",
+      "rel": "related",
+      "title": "Daily Mean of Water Level or Discharge for RIDEAU RIVER AT OTTAWA (02LA004)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-daily-mean/items?STATION_NUMBER=02LA004"
+     },
+     {
+      "type": "application/json",
+      "rel": "related",
+      "title": "Monthly Mean of Water Level or Discharge for RIDEAU RIVER AT OTTAWA (02LA004)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-monthly-mean/items?STATION_NUMBER=02LA004"
+     },
+     {
+      "type": "text/html",
+      "rel": "alternate",
+      "title": "Station Information for RIDEAU RIVER AT OTTAWA (02LA004)",
+      "href": "https://wateroffice.ec.gc.ca/report/historical_e.html?stn=02LA004",
+      "hreflang": "en-CA"
+     },
+     {
+      "type": "text/html",
+      "rel": "alternate",
+      "title": "Informations pour la station RIDEAU RIVER AT OTTAWA (02LA004)",
+      "href": "https://wateroffice.ec.gc.ca/report/historical_f.html?stn=02LA004",
+      "hreflang": "fr-CA"
+     },
+     {
+      "type": "application/json",
+      "rel": "related",
+      "title": "Annual Maximum and Minimum Instantaneous Water Level or Discharge for RIDEAU RIVER AT OTTAWA (02LA004)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-annual-peaks/items?STATION_NUMBER=02LA004"
+     },
+     {
+      "type": "application/json",
+      "rel": "related",
+      "title": "Annual Maximum and Minimum Daily Water Level or Discharge for RIDEAU RIVER AT OTTAWA (02LA004)",
+      "href": "https://api.weather.gc.ca/collections/hydrometric-annual-statistics/items?STATION_NUMBER=02LA004"
+     }
+    ],
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -75.69696807861328,
+      45.38150024414063
+     ]
+    },
+    "id": "02LA004"
+   }
+  ],
+  "numberMatched": 9,
+  "numberReturned": 2,
+  "links": [
+   {
+    "type": "application/geo+json",
+    "rel": "self",
+    "title": "This document as GeoJSON",
+    "href": "https://api.weather.gc.ca/collections/hydrometric-stations/items?f=json&bbox=-75.8,45.3,-75.6,45.5&limit=2"
+   },
+   {
+    "rel": "alternate",
+    "type": "application/ld+json",
+    "title": "This document as RDF (JSON-LD)",
+    "href": "https://api.weather.gc.ca/collections/hydrometric-stations/items?f=jsonld&bbox=-75.8,45.3,-75.6,45.5&limit=2"
+   },
+   {
+    "type": "text/html",
+    "rel": "alternate",
+    "title": "This document as HTML",
+    "href": "https://api.weather.gc.ca/collections/hydrometric-stations/items?f=html&bbox=-75.8,45.3,-75.6,45.5&limit=2"
+   },
+   {
+    "type": "application/geo+json",
+    "rel": "next",
+    "title": "Items (next)",
+    "href": "https://api.weather.gc.ca/collections/hydrometric-stations/items?offset=2&bbox=-75.8,45.3,-75.6,45.5&limit=2"
+   },
+   {
+    "type": "application/json",
+    "title": "Hydrometric Data - Monitoring Stations",
+    "rel": "collection",
+    "href": "https://api.weather.gc.ca/collections/hydrometric-stations"
+   }
+  ],
+  "timeStamp": "2026-11-04T10:32:12.273455Z"
+ }
+}

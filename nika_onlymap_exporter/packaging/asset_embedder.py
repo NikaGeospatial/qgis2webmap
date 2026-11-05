@@ -190,11 +190,15 @@ DATA_INFLATE_TEMPLATE = """
       }};
 
       // Layer data first: replacing it after the runtime loads would be too late.
+      // A live layer's embedded copy stays one the runtime does not read
+      // (`manifest_builder.FALLBACK_SCRIPT_TYPE`), until the page needs it.
       for (const block of document.querySelectorAll(
         'script[type="{gzip_type}"]'
       )) {{
         const json = document.createElement("script");
-        json.type = "application/json";
+        json.type = block.hasAttribute("data-q2w-fallback")
+          ? "{fallback_type}"
+          : "application/json";
         json.textContent = {inflated};
         block.replaceWith(json);
       }}
@@ -209,7 +213,13 @@ PICTURE_RESOLVER = "qgis2webmapPictures"
 
 def _data_inflate(pictures: bool) -> str:
     inflated = f"{PICTURE_RESOLVER}({_INFLATED})" if pictures else _INFLATED
-    return DATA_INFLATE_TEMPLATE.format(gzip_type=GZIP_SCRIPT_TYPE, inflated=inflated)
+    from ..core.manifest_builder import FALLBACK_SCRIPT_TYPE
+
+    return DATA_INFLATE_TEMPLATE.format(
+        gzip_type=GZIP_SCRIPT_TYPE,
+        inflated=inflated,
+        fallback_type=FALLBACK_SCRIPT_TYPE,
+    )
 
 
 # Then the runtime, for the single-file tier that carries it gzipped inline.

@@ -48,6 +48,8 @@ from .export_ir import (
     GeometryKind,
     LabelingSpec,
     LegendImage,
+    LiveFeaturesSpec,
+    LiveMode,
     NoDataRule,
     NumberFormat,
     PopupSpec,
@@ -65,6 +67,13 @@ from .labeling_translator import (
     format_label_number,
     label_expression_context,
     translate_labeling,
+)
+from .live_features import (
+    LIVE_PROVIDERS,
+    arcgis_template,
+    live_host,
+    ogcapi_template,
+    wfs_template,
 )
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
@@ -176,8 +185,10 @@ def describe_source(layer: QgsVectorLayer) -> AssetDependency:
     elif kind is SourceKind.SERVICE:
         disposition = AssetDisposition.EMBEDDABLE
         note = (
-            "Features are downloaded once and embedded, so the exported map does "
-            "not call the service. It is a snapshot, not a live feed."
+            "Features are downloaded once and embedded. A WFS, OGC API Features "
+            "or ArcGIS FeatureServer layer can also load them live in the "
+            "reader's browser, the embedded copy its fallback - its Live "
+            "features row in the Fidelity tab says which it does."
         )
     else:
         disposition = AssetDisposition.EMBEDDABLE
@@ -2659,6 +2670,95 @@ def point_names(
     )
 
 
+def is_live_capable(layer: QgsMapLayer) -> bool:
+    """Whether `layer` is a vector layer from a service the map can load live:
+    the layers the Layers tab offers the Features choice for."""
+    return (
+        layer.type() == QgsMapLayerType.VectorLayer
+        and (layer.providerType() or "").lower() in LIVE_PROVIDERS
+    )
+
+
+def read_live_source(
+    layer: QgsVectorLayer,
+    choice: LiveMode | None,
+    keep: set[str],
+    shown_values: bool,
+    clipped: bool,
+) -> LiveFeaturesSpec | None:
+    """The live source of a WFS, OGC API Features or ArcGIS FeatureServer
+    layer, with the reasons found here that its look needs the copy embedded
+    at export. `None` for any other layer, and when the export is to stay
+    embedded whatever (`choice` Embedded).
+
+    `keep` is the fields the map reads (`prepare_layer`), `shown_values`
+    whether its popup shows any through an editor widget, `clipped` whether
+    the export takes only the features in the QGIS view. The address QGIS
+    keeps never carries a login (that is the auth configuration's, or the
+    URI's own username and password, which make the layer embedded only);
+    one carrying an access key is embedded only too, so the key never
+    reaches the map.
+    """
+    from qgis.core import QgsDataSourceUri, QgsFields
+
+    provider = (layer.providerType() or "").lower()
+    service = LIVE_PROVIDERS.get(provider)
+    if service is None or choice is LiveMode.EMBEDDED:
+        return None
+    uri = QgsDataSourceUri(layer.source())
+    url = uri.param("url") or ""
+    if not url.startswith(("http://", "https://")):
+        return None
+
+    reasons: list[str] = []
+    if uri.username() or uri.password() or uri.authConfigId():
+        reasons.append("the login the service needs")
+    if _carries_key(url):
+        reasons.append("the access key in its address")
+    if (layer.subsetString() or "").strip() or uri.param("sql").strip():
+        reasons.append("the filter QGIS applies to it")
+    if clipped:
+        reasons.append("Export only the features in this view")
+    if shown_values:
+        reasons.append(
+            "the values its popup shows through a Value Map or Value Relation"
+        )
+    fields = layer.fields()
+    kept = [fields.indexOf(name) for name in sorted(keep)]
+    # An expression (virtual) field, or one joined from another layer, is
+    # QGIS's own: a feature loaded live does not have it.
+    not_the_services = (QgsFields.OriginExpression, QgsFields.OriginJoin)
+    if any(i >= 0 and fields.fieldOrigin(i) in not_the_services for i in kept):
+        reasons.append("its virtual or joined fields")
+
+    if provider == "wfs":
+        version = (uri.param("version") or "auto").strip().lower()
+        if version.startswith("1."):
+            reasons.append(f"its WFS version ({version}), which pages no features")
+        template = wfs_template(url, uri.param("typename"))
+    elif provider == "oapif":
+        template = ogcapi_template(url, uri.param("typename"))
+    else:
+        # ArcGIS sends a date as a number of milliseconds, where QGIS reads it
+        # as a date: the popup would show the number.
+        dated = [
+            fields.at(i).name()
+            for i in kept
+            if i >= 0
+            and fields.at(i).type() in (QMetaType.Type.QDate, QMetaType.Type.QDateTime)
+        ]
+        if dated:
+            reasons.append("its date fields, which the service sends as numbers")
+        template = arcgis_template(url, sorted(keep))
+    return LiveFeaturesSpec(
+        url=template,
+        host=live_host(url),
+        service=service,
+        choice=choice,
+        embedded_only=tuple(reasons),
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class PendingLayer:
     """A vector layer read as far as the GUI thread can take it.
@@ -2724,6 +2824,20 @@ class PendingLayer:
             base.layer_id,
         )
 
+        live = base.live
+        if live is not None and [f.name for f in popup.fields] != [
+            f.name for f in base.popup.fields
+        ]:
+            # The popup reads the renamed copies, which features loaded live
+            # do not have.
+            live = dataclasses.replace(
+                live,
+                embedded_only=(
+                    *live.embedded_only,
+                    "the field names its popup cannot read as they are",
+                ),
+            )
+
         layer_filter = None
         if self.filter_request is not None:
             outcome = build_filter(geojson, self.filter_request)
@@ -2756,6 +2870,7 @@ class PendingLayer:
             geojson=geojson,
             feature_ids=feature_ids,
             filter=layer_filter,
+            live=live,
         )
 
 
@@ -2866,6 +2981,7 @@ def read_layer(
     map_time: MapTime | None = None,
     filter_field: str | None = None,
     time_slider: bool = True,
+    live_choice: LiveMode | None = None,
 ) -> ExportLayer | None:
     """Read one layer into the normalized model, on the calling thread.
 
@@ -2890,6 +3006,7 @@ def read_layer(
         map_time=map_time,
         filter_field=filter_field,
         time_slider=time_slider,
+        live_choice=live_choice,
     )
     if isinstance(prepared, (PendingLayer, PendingRemoteRaster)):
         return prepared.finish(report)
@@ -2916,6 +3033,7 @@ def prepare_layer(
     filter_field: str | None = None,
     map_crs: QgsCoordinateReferenceSystem | None = None,
     time_slider: bool = True,
+    live_choice: LiveMode | None = None,
 ) -> ExportLayer | PendingLayer | PendingRemoteRaster | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
@@ -2952,6 +3070,10 @@ def prepare_layer(
 
     `time_slider` is off where the map has no controls (a cartograph's
     frame): a WMS-T is then a snapshot of the time QGIS draws.
+
+    `live_choice` is the Layers tab's Features choice for a WFS, OGC API
+    Features or ArcGIS FeatureServer layer (`read_live_source`): `None` is
+    automatic, `LiveMode.EMBEDDED` keeps the features in the file alone.
     """
     layer_id = layer.id()
     name = layer.name()
@@ -3082,6 +3204,9 @@ def prepare_layer(
         keep |= {field.name for field in popup.visible_fields}
     keep |= set(display_names)
     renumber_ids = primary_key_is_excluded(layer, keep)
+    live = read_live_source(
+        layer, live_choice, keep, bool(display_names), clip_extent is not None
+    )
     # The rules are matched as the features are read, from the renderer as it
     # is now - the one just translated.
     rules = (
@@ -3117,6 +3242,7 @@ def prepare_layer(
         group_path=group_path,
         dependencies=(describe_source(layer),),
         cluster_allowed=cluster,
+        live=live,
     )
     return PendingLayer(
         base=base,
