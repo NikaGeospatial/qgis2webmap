@@ -136,83 +136,83 @@
       <translation>मानचित्र {names} का इंटरैक्टिव होना ज़रूरी है।</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1889" />
+      <location filename="../core/cartograph_export.py" line="1890" />
       <source>Map data size</source>
       <translation>मानचित्र डेटा का आकार</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2239" />
+      <location filename="../core/cartograph_export.py" line="2240" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi the picture this frame is drawn through (its frame line included) would be larger than memory can hold. Make the map smaller or ask for a lower resolution.</source>
       <translation>अनुरोधित {wanted} dpi, {dpi} dpi पर बनाया गया ({width} x {height} पिक्सेल): {wanted} dpi पर इस फ़्रेम की मध्यवर्ती तस्वीर (फ़्रेम रेखा सहित) मेमोरी की क्षमता से बड़ी होगी। मानचित्र को छोटा करें या कम रिज़ॉल्यूशन माँगें।</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2247" />
+      <location filename="../core/cartograph_export.py" line="2248" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi this frame's picture would be larger than a browser can draw. Make the map smaller or ask for a lower resolution.</source>
       <translation>अनुरोधित {wanted} dpi, {dpi} dpi पर बनाया गया ({width} x {height} पिक्सेल): {wanted} dpi पर इस फ़्रेम की तस्वीर ब्राउज़र के बना पाने से बड़ी होगी। मानचित्र को छोटा करें या कम रिज़ॉल्यूशन माँगें।</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1890" />
+      <location filename="../core/cartograph_export.py" line="1891" />
       <source>The page carries {size} of vector data, which can leave the map blank for a long time while it opens, especially on a computer without a graphics card. Heaviest: {layers}. Simplify the geometry of those layers, or set the frame to Image in Map frames.</source>
       <translation>पेज में {size} वेक्टर डेटा है, जिससे खुलते समय मानचित्र काफ़ी देर तक खाली रह सकता है, खासकर ग्राफ़िक्स कार्ड के बिना कंप्यूटर पर। सबसे भारी: {layers}। इन परतों की ज्यामिति सरल करें, या मानचित्र फ़्रेम में फ़्रेम को छवि पर सेट करें।</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="565" />
+      <location filename="../core/fidelity_summary.py" line="571" />
       <source>{n} thing changes</source>
       <translation>{n} चीज़ बदलती है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="565" />
+      <location filename="../core/fidelity_summary.py" line="571" />
       <source>{n} things change</source>
       <translation>{n} चीज़ें बदलती हैं</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="640" />
-      <location filename="../core/fidelity_summary.py" line="637" />
+      <location filename="../core/fidelity_summary.py" line="646" />
+      <location filename="../core/fidelity_summary.py" line="643" />
       <source>See what changes</source>
       <translation>देखें क्या बदलता है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="374" />
+      <location filename="../core/fidelity_summary.py" line="380" />
       <source>Nothing to report.</source>
       <translation>बताने को कुछ नहीं।</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="445" />
+      <location filename="../core/fidelity_summary.py" line="451" />
       <source>{n} layer and the whole map need attention</source>
       <translation>{n} परत और पूरे मानचित्र पर ध्यान देना है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="445" />
+      <location filename="../core/fidelity_summary.py" line="451" />
       <source>{n} layers and the whole map need attention</source>
       <translation>{n} परतों और पूरे मानचित्र पर ध्यान देना है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="457" />
       <source>{n} layer needs attention</source>
       <translation>{n} परत पर ध्यान देना है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="457" />
       <source>{n} layers need attention</source>
       <translation>{n} परतों पर ध्यान देना है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="455" />
+      <location filename="../core/fidelity_summary.py" line="461" />
       <source>{n} needs attention</source>
       <translation>{n} पर ध्यान देना है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="455" />
+      <location filename="../core/fidelity_summary.py" line="461" />
       <source>{n} need attention</source>
       <translation>{n} पर ध्यान देना है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>the whole map needs attention</source>
       <translation>पूरे मानचित्र पर ध्यान देना है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="611" />
+      <location filename="../core/fidelity_summary.py" line="617" />
       <location filename="../ui/cartograph/controller.py" line="1176" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
@@ -220,91 +220,91 @@
       <translation>अभी जाँच नहीं हुई।</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="611" />
+      <location filename="../core/fidelity_summary.py" line="617" />
       <location filename="../ui/fidelity_panel.py" line="268" />
       <location filename="../ui/fidelity_panel.py" line="534" />
       <source>Check now</source>
       <translation>अभी जाँचें</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="613" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/fidelity_panel.py" line="547" />
       <source>Checking what the export changes...</source>
       <translation>जाँच हो रही है कि निर्यात क्या बदलता है...</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="620" />
+      <location filename="../core/fidelity_summary.py" line="626" />
       <source>See why</source>
       <translation>कारण देखें</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="624" />
+      <location filename="../core/fidelity_summary.py" line="630" />
       <source>Out of date - something changed since the last check.</source>
       <translation>पुराना - पिछली जाँच के बाद कुछ बदला है।</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="626" />
+      <location filename="../core/fidelity_summary.py" line="632" />
       <location filename="../ui/fidelity_panel.py" line="606" />
       <source>Check again</source>
       <translation>फिर से जाँचें</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="633" />
+      <location filename="../core/fidelity_summary.py" line="639" />
       <source>Review problems</source>
       <translation>समस्याएँ देखें</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>{n} layer</source>
       <translation>{n} परत</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>{n} layers</source>
       <translation>{n} परतें</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>No layers</source>
       <translation>कोई परत नहीं</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="385" />
+      <location filename="../core/fidelity_summary.py" line="391" />
       <source>everything is kept exactly</source>
       <translation>सब कुछ ठीक वैसा ही रखा गया है</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="414" />
+      <location filename="../core/fidelity_summary.py" line="420" />
       <source>{n} thing cannot be exported</source>
       <translation>{n} चीज़ निर्यात नहीं हो सकती</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="414" />
+      <location filename="../core/fidelity_summary.py" line="420" />
       <source>{n} things cannot be exported</source>
       <translation>{n} चीज़ें निर्यात नहीं हो सकतीं</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="436" />
+      <location filename="../core/fidelity_summary.py" line="442" />
       <source>{parts} on export.</source>
       <translation>निर्यात पर: {parts}।</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="618" />
+      <location filename="../core/fidelity_summary.py" line="624" />
       <source>The check failed.</source>
       <translation>जाँच विफल रही।</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="422" />
+      <location filename="../core/fidelity_summary.py" line="428" />
       <source>{n} layer cannot be exported</source>
       <translation>{n} परत निर्यात नहीं हो सकती</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="422" />
+      <location filename="../core/fidelity_summary.py" line="428" />
       <source>{n} layers cannot be exported</source>
       <translation>{n} परतें निर्यात नहीं हो सकतीं</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="616" />
+      <location filename="../core/fidelity_summary.py" line="622" />
       <source>The check could not finish: {error}</source>
       <translation>जाँच पूरी नहीं हो सकी: {error}</translation>
     </message>
@@ -1899,7 +1899,7 @@ Maps you have already published stay online. You will need to sign in again thro
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/main_dialog.py" line="3861" />
-      <location filename="../ui/runtime_setup.py" line="247" />
+      <location filename="../ui/runtime_setup.py" line="274" />
       <source>Cancel</source>
       <translation>रद्द करें</translation>
     </message>
@@ -5795,9 +5795,9 @@ They are also online at &lt;{url}&gt;.
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3732" />
-      <location filename="../ui/runtime_setup.py" line="252" />
-      <location filename="../ui/runtime_setup.py" line="203" />
-      <location filename="../ui/runtime_setup.py" line="267" />
+      <location filename="../ui/runtime_setup.py" line="279" />
+      <location filename="../ui/runtime_setup.py" line="225" />
+      <location filename="../ui/runtime_setup.py" line="296" />
       <source>OnlyMap runtime</source>
       <translation>OnlyMap रनटाइम</translation>
     </message>
@@ -6489,54 +6489,64 @@ Pick somewhere that exists, or create it first.</source>
       <translation>किसी फ़ाइल मैनेजर ने उत्तर नहीं दिया ({error}), और फ़ोल्डर खोलने वाला डिफ़ॉल्ट प्रोग्राम फ़ाइल मैनेजर नहीं है</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="57" />
+      <location filename="../ui/runtime_setup.py" line="58" />
       <source>&lt;p&gt;&lt;b&gt;QGIS2WebMap needs the OnlyMap runtime to build a map.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;The runtime is the code that draws the map in a browser. It is embedded in every map you export, which is what lets someone open your map with no internet connection and no software installed.&lt;/p&gt;&lt;p&gt;It is downloaded &lt;b&gt;once on this computer&lt;/b&gt; ({size}). Every export after that works offline.&lt;/p&gt;&lt;p&gt;QGIS2WebMap is free and open source. The OnlyMap runtime is a separate commercial product by NIKA with its own licence, shown below.&lt;/p&gt;</source>
       <translation>&lt;p&gt;&lt;b&gt;मानचित्र बनाने के लिए QGIS2WebMap को OnlyMap रनटाइम चाहिए।&lt;/b&gt;&lt;/p&gt;&lt;p&gt;रनटाइम वह कोड है जो ब्राउज़र में मानचित्र बनाता है। यह आपके हर निर्यात किए गए मानचित्र में शामिल होता है, इसीलिए कोई भी आपका मानचित्र बिना इंटरनेट और बिना कोई सॉफ़्टवेयर इंस्टॉल किए खोल सकता है।&lt;/p&gt;&lt;p&gt;यह &lt;b&gt;इस कंप्यूटर पर एक बार&lt;/b&gt; डाउनलोड होता है ({size})। उसके बाद हर निर्यात ऑफ़लाइन काम करता है।&lt;/p&gt;&lt;p&gt;QGIS2WebMap मुफ़्त और ओपन सोर्स है। OnlyMap रनटाइम NIKA का एक अलग व्यावसायिक उत्पाद है, जिसका अपना लाइसेंस नीचे दिखाया गया है।&lt;/p&gt;</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="74" />
+      <location filename="../ui/runtime_setup.py" line="75" />
       <source>Install the OnlyMap runtime</source>
       <translation>OnlyMap रनटाइम इंस्टॉल करें</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="100" />
+      <location filename="../ui/runtime_setup.py" line="117" />
       <source>I accept the OnlyMap licence</source>
       <translation>मैं OnlyMap लाइसेंस स्वीकार करता/करती हूँ</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="108" />
+      <location filename="../ui/runtime_setup.py" line="125" />
       <source>Download and install</source>
       <translation>डाउनलोड और इंस्टॉल करें</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="204" />
+      <location filename="../ui/runtime_setup.py" line="226" />
       <source>This installation does not pin a runtime version, so the runtime cannot be downloaded. Please reinstall the plugin.</source>
       <translation>यह इंस्टॉलेशन रनटाइम का कोई संस्करण तय नहीं करता, इसलिए रनटाइम डाउनलोड नहीं हो सकता। कृपया प्लगइन फिर से इंस्टॉल करें।</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="148" />
+      <location filename="../ui/runtime_setup.py" line="273" />
+      <source>Downloading the vector tile decoder…</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="165" />
       <source>The download was cancelled.</source>
       <translation>डाउनलोड रद्द कर दिया गया।</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="244" />
-      <source>Downloading the OnlyMap runtime ({size})…</source>
-      <translation>OnlyMap रनटाइम डाउनलोड हो रहा है ({size})…</translation>
-    </message>
-    <message>
-      <location filename="../ui/runtime_setup.py" line="154" />
+      <location filename="../ui/runtime_setup.py" line="171" />
       <source>If this computer reaches the internet through a proxy, check Settings -&gt; Options -&gt; Network in QGIS.</source>
       <translation>अगर यह कंप्यूटर प्रॉक्सी के ज़रिए इंटरनेट से जुड़ता है, तो QGIS में Settings -&gt; Options -&gt; Network देखें।</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="152" />
+      <location filename="../ui/runtime_setup.py" line="269" />
+      <source>Downloading the OnlyMap runtime ({size})…</source>
+      <translation>OnlyMap रनटाइम डाउनलोड हो रहा है ({size})…</translation>
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="169" />
       <source>Could not download the OnlyMap runtime.</source>
       <translation>OnlyMap रनटाइम डाउनलोड नहीं हो सका।</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="86" />
+      <location filename="../ui/runtime_setup.py" line="94" />
       <source>Source: {package}</source>
       <translation>स्रोत: {package}</translation>
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="100" />
+      <source>Downloaded with it, under its own licence: {packages}</source>
+      <translation type="unfinished" />
     </message>
   </context>
 </TS>

@@ -136,83 +136,83 @@
       <translation>يتطلب أن تكون الخريطة {names} تفاعلية.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1889" />
+      <location filename="../core/cartograph_export.py" line="1890" />
       <source>Map data size</source>
       <translation>حجم بيانات الخريطة</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2239" />
+      <location filename="../core/cartograph_export.py" line="2240" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi the picture this frame is drawn through (its frame line included) would be larger than memory can hold. Make the map smaller or ask for a lower resolution.</source>
       <translation>المطلوب {wanted} dpi، والرسم بدقة {dpi} dpi ({width} x {height} بكسل): عند {wanted} dpi ستكون الصورة الوسيطة لهذا الإطار (بما فيها خط الإطار) أكبر مما تتسع له الذاكرة. صغّر الخريطة أو اطلب استبانة أقل.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2247" />
+      <location filename="../core/cartograph_export.py" line="2248" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi this frame's picture would be larger than a browser can draw. Make the map smaller or ask for a lower resolution.</source>
       <translation>المطلوب {wanted} dpi، والرسم بدقة {dpi} dpi ({width} x {height} بكسل): عند {wanted} dpi ستكون صورة هذا الإطار أكبر مما يستطيع المتصفح رسمه. صغّر الخريطة أو اطلب استبانة أقل.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1890" />
+      <location filename="../core/cartograph_export.py" line="1891" />
       <source>The page carries {size} of vector data, which can leave the map blank for a long time while it opens, especially on a computer without a graphics card. Heaviest: {layers}. Simplify the geometry of those layers, or set the frame to Image in Map frames.</source>
       <translation>تحمل الصفحة {size} من البيانات المتجهة، وقد تبقى الخريطة فارغة وقتًا طويلًا أثناء فتحها، خصوصًا على جهاز بلا بطاقة رسومات. الأثقل: {layers}. بسّط هندسة هذه الطبقات، أو اضبط الإطار على صورة في إطارات الخريطة.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="565" />
+      <location filename="../core/fidelity_summary.py" line="571" />
       <source>{n} thing changes</source>
       <translation>يتغيّر {n} عنصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="565" />
+      <location filename="../core/fidelity_summary.py" line="571" />
       <source>{n} things change</source>
       <translation>تتغيّر {n} عناصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="640" />
-      <location filename="../core/fidelity_summary.py" line="637" />
+      <location filename="../core/fidelity_summary.py" line="646" />
+      <location filename="../core/fidelity_summary.py" line="643" />
       <source>See what changes</source>
       <translation>عرض ما يتغيّر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="374" />
+      <location filename="../core/fidelity_summary.py" line="380" />
       <source>Nothing to report.</source>
       <translation>لا شيء للإبلاغ عنه.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="445" />
+      <location filename="../core/fidelity_summary.py" line="451" />
       <source>{n} layer and the whole map need attention</source>
       <translation>تحتاج {n} طبقة والخريطة كاملة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="445" />
+      <location filename="../core/fidelity_summary.py" line="451" />
       <source>{n} layers and the whole map need attention</source>
       <translation>تحتاج {n} طبقات والخريطة كاملة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="457" />
       <source>{n} layer needs attention</source>
       <translation>تحتاج {n} طبقة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="457" />
       <source>{n} layers need attention</source>
       <translation>تحتاج {n} طبقات إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="455" />
+      <location filename="../core/fidelity_summary.py" line="461" />
       <source>{n} needs attention</source>
       <translation>{n} يحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="455" />
+      <location filename="../core/fidelity_summary.py" line="461" />
       <source>{n} need attention</source>
       <translation>{n} تحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>the whole map needs attention</source>
       <translation>الخريطة كاملة تحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="611" />
+      <location filename="../core/fidelity_summary.py" line="617" />
       <location filename="../ui/cartograph/controller.py" line="1176" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
@@ -220,91 +220,91 @@
       <translation>لم يُفحص بعد.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="611" />
+      <location filename="../core/fidelity_summary.py" line="617" />
       <location filename="../ui/fidelity_panel.py" line="268" />
       <location filename="../ui/fidelity_panel.py" line="534" />
       <source>Check now</source>
       <translation>افحص الآن</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="613" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/fidelity_panel.py" line="547" />
       <source>Checking what the export changes...</source>
       <translation>جارٍ فحص ما يغيّره التصدير...</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="620" />
+      <location filename="../core/fidelity_summary.py" line="626" />
       <source>See why</source>
       <translation>عرض السبب</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="624" />
+      <location filename="../core/fidelity_summary.py" line="630" />
       <source>Out of date - something changed since the last check.</source>
       <translation>قديم - تغيّر شيء منذ آخر فحص.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="626" />
+      <location filename="../core/fidelity_summary.py" line="632" />
       <location filename="../ui/fidelity_panel.py" line="606" />
       <source>Check again</source>
       <translation>افحص مرة أخرى</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="633" />
+      <location filename="../core/fidelity_summary.py" line="639" />
       <source>Review problems</source>
       <translation>مراجعة المشكلات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>{n} layer</source>
       <translation>{n} طبقة</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>{n} layers</source>
       <translation>{n} طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>No layers</source>
       <translation>لا طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="385" />
+      <location filename="../core/fidelity_summary.py" line="391" />
       <source>everything is kept exactly</source>
       <translation>كل شيء محفوظ كما هو تمامًا</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="414" />
+      <location filename="../core/fidelity_summary.py" line="420" />
       <source>{n} thing cannot be exported</source>
       <translation>لا يمكن تصدير {n} عنصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="414" />
+      <location filename="../core/fidelity_summary.py" line="420" />
       <source>{n} things cannot be exported</source>
       <translation>لا يمكن تصدير {n} عناصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="436" />
+      <location filename="../core/fidelity_summary.py" line="442" />
       <source>{parts} on export.</source>
       <translation>{parts} عند التصدير.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="618" />
+      <location filename="../core/fidelity_summary.py" line="624" />
       <source>The check failed.</source>
       <translation>فشل الفحص.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="422" />
+      <location filename="../core/fidelity_summary.py" line="428" />
       <source>{n} layer cannot be exported</source>
       <translation>لا يمكن تصدير {n} طبقة</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="422" />
+      <location filename="../core/fidelity_summary.py" line="428" />
       <source>{n} layers cannot be exported</source>
       <translation>لا يمكن تصدير {n} طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="616" />
+      <location filename="../core/fidelity_summary.py" line="622" />
       <source>The check could not finish: {error}</source>
       <translation>تعذّر إكمال الفحص: {error}</translation>
     </message>
@@ -1899,7 +1899,7 @@ Maps you have already published stay online. You will need to sign in again thro
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/main_dialog.py" line="3861" />
-      <location filename="../ui/runtime_setup.py" line="247" />
+      <location filename="../ui/runtime_setup.py" line="274" />
       <source>Cancel</source>
       <translation>إلغاء</translation>
     </message>
@@ -5795,9 +5795,9 @@ They are also online at &lt;{url}&gt;.
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3732" />
-      <location filename="../ui/runtime_setup.py" line="252" />
-      <location filename="../ui/runtime_setup.py" line="203" />
-      <location filename="../ui/runtime_setup.py" line="267" />
+      <location filename="../ui/runtime_setup.py" line="279" />
+      <location filename="../ui/runtime_setup.py" line="225" />
+      <location filename="../ui/runtime_setup.py" line="296" />
       <source>OnlyMap runtime</source>
       <translation>بيئة تشغيل OnlyMap</translation>
     </message>
@@ -6489,54 +6489,64 @@ Pick somewhere that exists, or create it first.</source>
       <translation>لم يستجب أي مدير ملفات ({error})، والبرنامج الذي يفتح المجلدات افتراضيًا ليس مدير ملفات</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="57" />
+      <location filename="../ui/runtime_setup.py" line="58" />
       <source>&lt;p&gt;&lt;b&gt;QGIS2WebMap needs the OnlyMap runtime to build a map.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;The runtime is the code that draws the map in a browser. It is embedded in every map you export, which is what lets someone open your map with no internet connection and no software installed.&lt;/p&gt;&lt;p&gt;It is downloaded &lt;b&gt;once on this computer&lt;/b&gt; ({size}). Every export after that works offline.&lt;/p&gt;&lt;p&gt;QGIS2WebMap is free and open source. The OnlyMap runtime is a separate commercial product by NIKA with its own licence, shown below.&lt;/p&gt;</source>
       <translation>&lt;p&gt;&lt;b&gt;يحتاج QGIS2WebMap إلى بيئة تشغيل OnlyMap لإنشاء خريطة.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;بيئة التشغيل هي الشيفرة التي ترسم الخريطة في المتصفح. وهي مضمّنة في كل خريطة تصدّرها، وهذا ما يتيح لأي شخص فتح خريطتك دون اتصال بالإنترنت ودون تثبيت أي برنامج.&lt;/p&gt;&lt;p&gt;يتم تنزيلها &lt;b&gt;مرة واحدة على هذا الحاسوب&lt;/b&gt; ({size}). وبعد ذلك يعمل كل تصدير دون اتصال.&lt;/p&gt;&lt;p&gt;QGIS2WebMap مجاني ومفتوح المصدر. أما بيئة تشغيل OnlyMap فهي منتج تجاري منفصل من NIKA وله ترخيصه الخاص المعروض أدناه.&lt;/p&gt;</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="74" />
+      <location filename="../ui/runtime_setup.py" line="75" />
       <source>Install the OnlyMap runtime</source>
       <translation>تثبيت بيئة تشغيل OnlyMap</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="100" />
+      <location filename="../ui/runtime_setup.py" line="117" />
       <source>I accept the OnlyMap licence</source>
       <translation>أوافق على ترخيص OnlyMap</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="108" />
+      <location filename="../ui/runtime_setup.py" line="125" />
       <source>Download and install</source>
       <translation>تنزيل وتثبيت</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="204" />
+      <location filename="../ui/runtime_setup.py" line="226" />
       <source>This installation does not pin a runtime version, so the runtime cannot be downloaded. Please reinstall the plugin.</source>
       <translation>هذا التثبيت لا يحدّد إصدارًا لبيئة التشغيل، لذا لا يمكن تنزيلها. يُرجى إعادة تثبيت المكوّن الإضافي.</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="148" />
+      <location filename="../ui/runtime_setup.py" line="273" />
+      <source>Downloading the vector tile decoder…</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="165" />
       <source>The download was cancelled.</source>
       <translation>أُلغي التنزيل.</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="244" />
-      <source>Downloading the OnlyMap runtime ({size})…</source>
-      <translation>جارٍ تنزيل بيئة تشغيل OnlyMap ({size})…</translation>
-    </message>
-    <message>
-      <location filename="../ui/runtime_setup.py" line="154" />
+      <location filename="../ui/runtime_setup.py" line="171" />
       <source>If this computer reaches the internet through a proxy, check Settings -&gt; Options -&gt; Network in QGIS.</source>
       <translation>إذا كان هذا الحاسوب يتصل بالإنترنت عبر وكيل، فتحقق من الإعدادات -&gt; الخيارات -&gt; الشبكة في QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="152" />
+      <location filename="../ui/runtime_setup.py" line="269" />
+      <source>Downloading the OnlyMap runtime ({size})…</source>
+      <translation>جارٍ تنزيل بيئة تشغيل OnlyMap ({size})…</translation>
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="169" />
       <source>Could not download the OnlyMap runtime.</source>
       <translation>تعذّر تنزيل بيئة تشغيل OnlyMap.</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="86" />
+      <location filename="../ui/runtime_setup.py" line="94" />
       <source>Source: {package}</source>
       <translation>المصدر: {package}</translation>
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="100" />
+      <source>Downloaded with it, under its own licence: {packages}</source>
+      <translation type="unfinished" />
     </message>
   </context>
 </TS>
