@@ -1748,14 +1748,15 @@ def read_map_service(
         or "1.3.0"
     )
     # QGIS asks the GetMap address the capabilities name, unless the layer
-    # is set to ignore it (`QgsWmsProvider::getMapUrl`).
+    # is set to ignore it (`QgsWmsProvider::getMapUrl`) - on https:// when
+    # the layer was added there (`on_https_as_added`).
     get_map = url
     if (
         parsed is not None
         and parsed.get_map_url
         and "IgnoreGetMapUrl" not in (key for key, _ in pairs)
     ):
-        get_map = parsed.get_map_url
+        get_map = map_services.on_https_as_added(parsed.get_map_url, url)
     extra = [
         (key.upper(), ",".join(map_services.values(pairs, key)))
         for key in ("filter", "opacities")
@@ -1784,17 +1785,20 @@ def read_map_service(
     # The legend pictures QGIS's legend shows, from the same capabilities;
     # none without them, since nothing else says where the service draws one.
     # Top first, as a legend lists layers: the reverse of the GetMap's order.
-    legend = (
-        map_services.wms_legend_urls(
-            parsed,
-            layers,
-            styles,
-            image_format,
-            url=url if "IgnoreGetMapUrl" in (key for key, _ in pairs) else None,
+    legend = [
+        (title, map_services.on_https_as_added(address, url))
+        for title, address in (
+            map_services.wms_legend_urls(
+                parsed,
+                layers,
+                styles,
+                image_format,
+                url=url if "IgnoreGetMapUrl" in (key for key, _ in pairs) else None,
+            )
+            if parsed is not None
+            else []
         )
-        if parsed is not None
-        else []
-    )
+    ]
     # QGIS's "Use contextual WMS legend", read as QGIS reads it: a whole
     # number, on when it is not 0. Its legend then shows only what is in view.
     contextual = map_services.value(pairs, "contextualWMSLegend").strip()

@@ -1,0 +1,136 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<WMS_Capabilities xmlns="http://www.opengis.net/wms" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.3.0" updateSequence="1446" xsi:schemaLocation="http://www.opengis.net/wms https://nowcoast.noaa.gov/geoserver/observations/schemas/wms/1.3.0/capabilities_1_3_0.xsd">
+ <Service>
+  <Name>WMS</Name>
+  <Title>Geostationary Satellite Imagery</Title>
+  <Abstract>This nowCOAST map service provides maps depicting satellite imagery for the visible, water vapor, shortwave infrared, longwave infrared, and snow/ice near infrared spectral bands, providing continuous weather imagery and monitoring of meteorological and space environment data across North America. Source data includes NOAA/NESDIS Global Mosaic of Geostationary Satellite Imagery (GMGSI) products and NOAA/NASA Geostationary Operational Environmental Satellites (GOES), GOES-EAST and GOES-WEST products. GMGSI composites data from five geostationary satellites, Himawari-9, GOES-18, GOES-19, Meteosat-9 and Meteosat-10, providing a global coverage from 60N to 60S, and the spatial resolution is approximately 3 km. GOES visible composite images have a horizontal resolution of 0.5 km, GOES shortwave infrared, longwave infrared, and water vapor composite images are approximately 2 km and snow/ice composite images are approximately 1 km. The visible imagery indicates cloud cover and ice and snow cover. The shortwave, or mid-infrared, indicates cloud cover and fog at night. The longwave, or thermal infrared, depicts cloud cover and land/sea temperature patterns. The water vapor imagery indicates the amount of water vapor contained in the mid to upper levels of the troposphere, with the darker grays indicating drier air and brighter grays/whites indicating more saturated air. The nowCOAST map service is updated with new GOES-EAST and GOES-WEST composite images every 5 minutes, and GMGSI global composite images are updated hourly.</Abstract>
+  <OnlineResource xlink:type="simple" xlink:href="https://nowcoast.noaa.gov"/>
+  <ContactInformation>
+   <ContactPersonPrimary>
+    <ContactPerson/>
+    <ContactOrganization/>
+   </ContactPersonPrimary>
+   <ContactPosition/>
+   <ContactAddress>
+    <AddressType/>
+    <Address/>
+    <City/>
+    <StateOrProvince/>
+    <PostCode/>
+    <Country/>
+   </ContactAddress>
+   <ContactVoiceTelephone/>
+   <ContactFacsimileTelephone/>
+   <ContactElectronicMailAddress/>
+  </ContactInformation>
+  <Fees>NONE</Fees>
+  <AccessConstraints>NONE</AccessConstraints>
+ </Service>
+ <Capability>
+  <Request>
+   <GetCapabilities>
+    <Format>text/xml</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&amp;"/>
+      </Get>
+      <Post>
+       <OnlineResource xlink:type="simple" xlink:href="https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&amp;"/>
+      </Post>
+     </HTTP>
+    </DCPType>
+   </GetCapabilities>
+   <GetMap>
+    <Format>image/png</Format>
+    <Format>application/atom+xml</Format>
+    <Format>application/json;type=utfgrid</Format>
+    <Format>application/pdf</Format>
+    <Format>application/rss+xml</Format>
+    <Format>application/vnd.google-earth.kml+xml</Format>
+    <Format>application/vnd.google-earth.kml+xml;mode=networklink</Format>
+    <Format>application/vnd.google-earth.kmz</Format>
+    <Format>image/geotiff</Format>
+    <Format>image/geotiff8</Format>
+    <Format>image/gif</Format>
+    <Format>image/jpeg</Format>
+    <Format>image/png; mode=8bit</Format>
+    <Format>image/svg+xml</Format>
+    <Format>image/tiff</Format>
+    <Format>image/tiff8</Format>
+    <Format>image/vnd.jpeg-png</Format>
+    <Format>image/vnd.jpeg-png8</Format>
+    <Format>text/html; subtype=openlayers</Format>
+    <Format>text/html; subtype=openlayers2</Format>
+    <Format>text/html; subtype=openlayers3</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&amp;"/>
+      </Get>
+     </HTTP>
+    </DCPType>
+   </GetMap>
+   <GetFeatureInfo>
+    <Format>text/plain</Format>
+    <Format>application/vnd.ogc.gml</Format>
+    <Format>text/xml</Format>
+    <Format>application/vnd.ogc.gml/3.1.1</Format>
+    <Format>text/xml; subtype=gml/3.1.1</Format>
+    <Format>text/html</Format>
+    <Format>application/json</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?SERVICE=WMS&amp;"/>
+      </Get>
+     </HTTP>
+    </DCPType>
+   </GetFeatureInfo>
+  </Request>
+  <Exception>
+   <Format>XML</Format>
+   <Format>INIMAGE</Format>
+   <Format>BLANK</Format>
+   <Format>JSON</Format>
+  </Exception>
+  <Layer>
+   <Title>Geostationary Satellite Imagery</Title>
+   <Abstract>This nowCOAST map service provides maps depicting satellite imagery for the visible, water vapor, shortwave infrared, longwave infrared, and snow/ice near infrared spectral bands, providing continuous weather imagery and monitoring of meteorological and space environment data across North America. Source data includes NOAA/NESDIS Global Mosaic of Geostationary Satellite Imagery (GMGSI) products and NOAA/NASA Geostationary Operational Environmental Satellites (GOES), GOES-EAST and GOES-WEST products. GMGSI composites data from five geostationary satellites, Himawari-9, GOES-18, GOES-19, Meteosat-9 and Meteosat-10, providing a global coverage from 60N to 60S, and the spatial resolution is approximately 3 km. GOES visible composite images have a horizontal resolution of 0.5 km, GOES shortwave infrared, longwave infrared, and water vapor composite images are approximately 2 km and snow/ice composite images are approximately 1 km. The visible imagery indicates cloud cover and ice and snow cover. The shortwave, or mid-infrared, indicates cloud cover and fog at night. The longwave, or thermal infrared, depicts cloud cover and land/sea temperature patterns. The water vapor imagery indicates the amount of water vapor contained in the mid to upper levels of the troposphere, with the darker grays indicating drier air and brighter grays/whites indicating more saturated air. The nowCOAST map service is updated with new GOES-EAST and GOES-WEST composite images every 5 minutes, and GMGSI global composite images are updated hourly.</Abstract>
+   <CRS>EPSG:3857</CRS>
+   <CRS>EPSG:4326</CRS>
+   <CRS>CRS:84</CRS>
+   <EX_GeographicBoundingBox>
+    <westBoundLongitude>-179.99994344357404</westBoundLongitude>
+    <eastBoundLongitude>179.95499090311822</eastBoundLongitude>
+    <southBoundLatitude>-72.74472336303444</southBoundLatitude>
+    <northBoundLatitude>72.73681640625001</northBoundLatitude>
+   </EX_GeographicBoundingBox>
+   <BoundingBox CRS="CRS:84" minx="-179.99994344357404" miny="-72.74472336303444" maxx="179.95499090311822" maxy="72.73681640625001"/>
+   <Layer queryable="1" opaque="0">
+    <Name>global_longwave_imagery_mosaic</Name>
+    <Title>Global Satellite Longwave Imagery</Title>
+    <Abstract>The NOAA/NESDIS Global Mosaic of Geostationary Satellite Imagery (GMGSI) longwave, thermal infrared band (~12.0 μm), has an hourly update frequency, approximately 3 km spatial resolution, the data latency is two to three hours and depicts cloud cover and land/sea temperature patterns. The channel is used in many baseline products, such as Fire Detection, Volcanic Ash Detection, and Derived Motion Wind Vector.</Abstract>
+    <CRS>EPSG:3857</CRS>
+    <CRS>CRS:84</CRS>
+    <EX_GeographicBoundingBox>
+     <westBoundLongitude>-179.99994344357404</westBoundLongitude>
+     <eastBoundLongitude>179.95499090311822</eastBoundLongitude>
+     <southBoundLatitude>-72.74472336303444</southBoundLatitude>
+     <northBoundLatitude>72.73681640625001</northBoundLatitude>
+    </EX_GeographicBoundingBox>
+    <BoundingBox CRS="CRS:84" minx="-179.99994344357404" miny="-72.74472336303444" maxx="179.95499090311822" maxy="72.73681640625001"/>
+    <BoundingBox CRS="EPSG:3857" minx="-2.0037502046956703E7" miny="-1.2026983336708374E7" maxx="2.0032497953043297E7" maxy="1.2024016663291626E7"/>
+    <Dimension name="time" default="2026-11-05T06:00:00Z" units="ISO8601" nearestValue="1">2026-11-05T01:00:00.000Z,2026-11-05T02:00:00.000Z,2026-11-05T03:00:00.000Z,2026-11-05T04:00:00.000Z,2026-11-05T05:00:00.000Z,2026-11-05T06:00:00.000Z</Dimension>
+    <Style>
+     <Name>reflectance</Name>
+     <Title>Reflectance</Title>
+     <LegendURL width="20" height="20">
+      <Format>image/png</Format>
+      <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:type="simple" xlink:href="https://nowcoast.noaa.gov/geoserver/observations/satellite/ows?service=WMS&amp;version=1.3.0&amp;request=GetLegendGraphic&amp;format=image%2Fpng&amp;width=20&amp;height=20&amp;layer=global_longwave_imagery_mosaic"/>
+     </LegendURL>
+    </Style>
+   </Layer>
+  </Layer>
+ </Capability>
+</WMS_Capabilities>

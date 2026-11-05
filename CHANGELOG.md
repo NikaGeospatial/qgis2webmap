@@ -120,6 +120,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   such a tile address, which was refused, now exports, and these layers no
   longer keep a cartograph's interactive frame out of its projected
   coordinate system.
+- A WMS layer added on an `https://` address whose capabilities still name
+  `http://` (the British Geological Survey's, for one) is now asked on
+  `https://` for its tiles and legend, as it was added. It used to be asked
+  on `http://`, which such a service only redirects to `https://`, and
+  Safari then showed it only as plain pictures under the rest of the map.
 
 ## [0.3.2] - 2026-11-05
 

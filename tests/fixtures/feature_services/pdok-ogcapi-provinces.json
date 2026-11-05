@@ -1,0 +1,111 @@
+{
+ "_note": "Recorded 2026-11-05 from PDOK's bestuurlijke gebieden OGC API Features (GoKoala), one items request as the plugin builds it; geometry cut to its first ring's first points and properties to four, to stay small. It pages by its next link only, with no numberMatched.",
+ "request": "https://api.pdok.nl/kadaster/bestuurlijkegebieden/ogc/v1/collections/provinciegebied/items?f=json&bbox=4.5,52.0,5.5,52.5&limit=2",
+ "headers": {
+  "access-control-allow-origin": "*",
+  "content-type": "application/geo+json"
+ },
+ "body": {
+  "type": "FeatureCollection",
+  "timeStamp": "2026-11-05T08:19:46Z",
+  "links": [
+   {
+    "rel": "self",
+    "title": "This document as GeoJSON",
+    "type": "application/geo+json",
+    "href": "https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1/collections/provinciegebied/items?bbox=4.5%2C52.0%2C5.5%2C52.5&f=json&limit=2"
+   },
+   {
+    "rel": "alternate",
+    "title": "This document as JSON-FG",
+    "type": "application/vnd.ogc.fg+json",
+    "href": "https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1/collections/provinciegebied/items?bbox=4.5%2C52.0%2C5.5%2C52.5&f=jsonfg&limit=2"
+   },
+   {
+    "rel": "alternate",
+    "title": "This document as HTML",
+    "type": "text/html",
+    "href": "https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1/collections/provinciegebied/items?bbox=4.5%2C52.0%2C5.5%2C52.5&f=html&limit=2"
+   },
+   {
+    "rel": "next",
+    "title": "Next page",
+    "type": "application/geo+json",
+    "href": "https://api.pdok.nl/kadaster/brk-bestuurlijke-gebieden/ogc/v1/collections/provinciegebied/items?bbox=4.5%2C52.0%2C5.5%2C52.5&cursor=BQ%7C6QRV8Q&f=json&limit=2"
+   }
+  ],
+  "features": [
+   {
+    "type": "Feature",
+    "properties": {
+     "code": "24",
+     "naam": "Flevoland",
+     "identificatie": "PV24",
+     "ligt_in_land_code": "6030"
+    },
+    "geometry": {
+     "type": "MultiPolygon",
+     "coordinates": [
+      [
+       [
+        [
+         5.811383568108243,
+         52.60742340809424
+        ],
+        [
+         5.8372139403899155,
+         52.60733122378312
+        ],
+        [
+         5.840524598638258,
+         52.610413202817526
+        ],
+        [
+         5.840590300118798,
+         52.61042212799262
+        ]
+       ]
+      ]
+     ]
+    },
+    "id": "d99dad4f-5325-5762-b088-23352dc521d3"
+   },
+   {
+    "type": "Feature",
+    "properties": {
+     "code": "26",
+     "naam": "Utrecht",
+     "identificatie": "PV26",
+     "ligt_in_land_code": "6030"
+    },
+    "geometry": {
+     "type": "MultiPolygon",
+     "coordinates": [
+      [
+       [
+        [
+         5.55790328582633,
+         52.04886511938737
+        ],
+        [
+         5.557875831164056,
+         52.0489518045007
+        ],
+        [
+         5.55797798923023,
+         52.049095825375176
+        ],
+        [
+         5.558565476110507,
+         52.04985536432868
+        ]
+       ]
+      ]
+     ]
+    },
+    "id": "5b8b4e09-bec6-5aab-8cbb-289d90838ec8"
+   }
+  ],
+  "numberReturned": 2
+ }
+}

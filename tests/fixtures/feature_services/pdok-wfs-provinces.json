@@ -1,0 +1,108 @@
+{
+ "_note": "Recorded 2026-11-05 from PDOK's bestuurlijke gebieden WFS 2.0, one GetFeature as the plugin builds it; geometry cut to its first ring's first points and properties to four, to stay small. It sends neither numberMatched nor numberReturned.",
+ "request": "https://service.pdok.nl/kadaster/bestuurlijkegebieden/wfs/v1_0?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=bestuurlijkegebieden:Provinciegebied&OUTPUTFORMAT=application/json&SRSNAME=EPSG:4326&BBOX=52.0,4.5,52.5,5.5,urn:ogc:def:crs:EPSG::4326&COUNT=2",
+ "headers": {
+  "access-control-allow-origin": "*",
+  "content-type": "application/json"
+ },
+ "body": {
+  "type": "FeatureCollection",
+  "name": "Provinciegebied",
+  "crs": {
+   "type": "name",
+   "properties": {
+    "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+   }
+  },
+  "features": [
+   {
+    "type": "Feature",
+    "id": "provinciegebied.2678f83d-171f-4302-8c52-5eb2dd3ec633",
+    "properties": {
+     "code": "24",
+     "naam": "Flevoland",
+     "identificatie": "PV24",
+     "ligtInLandCode": "6030"
+    },
+    "bbox": [
+     5.060426664721417,
+     52.24952786833605,
+     6.017302598102794,
+     52.843982677243154
+    ],
+    "geometry": {
+     "type": "MultiPolygon",
+     "coordinates": [
+      [
+       [
+        [
+         5.811385017909993,
+         52.60742344962677
+        ],
+        [
+         5.8372154873376445,
+         52.60733120428006
+        ],
+        [
+         5.8405261487757985,
+         52.610413174172734
+        ],
+        [
+         5.840591850449528,
+         52.610422099217516
+        ]
+       ]
+      ]
+     ]
+    }
+   },
+   {
+    "type": "Feature",
+    "id": "provinciegebied.76eac648-292c-448f-883d-7add2dc2e7d7",
+    "properties": {
+     "code": "26",
+     "naam": "Utrecht",
+     "identificatie": "PV26",
+     "ligtInLandCode": "6030"
+    },
+    "bbox": [
+     4.79204250207129,
+     51.85736084007542,
+     5.627314597981831,
+     52.30367730235055
+    ],
+    "geometry": {
+     "type": "MultiPolygon",
+     "coordinates": [
+      [
+       [
+        [
+         5.557903086092449,
+         52.04886504657465
+        ],
+        [
+         5.557875631570683,
+         52.04895173189549
+        ],
+        [
+         5.557977790145253,
+         52.04909575304736
+        ],
+        [
+         5.5585652801336325,
+         52.04985529387934
+        ]
+       ]
+      ]
+     ]
+    }
+   }
+  ],
+  "bbox": [
+   4.79204250207129,
+   51.8573608400754,
+   6.01730259810279,
+   52.8439826772432
+  ]
+ }
+}

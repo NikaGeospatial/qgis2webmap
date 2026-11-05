@@ -1,0 +1,182 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<WMS_Capabilities xmlns="http://www.opengis.net/wms" xmlns:qgs="http://www.qgis.org/wms" xmlns:sld="http://www.opengis.net/sld" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wms http://schemas.opengis.net/wms/1.3.0/capabilities_1_3_0.xsd http://www.opengis.net/sld http://schemas.opengis.net/sld/1.1.0/sld_capabilities.xsd http://www.qgis.org/wms https://geo.so.ch/ows/somap?SERVICE=WMS&amp;REQUEST=GetSchemaExtension" version="1.3.0">
+ <Service>
+  <Name>WMS</Name>
+  <Title>somap</Title>
+  <OnlineResource xlink:type="simple" xlink:href="https://geo.so.ch/api/wms?"/>
+  <ContactInformation>
+   <ContactPersonPrimary>
+    <ContactPerson>Mitarbeiter des AGI</ContactPerson>
+    <ContactOrganization>Amt für Geoinformation</ContactOrganization>
+   </ContactPersonPrimary>
+   <ContactPosition>Amt für Geoinformation</ContactPosition>
+   <ContactVoiceTelephone>++41(0)32 627 75 92</ContactVoiceTelephone>
+   <ContactElectronicMailAddress>agi@bd.so.ch</ContactElectronicMailAddress>
+  </ContactInformation>
+  <Fees>none</Fees>
+  <AccessConstraints>none</AccessConstraints>
+  <MaxWidth>8192</MaxWidth>
+  <MaxHeight>8192</MaxHeight>
+ </Service>
+ <Capability>
+  <Request>
+   <GetCapabilities>
+    <Format>text/xml</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://geo.so.ch/api/wms?"/>
+      </Get>
+     </HTTP>
+    </DCPType>
+   </GetCapabilities>
+   <GetMap>
+    <Format>image/jpeg</Format>
+    <Format>image/png</Format>
+    <Format>image/png; mode=16bit</Format>
+    <Format>image/png; mode=8bit</Format>
+    <Format>image/png; mode=1bit</Format>
+    <Format>application/dxf</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://geo.so.ch/api/wms?"/>
+      </Get>
+     </HTTP>
+    </DCPType>
+   </GetMap>
+   <GetFeatureInfo>
+    <Format>text/plain</Format>
+    <Format>text/html</Format>
+    <Format>text/xml</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://geo.so.ch/api/v1/featureinfo/somap?"/>
+      </Get>
+     </HTTP>
+    </DCPType>
+   </GetFeatureInfo>
+   <sld:GetLegendGraphic>
+    <Format>image/jpeg</Format>
+    <Format>image/png</Format>
+    <Format>application/json</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://geo.so.ch/api/v1/legend/somap?"/>
+      </Get>
+     </HTTP>
+    </DCPType>
+   </sld:GetLegendGraphic>
+   <sld:DescribeLayer>
+    <Format>text/xml</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://geo.so.ch/api/wms?"/>
+      </Get>
+     </HTTP>
+    </DCPType>
+   </sld:DescribeLayer>
+   <qgs:GetStyles>
+    <Format>text/xml</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xlink:type="simple" xlink:href="https://geo.so.ch/api/wms?"/>
+      </Get>
+     </HTTP>
+    </DCPType>
+   </qgs:GetStyles>
+  </Request>
+  <Exception>
+   <Format>XML</Format>
+  </Exception>
+  <sld:UserDefinedSymbolization SupportSLD="1" UserStyle="1" InlineFeature="0" RemoteWCS="0" UserLayer="0" RemoteWFS="0"/>
+  <Layer queryable="1">
+   <Name>somap</Name>
+   <Title>somap</Title>
+   <CRS>CRS:84</CRS>
+   <CRS>EPSG:2056</CRS>
+   <CRS>EPSG:4326</CRS>
+   <CRS>EPSG:3857</CRS>
+   <EX_GeographicBoundingBox>
+    <westBoundLongitude>7.039999</westBoundLongitude>
+    <eastBoundLongitude>8.328847</eastBoundLongitude>
+    <southBoundLatitude>47.019663</southBoundLatitude>
+    <northBoundLatitude>47.562711</northBoundLatitude>
+   </EX_GeographicBoundingBox>
+   <BoundingBox maxx="927162.929" miny="5945284.317" CRS="EPSG:3857" maxy="6034411.271" minx="783689.17"/>
+   <BoundingBox maxx="47.562711" miny="7.039999" CRS="EPSG:4326" maxy="8.328847" minx="47.019663"/>
+   <BoundingBox maxx="2667000" miny="1208000" CRS="EPSG:2056" maxy="1268000" minx="2570000"/>
+   <Layer queryable="0">
+    <Name>ch.so.ada.denkmalschutz</Name>
+    <Title>Denkmalschutz</Title>
+    <CRS>CRS:84</CRS>
+    <CRS>EPSG:2056</CRS>
+    <CRS>EPSG:4326</CRS>
+    <CRS>EPSG:3857</CRS>
+    <EX_GeographicBoundingBox>
+     <westBoundLongitude>7.369113</westBoundLongitude>
+     <eastBoundLongitude>8.030083</eastBoundLongitude>
+     <southBoundLatitude>47.07982</southBoundLatitude>
+     <northBoundLatitude>47.493604</northBoundLatitude>
+    </EX_GeographicBoundingBox>
+    <BoundingBox maxx="893904.736" miny="5955112.534" CRS="EPSG:3857" maxy="6023018.287" minx="820325.946"/>
+    <BoundingBox maxx="47.493604" miny="7.369113" CRS="EPSG:4326" maxy="8.030083" minx="47.07982"/>
+    <BoundingBox maxx="2644571.305" miny="1214478.312" CRS="EPSG:2056" maxy="1260316.287" minx="2594762.009"/>
+    <Style>
+     <Name>default</Name>
+     <Title>default</Title>
+     <LegendURL>
+      <Format>image/png</Format>
+      <OnlineResource xlink:href="https://geo.so.ch/api/v1/legend/somap?SERVICE=WMS&amp;VERSION=1.3.0&amp;REQUEST=GetLegendGraphic&amp;LAYER=ch.so.ada.denkmalschutz&amp;FORMAT=image%2Fpng&amp;STYLE=default&amp;SLD_VERSION=1.1.0" xlink:type="simple"/>
+     </LegendURL>
+    </Style>
+    <Traslations>
+     <OnlineResource xlink:href="https://geo.so.ch/api/wms?SERVICE=GetTranslations&amp;LANG={lang}" xlink:type="simple"/>
+    </Traslations>
+   </Layer>
+   <Layer queryable="0">
+    <Name>ch.so.agi.hintergrundkarte_sw</Name>
+    <Title>Hintergrundkarte schwarz-weiss</Title>
+    <CRS>CRS:84</CRS>
+    <CRS>EPSG:2056</CRS>
+    <CRS>EPSG:4326</CRS>
+    <CRS>EPSG:3857</CRS>
+    <EX_GeographicBoundingBox>
+     <westBoundLongitude>3.233304</westBoundLongitude>
+     <eastBoundLongitude>14.205305</eastBoundLongitude>
+     <southBoundLatitude>44.043493</southBoundLatitude>
+     <northBoundLatitude>49.028495</northBoundLatitude>
+    </EX_GeographicBoundingBox>
+    <BoundingBox maxx="1581327.316" miny="5472175.407" CRS="EPSG:3857" maxy="6279697.716" minx="359929.797"/>
+    <BoundingBox maxx="49.028495" miny="3.233304" CRS="EPSG:4326" maxy="14.205305" minx="44.043493"/>
+    <BoundingBox maxx="3096429.687" miny="896329.776" CRS="EPSG:2056" maxy="1431047.617" minx="2291962.83"/>
+    <Style>
+     <Name>default</Name>
+     <Title>default</Title>
+     <LegendURL>
+      <Format>image/png</Format>
+      <OnlineResource xlink:href="https://geo.so.ch/api/v1/legend/somap?SERVICE=WMS&amp;VERSION=1.3.0&amp;REQUEST=GetLegendGraphic&amp;LAYER=ch.so.agi.hintergrundkarte_sw&amp;FORMAT=image%2Fpng&amp;STYLE=default&amp;SLD_VERSION=1.1.0" xlink:type="simple"/>
+     </LegendURL>
+    </Style>
+    <Traslations>
+     <OnlineResource xlink:href="https://geo.so.ch/api/wms?SERVICE=GetTranslations&amp;LANG={lang}" xlink:type="simple"/>
+    </Traslations>
+   </Layer>
+   <Style>
+    <Name>default</Name>
+    <Title>default</Title>
+    <LegendURL>
+     <Format>image/png</Format>
+     <OnlineResource xlink:href="https://geo.so.ch/api/v1/legend/somap?SERVICE=WMS&amp;VERSION=1.3.0&amp;REQUEST=GetLegendGraphic&amp;LAYER=somap&amp;FORMAT=image%2Fpng&amp;STYLE=default&amp;SLD_VERSION=1.1.0" xlink:type="simple"/>
+    </LegendURL>
+   </Style>
+   <Traslations>
+    <OnlineResource xlink:href="https://geo.so.ch/api/wms?SERVICE=GetTranslations&amp;LANG={lang}" xlink:type="simple"/>
+   </Traslations>
+  </Layer>
+ </Capability>
+</WMS_Capabilities>

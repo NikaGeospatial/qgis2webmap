@@ -69,7 +69,9 @@ notes below are the things that are commonly assumed wrong.
   A layer of a PMTiles archive is read as tiles in its QGIS colours: a local
   archive travels inside a single HTML file (up to 100 MB with rasters) or
   beside the page in a Folder or Share ZIP (served, as for rasters), an
-  `https://` one stays live; no labels or filter panel on such a layer. A
+  `https://` one stays live; no labels or filter panel on such a layer. Both
+  this and a vector tile layer need an internet connection: the browser loads
+  their tile decoder from unpkg.com. A
   vector tile layer added with a style URL is a live layer drawn in its
   publisher's style, only while it is not restyled in QGIS (a restyled one is
   left out and reported).

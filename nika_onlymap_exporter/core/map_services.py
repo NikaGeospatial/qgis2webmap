@@ -46,7 +46,7 @@ import xml.etree.ElementTree as ET  # nosec B405
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qsl, quote, unquote
+from urllib.parse import parse_qsl, quote, unquote, urlsplit
 
 # Codes that name Web Mercator. A service that offers only an older alias is
 # asked in that alias: the BBOX values are the same metres either way.
@@ -134,6 +134,27 @@ def prepare_url(url: str) -> str:
     if not url.endswith(("?", "&")):
         return url + "&"
     return url
+
+
+def on_https_as_added(address: str, added: str) -> str:
+    """`address`, on `https://` when the capabilities name it on `http://`
+    but the layer was added on `https://` at the same host.
+
+    Such a service (the British Geological Survey's, 2026-11-05) answers its
+    `http://` address with a redirect to `https://`, which QGIS follows. A web
+    page cannot: WebKit refuses a redirect that carries no CORS header, and
+    a page served over `https://` may not ask `http://` at all. So the map
+    asks where the layer was added, which the service answers already.
+    """
+    asked, given = urlsplit(address), urlsplit(added)
+    if (
+        asked.scheme == "http"
+        and given.scheme == "https"
+        and asked.hostname
+        and asked.hostname == given.hostname
+    ):
+        return "https" + address[len("http") :]
+    return address
 
 
 def is_wmts_url(url: str) -> bool:
