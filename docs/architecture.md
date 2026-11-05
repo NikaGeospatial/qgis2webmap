@@ -251,9 +251,11 @@ These exist because the alternative was observed to fail in the incumbent:
    enforced by CI.
 2. **No dependency installers.** Never shell out to a package manager — enforced
    by CI.
-3. **Exports make no network requests beyond the runtime's own telemetry.** One
-   anonymous usage report on load, no `map-id`, and no remote basemap unless
-   explicitly chosen. The exporter stopped emitting `telemetry="off"` in 0.1.3;
+3. **Exports make no network requests beyond the runtime's own telemetry and
+   what the map's own layers need.** One anonymous usage report on load, no
+   `map-id`, no remote basemap unless explicitly chosen, and otherwise only the
+   servers the map's web layers come from (each named in the Fidelity tab and
+   the map's network dependencies). The exporter stopped emitting `telemetry="off"` in 0.1.3;
    `tests/browser/test_exported_map.py` pins the permitted endpoint so a second
    one cannot appear unnoticed.
 4. **Lossless by default.** Gzip shrinks bytes without changing data. Coordinate
