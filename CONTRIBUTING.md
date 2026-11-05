@@ -259,6 +259,12 @@ at a copy with `ONLYMAP_HTML_DATA` if it is not beside your runtime.
 one without re-running every tier — and understand that every tier passing is
 not by itself sufficient.
 
+The pin is written by
+`python scripts/lock_runtime.py /path/to/@nika-js/onlymap /path/to/@loaders.gl/mvt`
+(package roots, not `dist/`). The second package is the vector tile decoder
+worker every vector tile map carries; it must be the loaders.gl version the new
+runtime bundles, which the script reads from the runtime and refuses any other.
+
 **The precedent.** From 0.6.2 to 0.6.13 — twelve releases — the runtime silently
 stopped honouring `dash`: a dashed line rendered pixel-for-pixel identical to a
 solid one. The attribute stayed documented, byte-identical, in the runtime's own
