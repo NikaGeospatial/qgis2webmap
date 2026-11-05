@@ -105,7 +105,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   Reported in the Fidelity tab: labels and the filter
   panel are not exported for such a layer, rule-based styling draws in the
   first rule's symbol, markers QGIS draws itself become circles, and an
-  archive compressed with zstd, which browsers cannot read, is left out.
+  archive compressed with zstd or brotli, which browsers cannot read, is left
+  out.
 - **Vector tile layers export in their publisher's style.** A vector tile
   layer added with a style URL (such as a government base map's `style.json`)
   is drawn on the web map from the same tile service, in that style: its
