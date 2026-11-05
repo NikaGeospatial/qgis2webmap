@@ -156,63 +156,63 @@
       <translation>La page contient {size} de données vectorielles, ce qui peut laisser la carte vide longtemps à l'ouverture, surtout sur un ordinateur sans carte graphique. Les plus lourdes : {layers}. Simplifiez la géométrie de ces couches, ou réglez le cadre sur Image dans Cadres de carte.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="571" />
+      <location filename="../core/fidelity_summary.py" line="573" />
       <source>{n} thing changes</source>
       <translation>{n} élément change</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="571" />
+      <location filename="../core/fidelity_summary.py" line="573" />
       <source>{n} things change</source>
       <translation>{n} éléments changent</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="646" />
-      <location filename="../core/fidelity_summary.py" line="643" />
+      <location filename="../core/fidelity_summary.py" line="648" />
+      <location filename="../core/fidelity_summary.py" line="645" />
       <source>See what changes</source>
       <translation>Voir ce qui change</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="380" />
+      <location filename="../core/fidelity_summary.py" line="382" />
       <source>Nothing to report.</source>
       <translation>Rien à signaler.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="453" />
       <source>{n} layer and the whole map need attention</source>
       <translation>{n} couche et toute la carte demandent votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="453" />
       <source>{n} layers and the whole map need attention</source>
       <translation>{n} couches et toute la carte demandent votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="459" />
       <source>{n} layer needs attention</source>
       <translation>{n} couche demande votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="459" />
       <source>{n} layers need attention</source>
       <translation>{n} couches demandent votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="461" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>{n} needs attention</source>
       <translation>{n} demande votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="461" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>{n} need attention</source>
       <translation>{n} demandent votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="463" />
+      <location filename="../core/fidelity_summary.py" line="465" />
       <source>the whole map needs attention</source>
       <translation>toute la carte demande votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="617" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/cartograph/controller.py" line="1176" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
@@ -220,91 +220,91 @@
       <translation>Pas encore vérifié.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="617" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/fidelity_panel.py" line="268" />
       <location filename="../ui/fidelity_panel.py" line="534" />
       <source>Check now</source>
       <translation>Vérifier maintenant</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="619" />
+      <location filename="../core/fidelity_summary.py" line="621" />
       <location filename="../ui/fidelity_panel.py" line="547" />
       <source>Checking what the export changes...</source>
       <translation>Vérification de ce que l'export modifie...</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="626" />
+      <location filename="../core/fidelity_summary.py" line="628" />
       <source>See why</source>
       <translation>Voir pourquoi</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="630" />
+      <location filename="../core/fidelity_summary.py" line="632" />
       <source>Out of date - something changed since the last check.</source>
       <translation>Obsolète - quelque chose a changé depuis la dernière vérification.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="632" />
+      <location filename="../core/fidelity_summary.py" line="634" />
       <location filename="../ui/fidelity_panel.py" line="606" />
       <source>Check again</source>
       <translation>Vérifier à nouveau</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="639" />
+      <location filename="../core/fidelity_summary.py" line="641" />
       <source>Review problems</source>
       <translation>Examiner les problèmes</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>{n} layer</source>
       <translation>{n} couche</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>{n} layers</source>
       <translation>{n} couches</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>No layers</source>
       <translation>Aucune couche</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="391" />
+      <location filename="../core/fidelity_summary.py" line="393" />
       <source>everything is kept exactly</source>
       <translation>tout est conservé à l'identique</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="420" />
+      <location filename="../core/fidelity_summary.py" line="422" />
       <source>{n} thing cannot be exported</source>
       <translation>{n} élément ne peut pas être exporté</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="420" />
+      <location filename="../core/fidelity_summary.py" line="422" />
       <source>{n} things cannot be exported</source>
       <translation>{n} éléments ne peuvent pas être exportés</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="442" />
+      <location filename="../core/fidelity_summary.py" line="444" />
       <source>{parts} on export.</source>
       <translation>{parts} à l'export.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="624" />
+      <location filename="../core/fidelity_summary.py" line="626" />
       <source>The check failed.</source>
       <translation>La vérification a échoué.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="428" />
+      <location filename="../core/fidelity_summary.py" line="430" />
       <source>{n} layer cannot be exported</source>
       <translation>{n} couche ne peut pas être exportée</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="428" />
+      <location filename="../core/fidelity_summary.py" line="430" />
       <source>{n} layers cannot be exported</source>
       <translation>{n} couches ne peuvent pas être exportées</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="622" />
+      <location filename="../core/fidelity_summary.py" line="624" />
       <source>The check could not finish: {error}</source>
       <translation>La vérification n'a pas pu aboutir : {error}</translation>
     </message>
@@ -5581,7 +5581,7 @@ Ils sont aussi en ligne sur &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2327" />
       <source>Live first loads the features in view from the service in the reader's browser, and shows the copy embedded in the map when the service cannot be reached. Embedded carries the features as they are now, and contacts nothing. Live only carries no copy. Automatic is live first, embedded when the layer's style, labels, popup or filter are worked out from its features, and live only when they are too big to carry.</source>
-      <translation type="unfinished" />
+      <translation>« En direct d'abord » charge les entités de la vue depuis le service, dans le navigateur du lecteur, et affiche la copie intégrée à la carte quand le service est injoignable. « Intégrées » contient les entités telles qu'elles sont maintenant, et ne contacte rien. « En direct seulement » ne contient aucune copie. « Automatique » correspond à en direct d'abord, à intégrées quand le style, les étiquettes, la fenêtre contextuelle ou le filtre de la couche sont calculés à partir de ses entités, et à en direct seulement quand elles sont trop volumineuses pour être intégrées.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2375" />
@@ -6082,22 +6082,22 @@ Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2338" />
       <source>Features: automatic</source>
-      <translation type="unfinished" />
+      <translation>Entités : automatique</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2339" />
       <source>Features: live first</source>
-      <translation type="unfinished" />
+      <translation>Entités : en direct d'abord</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2340" />
       <source>Features: embedded</source>
-      <translation type="unfinished" />
+      <translation>Entités : intégrées</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2341" />
       <source>Features: live only</source>
-      <translation type="unfinished" />
+      <translation>Entités : en direct seulement</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2612" />
@@ -6516,7 +6516,7 @@ Choisissez un emplacement existant ou créez-le d'abord.</translation>
     <message>
       <location filename="../ui/runtime_setup.py" line="273" />
       <source>Downloading the vector tile decoder…</source>
-      <translation type="unfinished" />
+      <translation>Téléchargement du décodeur de tuiles vectorielles…</translation>
     </message>
     <message>
       <location filename="../ui/runtime_setup.py" line="165" />
@@ -6546,7 +6546,7 @@ Choisissez un emplacement existant ou créez-le d'abord.</translation>
     <message>
       <location filename="../ui/runtime_setup.py" line="100" />
       <source>Downloaded with it, under its own licence: {packages}</source>
-      <translation type="unfinished" />
+      <translation>Téléchargé avec lui, sous sa propre licence : {packages}</translation>
     </message>
   </context>
 </TS>

@@ -156,63 +156,63 @@
       <translation>页面包含 {size} 矢量数据，打开时地图可能长时间空白，在没有显卡的电脑上尤其如此。最大的是：{layers}。请简化这些图层的几何，或在地图画框中将画框设为图片。</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="571" />
+      <location filename="../core/fidelity_summary.py" line="573" />
       <source>{n} thing changes</source>
       <translation>{n} 项有变化</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="571" />
+      <location filename="../core/fidelity_summary.py" line="573" />
       <source>{n} things change</source>
       <translation>{n} 项有变化</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="646" />
-      <location filename="../core/fidelity_summary.py" line="643" />
+      <location filename="../core/fidelity_summary.py" line="648" />
+      <location filename="../core/fidelity_summary.py" line="645" />
       <source>See what changes</source>
       <translation>查看变化</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="380" />
+      <location filename="../core/fidelity_summary.py" line="382" />
       <source>Nothing to report.</source>
       <translation>没有需要报告的内容。</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="453" />
       <source>{n} layer and the whole map need attention</source>
       <translation>{n} 个图层和整张地图需要注意</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="453" />
       <source>{n} layers and the whole map need attention</source>
       <translation>{n} 个图层和整张地图需要注意</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="459" />
       <source>{n} layer needs attention</source>
       <translation>{n} 个图层需要注意</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="459" />
       <source>{n} layers need attention</source>
       <translation>{n} 个图层需要注意</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="461" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>{n} needs attention</source>
       <translation>{n} 个需要注意</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="461" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>{n} need attention</source>
       <translation>{n} 个需要注意</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="463" />
+      <location filename="../core/fidelity_summary.py" line="465" />
       <source>the whole map needs attention</source>
       <translation>整张地图需要注意</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="617" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/cartograph/controller.py" line="1176" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
@@ -220,91 +220,91 @@
       <translation>尚未检查。</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="617" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/fidelity_panel.py" line="268" />
       <location filename="../ui/fidelity_panel.py" line="534" />
       <source>Check now</source>
       <translation>立即检查</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="619" />
+      <location filename="../core/fidelity_summary.py" line="621" />
       <location filename="../ui/fidelity_panel.py" line="547" />
       <source>Checking what the export changes...</source>
       <translation>正在检查导出会改变什么...</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="626" />
+      <location filename="../core/fidelity_summary.py" line="628" />
       <source>See why</source>
       <translation>查看原因</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="630" />
+      <location filename="../core/fidelity_summary.py" line="632" />
       <source>Out of date - something changed since the last check.</source>
       <translation>已过期——自上次检查后有内容更改。</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="632" />
+      <location filename="../core/fidelity_summary.py" line="634" />
       <location filename="../ui/fidelity_panel.py" line="606" />
       <source>Check again</source>
       <translation>重新检查</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="639" />
+      <location filename="../core/fidelity_summary.py" line="641" />
       <source>Review problems</source>
       <translation>查看问题</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>{n} layer</source>
       <translation>{n} 个图层</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>{n} layers</source>
       <translation>{n} 个图层</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>No layers</source>
       <translation>没有图层</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="391" />
+      <location filename="../core/fidelity_summary.py" line="393" />
       <source>everything is kept exactly</source>
       <translation>所有内容都完全保留</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="420" />
+      <location filename="../core/fidelity_summary.py" line="422" />
       <source>{n} thing cannot be exported</source>
       <translation>{n} 项无法导出</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="420" />
+      <location filename="../core/fidelity_summary.py" line="422" />
       <source>{n} things cannot be exported</source>
       <translation>{n} 项无法导出</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="442" />
+      <location filename="../core/fidelity_summary.py" line="444" />
       <source>{parts} on export.</source>
       <translation>导出时：{parts}。</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="624" />
+      <location filename="../core/fidelity_summary.py" line="626" />
       <source>The check failed.</source>
       <translation>检查失败。</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="428" />
+      <location filename="../core/fidelity_summary.py" line="430" />
       <source>{n} layer cannot be exported</source>
       <translation>{n} 个图层无法导出</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="428" />
+      <location filename="../core/fidelity_summary.py" line="430" />
       <source>{n} layers cannot be exported</source>
       <translation>{n} 个图层无法导出</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="622" />
+      <location filename="../core/fidelity_summary.py" line="624" />
       <source>The check could not finish: {error}</source>
       <translation>检查未能完成：{error}</translation>
     </message>
@@ -5581,7 +5581,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2327" />
       <source>Live first loads the features in view from the service in the reader's browser, and shows the copy embedded in the map when the service cannot be reached. Embedded carries the features as they are now, and contacts nothing. Live only carries no copy. Automatic is live first, embedded when the layer's style, labels, popup or filter are worked out from its features, and live only when they are too big to carry.</source>
-      <translation type="unfinished" />
+      <translation>“优先实时”在读者的浏览器中从服务加载视图内的要素，服务无法访问时显示地图中嵌入的副本。“嵌入”携带要素的当前状态，不连接任何服务器。“仅实时”不携带副本。“自动”即优先实时；当图层的样式、标注、弹窗或筛选由其要素计算得出时为嵌入；要素太大无法携带时为仅实时。</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2375" />
@@ -6082,22 +6082,22 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2338" />
       <source>Features: automatic</source>
-      <translation type="unfinished" />
+      <translation>要素：自动</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2339" />
       <source>Features: live first</source>
-      <translation type="unfinished" />
+      <translation>要素：优先实时</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2340" />
       <source>Features: embedded</source>
-      <translation type="unfinished" />
+      <translation>要素：嵌入</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2341" />
       <source>Features: live only</source>
-      <translation type="unfinished" />
+      <translation>要素：仅实时</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2612" />
@@ -6516,7 +6516,7 @@ Pick somewhere that exists, or create it first.</source>
     <message>
       <location filename="../ui/runtime_setup.py" line="273" />
       <source>Downloading the vector tile decoder…</source>
-      <translation type="unfinished" />
+      <translation>正在下载矢量瓦片解码器…</translation>
     </message>
     <message>
       <location filename="../ui/runtime_setup.py" line="165" />
@@ -6546,7 +6546,7 @@ Pick somewhere that exists, or create it first.</source>
     <message>
       <location filename="../ui/runtime_setup.py" line="100" />
       <source>Downloaded with it, under its own licence: {packages}</source>
-      <translation type="unfinished" />
+      <translation>随之一同下载，采用其自己的许可证：{packages}</translation>
     </message>
   </context>
 </TS>

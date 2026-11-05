@@ -156,63 +156,63 @@
       <translation>تحمل الصفحة {size} من البيانات المتجهة، وقد تبقى الخريطة فارغة وقتًا طويلًا أثناء فتحها، خصوصًا على جهاز بلا بطاقة رسومات. الأثقل: {layers}. بسّط هندسة هذه الطبقات، أو اضبط الإطار على صورة في إطارات الخريطة.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="571" />
+      <location filename="../core/fidelity_summary.py" line="573" />
       <source>{n} thing changes</source>
       <translation>يتغيّر {n} عنصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="571" />
+      <location filename="../core/fidelity_summary.py" line="573" />
       <source>{n} things change</source>
       <translation>تتغيّر {n} عناصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="646" />
-      <location filename="../core/fidelity_summary.py" line="643" />
+      <location filename="../core/fidelity_summary.py" line="648" />
+      <location filename="../core/fidelity_summary.py" line="645" />
       <source>See what changes</source>
       <translation>عرض ما يتغيّر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="380" />
+      <location filename="../core/fidelity_summary.py" line="382" />
       <source>Nothing to report.</source>
       <translation>لا شيء للإبلاغ عنه.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="453" />
       <source>{n} layer and the whole map need attention</source>
       <translation>تحتاج {n} طبقة والخريطة كاملة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="453" />
       <source>{n} layers and the whole map need attention</source>
       <translation>تحتاج {n} طبقات والخريطة كاملة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="459" />
       <source>{n} layer needs attention</source>
       <translation>تحتاج {n} طبقة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="459" />
       <source>{n} layers need attention</source>
       <translation>تحتاج {n} طبقات إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="461" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>{n} needs attention</source>
       <translation>{n} يحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="461" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>{n} need attention</source>
       <translation>{n} تحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="463" />
+      <location filename="../core/fidelity_summary.py" line="465" />
       <source>the whole map needs attention</source>
       <translation>الخريطة كاملة تحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="617" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/cartograph/controller.py" line="1176" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
@@ -220,91 +220,91 @@
       <translation>لم يُفحص بعد.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="617" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/fidelity_panel.py" line="268" />
       <location filename="../ui/fidelity_panel.py" line="534" />
       <source>Check now</source>
       <translation>افحص الآن</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="619" />
+      <location filename="../core/fidelity_summary.py" line="621" />
       <location filename="../ui/fidelity_panel.py" line="547" />
       <source>Checking what the export changes...</source>
       <translation>جارٍ فحص ما يغيّره التصدير...</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="626" />
+      <location filename="../core/fidelity_summary.py" line="628" />
       <source>See why</source>
       <translation>عرض السبب</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="630" />
+      <location filename="../core/fidelity_summary.py" line="632" />
       <source>Out of date - something changed since the last check.</source>
       <translation>قديم - تغيّر شيء منذ آخر فحص.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="632" />
+      <location filename="../core/fidelity_summary.py" line="634" />
       <location filename="../ui/fidelity_panel.py" line="606" />
       <source>Check again</source>
       <translation>افحص مرة أخرى</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="639" />
+      <location filename="../core/fidelity_summary.py" line="641" />
       <source>Review problems</source>
       <translation>مراجعة المشكلات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>{n} layer</source>
       <translation>{n} طبقة</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>{n} layers</source>
       <translation>{n} طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="383" />
+      <location filename="../core/fidelity_summary.py" line="385" />
       <source>No layers</source>
       <translation>لا طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="391" />
+      <location filename="../core/fidelity_summary.py" line="393" />
       <source>everything is kept exactly</source>
       <translation>كل شيء محفوظ كما هو تمامًا</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="420" />
+      <location filename="../core/fidelity_summary.py" line="422" />
       <source>{n} thing cannot be exported</source>
       <translation>لا يمكن تصدير {n} عنصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="420" />
+      <location filename="../core/fidelity_summary.py" line="422" />
       <source>{n} things cannot be exported</source>
       <translation>لا يمكن تصدير {n} عناصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="442" />
+      <location filename="../core/fidelity_summary.py" line="444" />
       <source>{parts} on export.</source>
       <translation>{parts} عند التصدير.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="624" />
+      <location filename="../core/fidelity_summary.py" line="626" />
       <source>The check failed.</source>
       <translation>فشل الفحص.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="428" />
+      <location filename="../core/fidelity_summary.py" line="430" />
       <source>{n} layer cannot be exported</source>
       <translation>لا يمكن تصدير {n} طبقة</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="428" />
+      <location filename="../core/fidelity_summary.py" line="430" />
       <source>{n} layers cannot be exported</source>
       <translation>لا يمكن تصدير {n} طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="622" />
+      <location filename="../core/fidelity_summary.py" line="624" />
       <source>The check could not finish: {error}</source>
       <translation>تعذّر إكمال الفحص: {error}</translation>
     </message>
@@ -5581,7 +5581,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2327" />
       <source>Live first loads the features in view from the service in the reader's browser, and shows the copy embedded in the map when the service cannot be reached. Embedded carries the features as they are now, and contacts nothing. Live only carries no copy. Automatic is live first, embedded when the layer's style, labels, popup or filter are worked out from its features, and live only when they are too big to carry.</source>
-      <translation type="unfinished" />
+      <translation>«مباشر أولًا» يحمّل المعالم الظاهرة في العرض من الخدمة داخل متصفح القارئ، ويعرض النسخة المضمّنة في الخريطة عندما يتعذر الوصول إلى الخدمة. «مضمّنة» تحمل المعالم كما هي الآن، ولا تتصل بأي جهة. «مباشر فقط» لا يحمل أي نسخة. «تلقائي» يعني مباشر أولًا، ومضمّنة عندما يُحسب نمط الطبقة أو تسمياتها أو نافذتها المنبثقة أو تصفيتها من معالمها، ومباشر فقط عندما تكون المعالم أكبر من أن تُحمل.</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2375" />
@@ -6082,22 +6082,22 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2338" />
       <source>Features: automatic</source>
-      <translation type="unfinished" />
+      <translation>المعالم: تلقائي</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2339" />
       <source>Features: live first</source>
-      <translation type="unfinished" />
+      <translation>المعالم: مباشر أولًا</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2340" />
       <source>Features: embedded</source>
-      <translation type="unfinished" />
+      <translation>المعالم: مضمّنة</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2341" />
       <source>Features: live only</source>
-      <translation type="unfinished" />
+      <translation>المعالم: مباشر فقط</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="2612" />
@@ -6516,7 +6516,7 @@ Pick somewhere that exists, or create it first.</source>
     <message>
       <location filename="../ui/runtime_setup.py" line="273" />
       <source>Downloading the vector tile decoder…</source>
-      <translation type="unfinished" />
+      <translation>جارٍ تنزيل مفكك ترميز المربعات المتجهة…</translation>
     </message>
     <message>
       <location filename="../ui/runtime_setup.py" line="165" />
@@ -6546,7 +6546,7 @@ Pick somewhere that exists, or create it first.</source>
     <message>
       <location filename="../ui/runtime_setup.py" line="100" />
       <source>Downloaded with it, under its own licence: {packages}</source>
-      <translation type="unfinished" />
+      <translation>يُنزَّل معها، بترخيصه الخاص: {packages}</translation>
     </message>
   </context>
 </TS>
