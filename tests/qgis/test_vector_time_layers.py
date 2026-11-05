@@ -44,6 +44,8 @@ MODES = Qgis.VectorTemporalMode
 @pytest.fixture(autouse=True)
 def _qgis(qgis_app):
     """Every test makes layers, which need QGIS and its providers started."""
+
+
 DAY_MS = 86_400_000
 UTC = Qt.TimeSpec.UTC
 LOCAL = Qt.TimeSpec.LocalTime

@@ -49,7 +49,13 @@ notes below are the things that are commonly assumed wrong.
   national grid) stay empty without CORS. A WMS or WMTS layer's legend shows the service's legend
   picture, loaded live. A time-enabled WMS (WMS-T) that follows QGIS's time
   opens at the time QGIS draws, with a time slider over the service's times
-  (a fixed snapshot when that time is not one of them). A
+  (a fixed snapshot when that time is not one of them). A vector layer that
+  follows QGIS's time (Layer Properties > Temporal) gets a time slider too,
+  opening at the time QGIS draws and showing the features QGIS draws for a
+  frame of the temporal controller's length from the slider's time, when its
+  features last equally long (a snapshot of that time otherwise; every
+  feature from Processing or in a cartograph, which have no QGIS map view);
+  it stays embedded. A
   Cloud Optimized GeoTIFF QGIS reads from an `https://` address is a live
   layer only when it is a 3-band colour composite in Web Mercator, compressed
   with DEFLATE, JPEG, WEBP or nothing (not LZW, ZSTD or LERC), on a server

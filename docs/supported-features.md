@@ -22,6 +22,7 @@ Where that line falls differently from the established plugin's is set out in
 | | |
 |---|---|
 | Vector points, lines, polygons | Yes |
+| Vector layers that follow QGIS's time (Layer Properties > Temporal) | Yes, with a **time slider** (play, pause, scrub) in the top-left corner, headed by the layer's name, for a layer whose features each have a time: an instant from a date, date-and-time or text field (with an event duration, or Accumulate features), start and end fields, start and duration fields, or start and end expressions. The map opens at the time QGIS draws, showing the features QGIS draws then, and the slider shows the features QGIS draws for a frame of the temporal controller's length starting at the slider's time - a frame's start included and its end not, a feature's end as the layer's limits say - playing at the controller's frame rate. It moves smoothly rather than frame by frame, spans the times of the layer's features rather than the controller's range, and labels times as QGIS shows them (whatever their time zone, as QGIS compares them); a time within a few minutes of a frame's edge may show in the frame beside it. Times are worked out at export, so the layer stays embedded, its points do not merge into count bubbles, and its labels stay when their features are hidden. Features with no start or no end time, which QGIS draws from or until any time, are hidden. A **snapshot** of the time QGIS draws instead: features lasting differently long, and frames shorter than the map can tell apart (about a second). A layer with a fixed temporal range shows, without a slider, when QGIS draws it at its time, and is switched off otherwise. **Every feature**, as QGIS draws them without a time: a layer QGIS only redraws at each time, and every such layer when the temporal controller is off or the export has no QGIS map view (Processing, a cartograph). Several such layers get a slider each |
 | Layer order and groups, including nested groups | Yes |
 | Layer visibility and opacity | Yes |
 | Scale-dependent visibility | Yes - converted to the matching web zoom levels; the Fidelity tab shows the zooms, and how far they drift towards the edges of a tall map |
@@ -545,7 +546,7 @@ On the **Appearance** tab you can also:
   of your choosing. The description is the abstract from
   *Project Properties → Metadata*; nothing appears if the project has none.
   Corners are shared with the map controls — the layer switcher, filter
-  panels and WMS-T time sliders are top left, the legend top right, the zoom, scale, measure tool and basemap panel bottom
+  panels and time sliders are top left, the legend top right, the zoom, scale, measure tool and basemap panel bottom
   left, and the OnlyMap credit bottom right.
 - **Set the size of the legend and the layer switcher**, a width and a height
   in pixels for each. Left on Auto, a panel is as wide as its contents and at

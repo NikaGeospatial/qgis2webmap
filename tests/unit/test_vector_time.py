@@ -274,7 +274,8 @@ class TestApplyTime:
 
     @pytest.mark.parametrize("accumulate", [False, True])
     def test_a_snapshot_keeps_what_qgis_draws_now(self, accumulate) -> None:
-        """A cartograph frame: no slider, the features of the frame QGIS draws."""
+        """A map with no controls: no slider, the features of the frame QGIS
+        draws."""
         report = FidelityReportBuilder()
         spans = [(B - DAY_MS, B - DAY_MS), (B, B), (B + DAY_MS, B + DAY_MS), None]
         geojson, spec = apply_time(

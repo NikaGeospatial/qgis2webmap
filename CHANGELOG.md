@@ -32,6 +32,24 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   no time, or QGIS knows no list of times, the layer is a fixed snapshot as
   before, and the Fidelity tab says why. A service listing more than 2,000
   times gets a slider over the 2,000 around the time QGIS draws.
+- **A time slider for vector layers that follow QGIS's time** (Layer
+  Properties > Temporal) - point, line and polygon layers with a date, a
+  date and time, or a text date. The map opens at the time QGIS draws and
+  shows the features QGIS draws for that frame; the slider (play, pause and
+  scrub, as a WMS-T's, top left) then shows the features QGIS draws for a
+  frame of the temporal controller's length starting at the slider's time,
+  playing at the controller's frame rate. Every mode that gives features
+  their own time is followed - an instant from a field (with an event
+  duration, or Accumulate features), start and end fields, start and
+  duration fields, and start and end expressions - when the features last
+  equally long; features lasting differently long are a snapshot of the
+  time QGIS draws. A layer with a fixed temporal range opens switched off
+  when QGIS does not draw it now; one QGIS only redraws, and every layer
+  when the temporal controller is off or the export has no QGIS map view
+  (Processing, a cartograph), exports all its features, as QGIS draws them
+  without a time. The slider moves smoothly rather than frame by frame and
+  spans the layer's own times; such a layer stays embedded, its points are
+  not merged into count bubbles, and the Fidelity tab says all of this.
 - **Live features from WFS, OGC API Features and ArcGIS FeatureServer
   layers.** Such a layer now loads live first: the reader's browser asks the
   service for the features in view, and again when the map moves elsewhere,

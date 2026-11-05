@@ -475,9 +475,10 @@ def read_vector_time(
         report.approximated(
             subject,
             "This layer follows QGIS's time, and this export has no QGIS map "
-            "view to read the time from, so every feature is exported, as QGIS "
-            "draws the layer while its temporal controller is off, with no "
-            "time slider. Export from the QGIS2WebMap dialog for one.",
+            "view to read the time from (Processing, a cartograph), so every "
+            "feature is exported, as QGIS draws the layer while its temporal "
+            "controller is off, with no time slider. The QGIS2WebMap dialog's "
+            "web map export gives it one.",
             layer_id,
         )
         return None
