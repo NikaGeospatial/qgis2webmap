@@ -55,6 +55,13 @@
         flex: 1 1 auto;
         min-height: 0;
       }
+      /* The runtime's visually hidden status line has no offset of its own,
+         and WebKit puts it below the map's other children: under the window,
+         where the page scrolled to reach it. */
+      om-map > [data-om-quota-live] {
+        top: 0;
+        left: 0;
+      }
       /* Popup styling deliberately does NOT live here. `om-overlay` renders the
          popup inside a shadow root, which document rules cannot reach, so these
          selectors would match nothing. The stylesheet travels inside the overlay

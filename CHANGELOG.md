@@ -92,6 +92,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `https://`.
 
 ### Fixed
+- In Safari and other WebKit browsers the page no longer scrolls a little
+  past the map when the legend is one the plugin draws itself (a map with a
+  tile or web service layer) and is given a small size or folded at Largest.
+  The runtime's hidden status line sat below the window there.
 - Tile layers whose addresses carry no file extension (ArcGIS tile caches'
   `.../MapServer/tile/{z}/{y}/{x}`, Google-style addresses) and TMS `{-y}`
   addresses now draw; they exported but showed nothing. A WMTS layer with
