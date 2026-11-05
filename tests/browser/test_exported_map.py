@@ -62,12 +62,14 @@ def require_webgl(page):
 
     deck.gl needs one, so without it the map genuinely cannot draw -- but that
     is a fact about the machine, not about the export. Headless Firefox has no
-    bundled software renderer the way Chromium has SwiftShader, so on a box with
-    no GPU it reports `FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS`.
+    bundled software renderer the way Chromium has SwiftShader, so on a box
+    where it finds no EGL (see `browser_type_launch_args`) it reports
+    `FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS`.
 
     Skipping keeps that honest in both directions: this tier stays silent about
     an environment it cannot judge, and still fails loudly on a machine that
-    *can* render, which is what the release matrix runs on.
+    *can* render, which is what the release matrix runs on. With
+    `Q2W_REQUIRE_WEBGL2` set, as CI sets it, the skip is a failure instead.
     """
     if not page.evaluate(WEBGL2_PROBE):
         pytest.skip("no WebGL2 context in this browser/environment")
@@ -1014,10 +1016,18 @@ class TestTheRuntimeHasNoComplaints:
     came out of that gap, so the warning stream itself is now the assertion.
 
     GPU driver chatter is excluded: it is the machine talking, not the map.
+    So is Firefox's deprecation notice for the renderer-name extension, which
+    the runtime's WebGL library asks every browser for: it is Firefox talking
+    about that library, and says nothing about our attributes.
     """
 
-    # Emitted by the driver under software rendering, not by the runtime.
-    IGNORED = ("GL Driver Message", "GPU stall")
+    # Emitted by the driver under software rendering, not by the runtime; the
+    # last by Firefox whenever a page asks for the extension.
+    IGNORED = (
+        "GL Driver Message",
+        "GPU stall",
+        "WEBGL_debug_renderer_info is deprecated in Firefox",
+    )
 
     def test_a_plain_export_warns_about_nothing(
         self, page_with_console_log, exported_map
