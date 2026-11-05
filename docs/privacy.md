@@ -17,9 +17,9 @@ had QGIS installed.
 
 - One anonymous usage report each time the map finishes loading. See below
   for exactly what is in it.
-- No tiles or pictures fetched from a server - unless you choose a basemap or
-  relief, or the map has a live web layer or a popup picture from a web
-  address; see below.
+- No tiles, pictures or features fetched from a server - unless you choose a
+  basemap or relief, or the map has a live web layer or a popup picture from a
+  web address; see below.
 - No fonts, scripts or styles loaded from a CDN - everything is inside the
   file, unless you switch relief on, whose terrain decoder is loaded from
   unpkg.com; see below.
@@ -28,7 +28,7 @@ had QGIS installed.
 You can check this yourself: open an exported map in a browser, open the
 developer tools Network tab, and reload. For a map with none of the web
 content described below, you will see exactly one request, to NIKA's
-telemetry service.
+telemetry service at `om-api.nika.eco`.
 
 ## The one report: usage telemetry
 
@@ -94,7 +94,10 @@ from the publisher when the map opens. A PMTiles archive on your own computer
 is carried with the map and read from it. The script that decodes vector
 tiles - a PMTiles archive's or a vector tile layer's - is carried inside the
 map too, so drawing them contacts no one beyond the layer's own server, and a
-carried archive draws with no connection at all. A WMS or WMTS layer's legend picture is
+carried archive draws with no connection at all. (A runtime
+installed by hand without that script - see
+[installation](installation.md#on-a-computer-with-no-internet-access) - makes
+such a map load it from unpkg.com instead, and the export says so.) A WMS or WMTS layer's legend picture is
 loaded from the service the same way when the map opens. A click on a WMS
 layer that answers clicks (see [supported features](supported-features.md))
 sends that service the position clicked, as a small map around it, to ask
