@@ -37,8 +37,10 @@ map's data or who opened it. Aside from that one report, an exported file
 works with no internet connection, on a machine that has never had QGIS
 installed - unless you add a basemap, relief, live XYZ, WMS, WMTS or vector
 tile layers (and their legend pictures or styles), a Cloud Optimized GeoTIFF or
-PMTiles archive read from a web address, or popup links and web pictures, which
-need the reader to be online.
+PMTiles archive read from a web address, WFS, OGC API Features or ArcGIS
+FeatureServer layers loaded live, or popup links and web pictures, which need
+the reader to be online. A click on a WMS layer asks its service what is
+there, and a coordinate system the map does not carry is looked up at epsg.io.
 Publishing to NIKA hosting and AI-assisted enhancement are separate, explicit
 actions you start yourself — nothing is uploaded automatically.
 
@@ -131,8 +133,11 @@ sources, with single-symbol, categorized, graduated and rule-based styling;
 layer order, groups, visibility, field aliases and hidden fields; labels from a
 field or an expression, popups with links and pictures, and data attribution;
 rasters from disk, PMTiles archives, live XYZ, WMS and WMTS layers, and vector
-tile layers in their publisher's style. Every map ships a legend,
-layer switcher, zoom controls, a scale bar and a measure tool.
+tile layers in their publisher's style; WFS, OGC API Features and ArcGIS
+FeatureServer layers loaded live, with their exported copy as the fallback; and
+a time slider for WMS-T layers and vector layers that follow QGIS's time. Every
+map ships a legend, layer switcher, zoom controls, a scale bar and a measure
+tool.
 
 Anything that will not survive the trip is listed in the **Fidelity** tab
 *before* you export, classified as preserved, approximated, raster-fallback,
