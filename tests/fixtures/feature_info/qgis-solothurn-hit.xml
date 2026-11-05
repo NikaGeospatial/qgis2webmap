@@ -1,0 +1,38 @@
+<GetFeatureInfoResponse>
+    <Layer title="Flurreglemente der Gemeinden (Strukturverbesserungen)" name="ch.so.alw.strukturverbesserungen.gemeinde_flurreglemente"
+        layerinfo="ch.so.alw.strukturverbesserungen.gemeinde_flurreglemente"
+        
+        >
+        <Feature id="92">
+            <HtmlContent inline="1">&lt;table class=&quot;attribute-list&quot;&gt;
+    &lt;tbody&gt;
+        &lt;tr&gt;
+            &lt;td class=&quot;identify-attr-title wrap&quot;&gt;&lt;i&gt;Gemeinde&lt;/i&gt;&lt;/td&gt;
+            &lt;td class=&quot;identify-attr-value wrap&quot;&gt;Solothurn &lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+            &lt;td class=&quot;identify-attr-title wrap&quot;&gt;&lt;i&gt;BFS-Nr&lt;/i&gt;&lt;/td&gt;
+            &lt;td class=&quot;identify-attr-value wrap&quot;&gt;2601&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+            &lt;td class=&quot;identify-attr-title wrap&quot;&gt;&lt;i&gt;Anzahl Flurreglemente&lt;/i&gt;&lt;/td&gt;
+            &lt;td class=&quot;identify-attr-value wrap&quot;&gt;0&lt;/td&gt;
+        &lt;/tr&gt;
+    &lt;/tbody&gt;
+&lt;/table&gt;
+    </HtmlContent>
+            
+            <BoundingBox CRS="EPSG:3857"
+                minx="835930.6243" miny="5974111.4516"
+                maxx="840721.1857" maxy="5978098.6302"
+            />
+            
+            <Attribute name="geometry" value="MultiPolygon (((835934.8684 5976247.7392, 835936.3692 5976251.66, 835934.8684 5976247.7392)))"
+                type="derived" />
+            
+                <Attribute name="Gemeinde" value="Solothurn" attrname="gemeindename" />
+                <Attribute name="BFS-Nr" value="2601" attrname="bfsnr" />
+                <Attribute name="Anzahl Flurreglemente" value="0" attrname="anzahl_flurreglemente" />
+                <Attribute name="Fliurreglemente" value="-" attrname="flurreglemente" />
+        </Feature>
+        </Layer></GetFeatureInfoResponse>

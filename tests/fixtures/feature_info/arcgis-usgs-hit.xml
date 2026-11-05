@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FeatureInfoResponse xmlns="http://www.esri.com/wms" xmlns:esri_wms="http://www.esri.com/wms">
+	<FIELDS OBJECTID="42587" Shape="Polygon" PERMANENT_IDENTIFIER="35541769-cb3b-4496-92d7-7d24852fdf79" SOURCE_FEATUREID="08031" SOURCE_DATASETID="44c18b8f-65d5-4d88-907e-37c222501829" SOURCE_DATADESC="2025 TIGER/Line Shapefile, Current County and Equivalent" SOURCE_ORIGINATOR="U.S. Department of Commerce, U.S. Census Bureau, Geography Division" Data_Security="Unclassified" Distribution_Policy="Public Domain - Free Distribution to Third Parties Via Internet" LOADDATE="9/23/2025" FCode="County" STATE_FIPSCODE="08" STATE_NAME="Colorado" COUNTY_FIPSCODE="031" COUNTY_NAME="Denver" STCO_FIPSCODE="08031" POPULATION="715522" AREASQKM="400.735724" GNIS_ID="198131" GNIS_NAME="Denver County" SHAPE_Length="339358.136144" SHAPE_Area="679002975.390244" GLOBALID="{EEE6309C-5303-4BD9-9506-44AF679C35C9}"/>
+</FeatureInfoResponse>

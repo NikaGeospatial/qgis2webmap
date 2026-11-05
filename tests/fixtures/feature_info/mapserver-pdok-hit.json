@@ -1,0 +1,53 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "id": "gemeentegebied.201985ef-60bd-4c97-a864-e38622a4eb00",
+   "type": "Feature",
+   "bbox": [
+    526402.9578078244,
+    6850544.157808736,
+    568585.7634536078,
+    6878445.792245834
+   ],
+   "geometry": {
+    "type": "MultiPolygon",
+    "coordinates": [
+     [
+      [
+       [
+        0,
+        0
+       ],
+       [
+        1,
+        0
+       ],
+       [
+        1,
+        1
+       ],
+       [
+        0,
+        0
+       ]
+      ]
+     ]
+    ]
+   },
+   "properties": {
+    "code": "0363",
+    "identificatie": "GM0363",
+    "ligtInProvincieCode": "27",
+    "ligtInProvincieNaam": "Noord-Holland",
+    "naam": "Amsterdam"
+   }
+  }
+ ],
+ "crs": {
+  "properties": {
+   "name": "urn:ogc:def:crs:EPSG::3857"
+  },
+  "type": "name"
+ }
+}

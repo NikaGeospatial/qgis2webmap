@@ -26,7 +26,9 @@ legend picture is the one QGIS's legend shows
 (`QgsWmsProvider::getLegendGraphicUrl` and `getLegendGraphicFullURL`): the
 style's LegendURL, or a GetLegendGraphic request, from the same capabilities.
 A WMS-T's times are the time dimension QGIS read from the capabilities
-(`parse_time_dimension`).
+(`parse_time_dimension`). A click on a WMS layer asks the service what is
+there, as QGIS's Identify tool does: a GetFeatureInfo of the same GetMap,
+which the page fills from the click (`wms_feature_info_template`).
 
 Pure Python: no PyQGIS, no Qt, unit-tested in CI.
 
@@ -261,6 +263,12 @@ class WmsCapabilities:
     # Every named layer's styles, inherited ones included, and its title.
     layer_styles: dict[str, tuple[WmsStyle, ...]] = field(default_factory=dict)
     layer_titles: dict[str, str] = field(default_factory=dict)
+    # The service's GetFeatureInfo address and the answers it offers, in the
+    # document's order, and whether each named layer answers it (`queryable`,
+    # inherited from its parents as QGIS inherits it).
+    get_feature_info_url: str | None = None
+    feature_info_formats: tuple[str, ...] = ()
+    layer_queryable: dict[str, bool] = field(default_factory=dict)
 
     def offered_web_mercator(self, layers: Sequence[str]) -> str | None:
         """The Web Mercator code every one of `layers` offers, preferring
@@ -286,15 +294,24 @@ def parse_wms_capabilities(document: bytes | None) -> WmsCapabilities | None:
     # `sld:GetLegendGraphic`; local names make it the same element.
     get_map = _get_address(request, "GetMap")
     get_legend_graphic = _get_address(request, "GetLegendGraphic")
+    get_feature_info = _get_address(request, "GetFeatureInfo")
+    info = _child(request, "GetFeatureInfo") if request is not None else None
+    info_formats = tuple(
+        (element.text or "").strip()
+        for element in (_children(info, "Format") if info is not None else ())
+        if (element.text or "").strip()
+    )
 
     layer_crs: dict[str, frozenset[str]] = {}
     layer_styles: dict[str, tuple[WmsStyle, ...]] = {}
     layer_titles: dict[str, str] = {}
+    layer_queryable: dict[str, bool] = {}
 
     def walk(
         layer: ET.Element,
         inherited: frozenset[str],
         inherited_styles: tuple[WmsStyle, ...],
+        inherited_queryable: bool = False,
     ) -> None:
         codes = set(inherited)
         for name in ("CRS", "SRS"):
@@ -314,12 +331,16 @@ def parse_wms_capabilities(document: bytes | None) -> WmsCapabilities | None:
             # for the MapServer habit of repeating them.
             styles = [kept for kept in styles if kept.name != style.name]
             styles.append(style)
+        # A layer that says nothing answers as its parent does.
+        stated = layer.attrib.get("queryable", "").strip().lower()
+        queryable = stated in ("1", "true") if stated else inherited_queryable
         if name:
             layer_crs[name] = own
             layer_styles[name] = tuple(styles)
             layer_titles[name] = _text(layer, "Title")
+            layer_queryable[name] = queryable
         for child in _children(layer, "Layer"):
-            walk(child, own, tuple(styles))
+            walk(child, own, tuple(styles), queryable)
 
     for layer in _children(capability, "Layer"):
         walk(layer, frozenset(), ())
@@ -330,6 +351,9 @@ def parse_wms_capabilities(document: bytes | None) -> WmsCapabilities | None:
         get_legend_graphic_url=get_legend_graphic,
         layer_styles=layer_styles,
         layer_titles=layer_titles,
+        get_feature_info_url=get_feature_info,
+        feature_info_formats=info_formats,
+        layer_queryable=layer_queryable,
     )
 
 
@@ -432,20 +456,56 @@ def wms_get_map_template(
     the WMS-T `TIME` value QGIS sends, when it sends one, or `TIME_TOKEN`
     for the time a slider steps. `crs` must be one `bbox_token` fills.
     """
+    bbox = _bbox_or_refuse(crs)
+    pairs = _map_request(
+        url, version, "GetMap", layers, styles, image_format, extra, time
+    )
+    crs_key = "SRS" if version.startswith("1.1") else "CRS"
+    pairs += [
+        (crs_key, crs),
+        ("WIDTH", "{width}"),
+        ("HEIGHT", "{height}"),
+        ("BBOX", bbox),
+    ]
+    return _join(_base_address(url), pairs)
+
+
+def _bbox_or_refuse(crs: str) -> str:
     bbox = bbox_token(crs)
     if bbox is None:
         raise ValueError(f"no extent token for {crs}")
-    base, _, query = url.partition("?")
-    reserved = _WMS_RESERVED | {"TIME"} if time is not None else _WMS_RESERVED
+    return bbox
+
+
+def _base_address(url: str) -> str:
+    """`url` without its query."""
+    return url.partition("?")[0]
+
+
+def _map_request(
+    url: str,
+    version: str,
+    request: str,
+    layers: Sequence[str],
+    styles: Sequence[str],
+    image_format: str,
+    extra: Sequence[tuple[str, str]],
+    time: str | None,
+    reserved: frozenset[str] = _WMS_RESERVED,
+) -> list[tuple[str, str]]:
+    """What a GetMap and a GetFeatureInfo share, up to the extent: the
+    address's own parameters, the request, its layers, styles, format and
+    TRANSPARENT, `extra` and `time` (see `wms_get_map_template`)."""
+    query = url.partition("?")[2]
+    reserved = reserved | {"TIME"} if time is not None else reserved
     pairs = [
         (_query_value(key), _query_value(found, safe="/:,"))
         for key, found in _kept_url_parameters(query, reserved)
     ]
-    crs_key = "SRS" if version.startswith("1.1") else "CRS"
     pairs += [
         ("SERVICE", "WMS"),
         ("VERSION", _query_value(version)),
-        ("REQUEST", "GetMap"),
+        ("REQUEST", request),
         ("LAYERS", ",".join(_query_value(name) for name in layers)),
         ("STYLES", ",".join(_query_value(name) for name in styles)),
         ("FORMAT", _query_value(image_format, safe="/")),
@@ -460,13 +520,162 @@ def wms_get_map_template(
     if time is not None:
         written = time if time == TIME_TOKEN else _query_value(time, safe=":/")
         pairs.append(("TIME", written))
+    return pairs
+
+
+# --------------------------------------------------------------------------
+# WMS GetFeatureInfo: what a click on the layer asks
+# --------------------------------------------------------------------------
+
+# The tokens the page's click script fills (`templates/feature-info.html`),
+# beside the extent token of the request's CRS: the size of the small map
+# the click is in the middle of, and the clicked pixel in it.
+CLICK_TOKENS = ("{width}", "{height}", "{i}", "{j}")
+# Extent tokens the page fills itself, from the click: Web Mercator metres,
+# and longitude and latitude in the order the request's version names them.
+_CLICK_BBOX_TOKENS = frozenset({"{bbox-epsg-3857}", "{bbox-epsg-4326}", "{bbox-crs84}"})
+# What QGIS asks for when a source string names no feature count.
+DEFAULT_FEATURE_COUNT = 10
+
+# Parameters a GetFeatureInfo writes on top of a GetMap's.
+_WMS_INFO_RESERVED = _WMS_RESERVED | {
+    "QUERY_LAYERS",
+    "INFO_FORMAT",
+    "FEATURE_COUNT",
+    "I",
+    "J",
+    "X",
+    "Y",
+}
+
+# Answers that list what was found field by field, so a click on nothing
+# shows nothing. JSON first: one shape whatever the server. Then GML and the
+# servers' own XML (QGIS Server's, ArcGIS's). The capabilities documents'
+# own type (`vnd.ogc.wms_xml`) and the exception type are no answer.
+_JSON_FORMAT = re.compile(
+    r"application/((geo|vnd\.geo)\+)?json(\s*;.*)?|application/geojson", re.IGNORECASE
+)
+_XML_FORMAT = re.compile(r".*(gml|xml).*", re.IGNORECASE)
+_NOT_AN_ANSWER = re.compile(r".*(wms_xml|se_xml|se_inimage|se_blank).*", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class FeatureInfoRequest:
+    """The GetMap a layer's tiles are asked with, which a click's
+    GetFeatureInfo repeats: see `wms_get_map_template` for each part."""
+
+    url: str
+    version: str
+    layers: tuple[str, ...]
+    styles: tuple[str, ...]
+    image_format: str
+    crs: str
+    extra: tuple[tuple[str, str], ...] = ()
+    time: str | None = None
+
+
+def feature_info_format(formats: Sequence[str]) -> str | None:
+    """The answer to ask a click for, of the `formats` a service offers, or
+    `None` when it offers none the page can show.
+
+    A structured one first (JSON, then GML or XML), each in the service's
+    own order; then plain text, then HTML, which the page shows as written
+    since it cannot tell an empty one from a hit.
+    """
+    offered = [found.strip() for found in formats if found.strip()]
+    for wanted in (
+        lambda f: bool(_JSON_FORMAT.fullmatch(f)),
+        lambda f: bool(_XML_FORMAT.fullmatch(f)) and not _NOT_AN_ANSWER.fullmatch(f),
+        lambda f: f.lower() == "text/plain",
+        lambda f: f.lower() == "text/html",
+    ):
+        chosen = next((found for found in offered if wanted(found)), None)
+        if chosen is not None:
+            return chosen
+    return None
+
+
+def is_structured_format(info_format: str) -> bool:
+    """Whether an answer in `info_format` lists what was found field by
+    field (JSON, GML or XML), rather than as text or a page."""
+    return info_format.lower() not in ("text/plain", "text/html")
+
+
+def feature_info_crs(
+    capabilities: WmsCapabilities, layers: Sequence[str], crs: str, version: str
+) -> str | None:
+    """The CRS a click asks `layers` in: `crs`, the one their tiles are
+    asked in, when the page can place a click in it (Web Mercator, or
+    longitude and latitude); otherwise longitude and latitude, when every
+    one of `layers` offers them; else `None`.
+
+    The page has no projection of its own to place a click in any other
+    CRS, and a point is the same point in any of them.
+    """
+    if bbox_token(crs) in _CLICK_BBOX_TOKENS:
+        return crs
+    candidates = (
+        ("EPSG:4326",) if version.startswith("1.1") else ("EPSG:4326", "CRS:84")
+    )
+    for candidate in candidates:
+        if layers and all(
+            candidate in {code.upper() for code in capabilities.layer_crs.get(name, ())}
+            for name in layers
+        ):
+            return candidate
+    return None
+
+
+def wms_feature_info_template(
+    url: str,
+    version: str,
+    layers: Sequence[str],
+    styles: Sequence[str],
+    image_format: str,
+    crs: str,
+    query_layers: Sequence[str],
+    info_format: str,
+    feature_count: int = DEFAULT_FEATURE_COUNT,
+    extra: Sequence[tuple[str, str]] = (),
+    time: str | None = None,
+) -> str:
+    """The GetFeatureInfo request QGIS's Identify tool sends for a click, as
+    a template the page fills.
+
+    The GetMap of a small map around the click (`wms_get_map_template`'s
+    parameters, in `crs`, which must be one `feature_info_crs` returns) with
+    the layers asked about, the answer wanted and how many features, and the
+    clicked pixel: `I`/`J` in WMS 1.3.0, `X`/`Y` in 1.1.1. The page fills
+    `CLICK_TOKENS` and the extent token, `{bbox-epsg-4326}` latitude first
+    in a 1.3.0 request as the runtime fills it for a tile.
+    """
+    bbox = _bbox_or_refuse(crs)
+    if bbox not in _CLICK_BBOX_TOKENS:
+        raise ValueError(f"the page cannot place a click in {crs}")
+    pairs = _map_request(
+        url,
+        version,
+        "GetFeatureInfo",
+        layers,
+        styles,
+        image_format,
+        extra,
+        time,
+        reserved=_WMS_INFO_RESERVED,
+    )
+    legacy = version.startswith("1.1")
     pairs += [
-        (crs_key, crs),
+        ("QUERY_LAYERS", ",".join(_query_value(name) for name in query_layers)),
+        ("INFO_FORMAT", _query_value(info_format, safe="/")),
+        ("FEATURE_COUNT", str(feature_count)),
+        ("SRS" if legacy else "CRS", crs),
         ("WIDTH", "{width}"),
         ("HEIGHT", "{height}"),
         ("BBOX", bbox),
+        ("X" if legacy else "I", "{i}"),
+        ("Y" if legacy else "J", "{j}"),
     ]
-    return _join(base, pairs)
+    return _join(_base_address(url), pairs)
 
 
 def _legend_address(capabilities: WmsCapabilities, layer: str, style: str) -> str:

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?><wfs:FeatureCollection xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:dwd="https://www.dwd.de" xmlns:wfs="http://www.opengis.net/wfs" xmlns:gml="http://www.opengis.net/gml" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wfs https://maps.dwd.de/geoserver/schemas/wfs/1.1.0/wfs.xsd https://www.dwd.de https://maps.dwd.de/geoserver/dwd/wfs?service=WFS&amp;version=1.1.0&amp;request=DescribeFeatureType&amp;typeName=dwd%3AWarngebiete_Kreise">
+  <gml:boundedBy>
+    <gml:Envelope srsDimension="2" srsName="EPSG:4326">
+      <gml:lowerCorner>52.0255 11.5191</gml:lowerCorner>
+      <gml:upperCorner>52.2281 11.7567</gml:upperCorner>
+    </gml:Envelope>
+  </gml:boundedBy>
+  <gml:featureMembers>
+    <dwd:Warngebiete_Kreise gml:id="Warngebiete_Kreise.fid--7727ebd6_1a1aa9536a9_-e9b">
+      <gml:boundedBy>
+        <gml:Envelope srsName="EPSG:4326" srsDimension="2">
+          <gml:lowerCorner>52.0255 11.5191</gml:lowerCorner>
+          <gml:upperCorner>52.2281 11.7567</gml:upperCorner>
+        </gml:Envelope>
+      </gml:boundedBy>
+      <dwd:FID>277</dwd:FID>
+      <dwd:MIN_HEIGHT>40</dwd:MIN_HEIGHT>
+      <dwd:MAX_HEIGHT>130</dwd:MAX_HEIGHT>
+      <dwd:WARNCELLID>115003000</dwd:WARNCELLID>
+      <dwd:TYPE>1</dwd:TYPE>
+      <dwd:NAME>Stadt Magdeburg</dwd:NAME>
+      <dwd:KURZNAME>Magdeburg</dwd:KURZNAME>
+      <dwd:CCC>MDX</dwd:CCC>
+      <dwd:BL>ST</dwd:BL>
+      <dwd:STATE>15</dwd:STATE>
+      <dwd:RZ>LZ</dwd:RZ>
+      <dwd:WARNCENTER>205</dwd:WARNCENTER>
+      <dwd:COPYRIGHT>© GeoBasis-DE / BKG 2021 (Daten modifiziert)</dwd:COPYRIGHT>
+      <dwd:SHAPE>
+        <gml:Polygon srsName="EPSG:4326" srsDimension="2">
+          <gml:exterior>
+            <gml:LinearRing>
+              <gml:posList>52.2208 11.6396 52.1972 11.6482 52.2208 11.6396</gml:posList>
+            </gml:LinearRing>
+          </gml:exterior>
+        </gml:Polygon>
+      </dwd:SHAPE>
+    </dwd:Warngebiete_Kreise>
+  </gml:featureMembers>
+</wfs:FeatureCollection>

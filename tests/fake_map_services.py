@@ -11,6 +11,10 @@ serves both, on 127.0.0.1 and a free port, from a thread:
   `target` (offered in EPSG:3857, EPSG:25832 and EPSG:4326), `boundary`
   (the same) and `utm_only` (EPSG:25832 only). An unknown layer gets a
   ServiceException, served with status 200 as real servers do.
+* Clicks: both declare GetFeatureInfo, which `target` and `utm_only` answer
+  (`queryable`) and `boundary` does not. A GetFeatureInfo is answered with
+  the reply set for its QUERY_LAYERS (`set_feature_info`), else with one
+  JSON feature naming them (`feature_info_json`).
 * Legends: both declare GetLegendGraphic, which draws `LEGEND_SIZES[layer]`.
   `target` has the styles `default`, with no LegendURL, and `outlined`,
   whose LegendURL is `legends/outlined.png` (`OUTLINED_LEGEND_SIZE`);
@@ -42,6 +46,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import json
 import math
 import struct
 import threading
@@ -59,6 +64,14 @@ WMS_LAYERS = {"target": ("EPSG:3857", "EPSG:25832", "EPSG:4326")}
 WMS_LAYERS["boundary"] = WMS_LAYERS["target"]
 WMS_LAYERS["utm_only"] = ("EPSG:25832",)
 WMS_TITLES = {"target": "Target area", "boundary": "Boundary", "utm_only": "UTM only"}
+# The layers that answer a click, and the answers the service offers.
+WMS_QUERYABLE = {"target": True, "boundary": False, "utm_only": True}
+FEATURE_INFO_FORMATS = (
+    "text/plain",
+    "application/vnd.ogc.gml",
+    "text/html",
+    "application/json",
+)
 # The (width, height) of each layer's GetLegendGraphic picture, and of the
 # `outlined` style's LegendURL picture.
 LEGEND_SIZES = {"target": (64, 32), "boundary": (48, 600), "utm_only": (40, 20)}
@@ -223,9 +236,34 @@ def _styles(base: str, name: str, xlink: str = "") -> str:
     )
 
 
+def _queryable(name: str) -> str:
+    return "1" if WMS_QUERYABLE[name] else "0"
+
+
+def _feature_info_request(online: str) -> str:
+    return (
+        "<GetFeatureInfo>"
+        + "".join(f"<Format>{found}</Format>" for found in FEATURE_INFO_FORMATS)
+        + f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetFeatureInfo>"
+    )
+
+
+def feature_info_json(query_layers: str) -> bytes:
+    """The answer a click gets by default: one feature, naming the layers it
+    was asked about."""
+    feature = {
+        "type": "Feature",
+        "id": f"{query_layers}.1",
+        "geometry": None,
+        "properties": {"name": f"Found in {query_layers}", "empty": None},
+    }
+    return json.dumps({"type": "FeatureCollection", "features": [feature]}).encode()
+
+
 def wms_capabilities_130(base: str) -> str:
     layers = "".join(
-        f"<Layer queryable='0'><Name>{name}</Name><Title>{WMS_TITLES[name]}</Title>"
+        f"<Layer queryable='{_queryable(name)}'><Name>{name}</Name>"
+        f"<Title>{WMS_TITLES[name]}</Title>"
         + "".join(f"<CRS>{crs}</CRS>" for crs in crs_list)
         + "<EX_GeographicBoundingBox><westBoundLongitude>5</westBoundLongitude>"
         "<eastBoundLongitude>16</eastBoundLongitude><southBoundLatitude>47"
@@ -246,6 +284,7 @@ def wms_capabilities_130(base: str) -> str:
         f"{online}</Get></HTTP></DCPType></GetCapabilities>"
         "<GetMap><Format>image/png</Format><Format>image/jpeg</Format>"
         f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetMap>"
+        f"{_feature_info_request(online)}"
         # 1.3.0 has no GetLegendGraphic of its own; it is the SLD profile's.
         "<sld:GetLegendGraphic><Format>image/png</Format>"
         f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType>"
@@ -260,7 +299,8 @@ _XLINK = "http://www.w3.org/1999/xlink"
 
 def wms_capabilities_111(base: str) -> str:
     layers = "".join(
-        f"<Layer queryable='0'><Name>{name}</Name><Title>{WMS_TITLES[name]}</Title>"
+        f"<Layer queryable='{_queryable(name)}'><Name>{name}</Name>"
+        f"<Title>{WMS_TITLES[name]}</Title>"
         + "".join(f"<SRS>{crs}</SRS>" for crs in crs_list)
         + "<LatLonBoundingBox minx='5' miny='47' maxx='16' maxy='56'/>"
         + _styles(base, name, xlink=f"xmlns:xlink='{_XLINK}' ")
@@ -280,6 +320,7 @@ def wms_capabilities_111(base: str) -> str:
         f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetCapabilities>"
         "<GetMap><Format>image/png</Format>"
         f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetMap>"
+        f"{_feature_info_request(online)}"
         "<GetLegendGraphic><Format>image/png</Format>"
         f"<DCPType><HTTP><Get>{online}</Get></HTTP></DCPType></GetLegendGraphic>"
         "</Request><Exception><Format>application/vnd.ogc.se_xml</Format>"
@@ -394,6 +435,16 @@ class _Handler(BaseHTTPRequestHandler):
             if request == "getlegendgraphic":
                 self._get_legend_graphic(params)
                 return
+            if request == "getfeatureinfo":
+                query_layers = params.get("QUERY_LAYERS", "")
+                with self.server.lock:
+                    reply = self.server.feature_info.get(query_layers)
+                body, content_type = reply or (
+                    feature_info_json(query_layers),
+                    "application/json",
+                )
+                self._send(200, content_type, body)
+                return
         if service == "legends" and segments[2:] == ["outlined.png"]:
             width, height = OUTLINED_LEGEND_SIZE
             self._send(200, "image/png", png(width, height, lambda c, r: LEGEND_RGBA))
@@ -479,6 +530,7 @@ class _Server(ThreadingHTTPServer):
     base_url: str
     lock: threading.Lock
     requests: list[dict[str, object]]
+    feature_info: dict[str, tuple[bytes, str]]
 
 
 class FakeMapServices:
@@ -489,6 +541,7 @@ class FakeMapServices:
         self._server.base_url = f"http://127.0.0.1:{self._server.server_port}"
         self._server.lock = threading.Lock()
         self._server.requests = []
+        self._server.feature_info = {}
         self._thread = threading.Thread(
             target=self._server.serve_forever, name="fake-map-services", daemon=True
         )
@@ -506,6 +559,17 @@ class FakeMapServices:
     def requests(self) -> list[dict[str, object]]:
         with self._server.lock:
             return list(self._server.requests)
+
+    def set_feature_info(
+        self, query_layers: str, body: bytes | None, content_type: str = ""
+    ) -> None:
+        """Answer a click asking about `query_layers` with `body`, sent as
+        `content_type`; `None` goes back to the default answer."""
+        with self._server.lock:
+            if body is None:
+                self._server.feature_info.pop(query_layers, None)
+            else:
+                self._server.feature_info[query_layers] = (body, content_type)
 
     def close(self) -> None:
         self._server.shutdown()

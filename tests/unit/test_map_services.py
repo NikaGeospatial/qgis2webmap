@@ -31,6 +31,8 @@ from nika_onlymap_exporter.core.map_services import (
     WmtsTiles,
     bbox_token,
     capabilities_url,
+    feature_info_crs,
+    feature_info_format,
     is_image_tile_template,
     parse_tile_dimensions,
     parse_time_dimension,
@@ -40,6 +42,7 @@ from nika_onlymap_exporter.core.map_services import (
     source_pairs,
     values,
     web_mercator_code,
+    wms_feature_info_template,
     wms_get_map_template,
     wms_legend_url,
     wms_legend_urls,
@@ -889,3 +892,285 @@ class TestARealNationalWmts:
         )
         assert isinstance(tiles, WmtsTiles)
         assert tiles.tile_matrix_set is not None
+
+
+# --------------------------------------------------------------------------
+# GetFeatureInfo: what a click asks
+# --------------------------------------------------------------------------
+
+FEATURE_INFO = Path(__file__).resolve().parents[1] / "fixtures" / "feature_info"
+
+
+def _capabilities(name: str):
+    parsed = parse_wms_capabilities((FEATURE_INFO / name).read_bytes())
+    assert parsed is not None
+    return parsed
+
+
+def _params(url: str) -> dict[str, str]:
+    return dict(parse_qsl(url.partition("?")[2], keep_blank_values=True))
+
+
+# Each real service's capabilities, the layer asked, and what the request
+# sent to it on 2026-11-05 carried (tests/fixtures/README.md), its BBOX the
+# one asked for the recorded hit.
+REAL_SERVICES = [
+    pytest.param(
+        "geoserver-dwd-capabilities.xml",
+        "1.3.0",
+        "EPSG:4326",
+        "Warngebiete_Kreise",
+        "https://maps.dwd.de/geoserver/dwd/ows",
+        {"SERVICE": "WMS", "CRS": "EPSG:4326", "I": "50", "J": "50"},
+        "application/json",
+        "52.0795,11.5695,52.1805,11.6705",
+        id="geoserver",
+    ),
+    pytest.param(
+        "mapserver-pdok-capabilities.xml",
+        "1.3.0",
+        "EPSG:3857",
+        "Gemeentegebied",
+        "https://service.pdok.nl/kadaster/brk-bestuurlijke-gebieden/wms/v1_0",
+        {"CRS": "EPSG:3857", "I": "50", "J": "50"},
+        "application/json",
+        "544960.5,6866799.7,545970.5,6867809.7",
+        id="mapserver",
+    ),
+    pytest.param(
+        "arcgis-usgs-capabilities.xml",
+        "1.1.1",
+        "EPSG:4326",
+        "19",
+        "https://carto.nationalmap.gov:443/arcgis/services/govunits/MapServer/WMSServer",
+        {"SRS": "EPSG:4326", "X": "50", "Y": "50"},
+        "application/geo+json",
+        "-105.0405,39.6895,-104.9395,39.7905",
+        id="arcgis",
+    ),
+    pytest.param(
+        "qgis-solothurn-capabilities.xml",
+        "1.3.0",
+        "EPSG:3857",
+        "ch.so.alw.strukturverbesserungen.gemeinde_flurreglemente",
+        "https://geo.so.ch/api/v1/featureinfo/somap",
+        {"CRS": "EPSG:3857", "I": "50", "J": "50"},
+        "text/xml",
+        "838772.4,5977000.0,839277.4,5977505.0",
+        id="qgis-server",
+    ),
+]
+
+
+class TestFeatureInfo:
+    @pytest.mark.parametrize(
+        ("name", "version", "crs", "layer", "address", "sent", "info_format", "bbox"),
+        REAL_SERVICES,
+    )
+    def test_a_real_service_is_asked_as_it_was_asked(
+        self, name, version, crs, layer, address, sent, info_format, bbox
+    ) -> None:
+        """The request built from each real service's capabilities, filled with
+        the box asked on the day, is the one whose answer is recorded: at the
+        GetFeatureInfo address the capabilities give (Solothurn's is not its
+        GetMap's), for the answer the service lists that the popup reads best."""
+        parsed = _capabilities(name)
+        assert parsed.layer_queryable[layer] is True
+        chosen = feature_info_format(parsed.feature_info_formats)
+        assert chosen == info_format
+        assert parsed.get_feature_info_url is not None
+        assert feature_info_crs(parsed, [layer], crs, version) == crs
+        template = wms_feature_info_template(
+            prepare_url(parsed.get_feature_info_url).rstrip("?&"),
+            version,
+            [layer],
+            [""],
+            "image/png",
+            crs,
+            [layer],
+            chosen,
+        )
+        filled = (
+            template.replace(bbox_token(crs) or "", bbox)
+            .replace("{width}", "101")
+            .replace("{height}", "101")
+            .replace("{i}", "50")
+            .replace("{j}", "50")
+        )
+        assert filled.partition("?")[0] == address
+        params = _params(filled)
+        assert params == {
+            **params,
+            **sent,
+            "VERSION": version,
+            "REQUEST": "GetFeatureInfo",
+            "LAYERS": layer,
+            "QUERY_LAYERS": layer,
+            "STYLES": "",
+            "FORMAT": "image/png",
+            "INFO_FORMAT": info_format,
+            "FEATURE_COUNT": "10",
+            "WIDTH": "101",
+            "HEIGHT": "101",
+            "BBOX": bbox,
+        }
+
+    def test_a_layer_in_a_group_that_answers_nothing_still_answers(self) -> None:
+        """Solothurn's: `queryable` is the layer's own, and inherited only
+        where a layer says nothing."""
+        parsed = _capabilities("qgis-solothurn-capabilities.xml")
+        assert parsed.layer_queryable["ch.so.alw.strukturverbesserungen"] is False
+        assert parsed.layer_queryable["ch.so.agi.grundbuchplan_oereb"] is False
+        assert parsed.layer_queryable["somap"] is True
+        document = (
+            "<WMS_Capabilities version='1.3.0' xmlns='http://www.opengis.net/wms'>"
+            "<Capability><Layer queryable='1'><Name>root</Name>"
+            "<Layer><Name>says_nothing</Name></Layer>"
+            "<Layer queryable='0'><Name>off</Name>"
+            "<Layer><Name>off_child</Name></Layer></Layer>"
+            "</Layer><Layer><Name>no_root</Name></Layer>"
+            "</Capability></WMS_Capabilities>"
+        )
+        parsed = parse_wms_capabilities(document.encode())
+        assert parsed is not None
+        assert parsed.layer_queryable == {
+            "root": True,
+            "says_nothing": True,
+            "off": False,
+            "off_child": False,
+            "no_root": False,
+        }
+        assert parsed.get_feature_info_url is None
+        assert parsed.feature_info_formats == ()
+
+    @pytest.mark.parametrize(
+        ("formats", "chosen"),
+        [
+            # GeoServer's list: JSON, wherever it is listed.
+            (
+                [
+                    "text/plain",
+                    "application/vnd.ogc.gml",
+                    "text/html",
+                    "application/json",
+                ],
+                "application/json",
+            ),
+            (
+                ["application/vnd.esri.wms_raw_xml", "application/geo+json"],
+                "application/geo+json",
+            ),
+            (
+                ["application/json; subtype=geojson"],
+                "application/json; subtype=geojson",
+            ),
+            # Then GML or the server's own XML, in the service's order.
+            (
+                ["text/html", "text/xml; subtype=gml/3.1.1", "application/vnd.ogc.gml"],
+                "text/xml; subtype=gml/3.1.1",
+            ),
+            (
+                ["text/plain", "application/vnd.esri.wms_raw_xml"],
+                "application/vnd.esri.wms_raw_xml",
+            ),
+            # Then text, then a page.
+            (["text/html", "text/plain"], "text/plain"),
+            (["text/html"], "text/html"),
+            # The capabilities' own type and exceptions are no answer.
+            (["application/vnd.ogc.wms_xml", "application/vnd.ogc.se_xml"], None),
+            (["text/javascript", "image/png"], None),
+            ([], None),
+        ],
+    )
+    def test_the_answer_asked_for(self, formats, chosen) -> None:
+        assert feature_info_format(formats) == chosen
+
+    def test_130_names_the_pixel_i_j_and_111_x_y(self) -> None:
+        common = (["boundary", "target"], ["", "outlined"], "image/png")
+        new = wms_feature_info_template(
+            BASE, "1.3.0", *common, "EPSG:3857", ["target"], "application/geo+json", 7
+        )
+        old = wms_feature_info_template(
+            BASE, "1.1.1", *common, "EPSG:4326", ["target"], "text/plain"
+        )
+        assert new == (
+            BASE + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo"
+            "&LAYERS=boundary,target&STYLES=,outlined&FORMAT=image/png"
+            "&TRANSPARENT=TRUE&QUERY_LAYERS=target"
+            "&INFO_FORMAT=application/geo%2Bjson&FEATURE_COUNT=7&CRS=EPSG:3857"
+            "&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-3857}&I={i}&J={j}"
+        )
+        assert old.endswith(
+            "&QUERY_LAYERS=target&INFO_FORMAT=text/plain&FEATURE_COUNT=10"
+            "&SRS=EPSG:4326&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-4326}"
+            "&X={i}&Y={j}"
+        )
+        assert "CRS=" not in old and "&I=" not in old
+
+    def test_the_getmap_it_repeats_keeps_its_own_parts(self) -> None:
+        """The service's own parameters, FILTER and a WMS-T's time, as the
+        layer's GetMap carries them; ours replace any the address names."""
+        template = wms_feature_info_template(
+            BASE + "?map=/srv/a.map&QUERY_LAYERS=x&info_format=text/html",
+            "1.3.0",
+            ["target"],
+            [""],
+            "image/jpeg",
+            "CRS:84",
+            ["target"],
+            "application/json",
+            extra=[("FILTER", "(a)")],
+            time=TIME_TOKEN,
+        )
+        assert template.startswith(BASE + "?map=/srv/a.map&SERVICE=WMS&")
+        params = _params(template)
+        assert params["QUERY_LAYERS"] == "target"
+        assert params["INFO_FORMAT"] == "application/json"
+        assert "info_format" not in params
+        assert "TRANSPARENT" not in params
+        assert (params["FILTER"], params["TIME"]) == ("(a)", TIME_TOKEN)
+        assert (params["CRS"], params["BBOX"]) == ("CRS:84", "{bbox-crs84}")
+
+    def test_a_click_is_asked_in_the_tiles_crs_or_in_degrees(self) -> None:
+        parsed = parse_wms_capabilities(wms_capabilities_130(BASE).encode())
+        assert parsed is not None
+        for crs in ("EPSG:3857", "EPSG:900913", "EPSG:4326", "CRS:84"):
+            assert feature_info_crs(parsed, ["target"], crs, "1.3.0") == crs
+        # Tiles warped from EPSG:25832: the same point, in longitude and latitude.
+        assert feature_info_crs(parsed, ["target"], "EPSG:25832", "1.3.0") == (
+            "EPSG:4326"
+        )
+        assert feature_info_crs(parsed, ["utm_only"], "EPSG:25832", "1.3.0") is None
+        assert (
+            feature_info_crs(parsed, ["target", "utm_only"], "EPSG:25832", "1.3.0")
+            is None
+        )
+        only_crs84 = parse_wms_capabilities(
+            b"<WMS_Capabilities version='1.3.0'><Capability><Layer><Name>a</Name>"
+            b"<CRS>EPSG:2056</CRS><CRS>CRS:84</CRS></Layer></Capability>"
+            b"</WMS_Capabilities>"
+        )
+        assert only_crs84 is not None
+        assert feature_info_crs(only_crs84, ["a"], "EPSG:2056", "1.3.0") == "CRS:84"
+        # WMS 1.1.1 has no CRS:84.
+        assert feature_info_crs(only_crs84, ["a"], "EPSG:2056", "1.1.1") is None
+
+    def test_a_crs_the_page_cannot_place_a_click_in_is_refused(self) -> None:
+        with pytest.raises(ValueError):
+            wms_feature_info_template(
+                BASE, "1.3.0", ["a"], [""], "image/png", "EPSG:25832", ["a"], "text/xml"
+            )
+
+    def test_the_fake_service_answers_as_its_capabilities_say(self) -> None:
+        for document in (wms_capabilities_130(BASE), wms_capabilities_111(BASE)):
+            parsed = parse_wms_capabilities(document.encode())
+            assert parsed is not None
+            assert parsed.get_feature_info_url == BASE + "?"
+            assert parsed.layer_queryable == {
+                "target": True,
+                "boundary": False,
+                "utm_only": True,
+            }
+            assert feature_info_format(parsed.feature_info_formats) == (
+                "application/json"
+            )
