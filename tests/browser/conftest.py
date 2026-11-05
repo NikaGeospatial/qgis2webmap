@@ -14,9 +14,15 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import faulthandler
+import os
+import sys
+import threading
 
 import pytest
+from _pytest.faulthandler import fault_handler_stderr_fd_key
 
 from nika_onlymap_exporter.core.export_ir import (
     Color,
@@ -76,19 +82,106 @@ def browser_type_launch_args(browser_type_launch_args, browser_name):
     export -- left unset, this tier reports a WebGL failure on every run and the
     signal that matters gets lost in it.
 
+    The prefs alone are not enough: with no window, Firefox has no GLX to ask
+    and gives up (`FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS`) unless it is told
+    to go through EGL, which Mesa answers with a software context. Running it
+    headed under Xvfb instead also draws, but there `set_viewport_size` never
+    returns.
+
     Chromium and WebKit need nothing here.
     """
     if browser_name != "firefox":
         return browser_type_launch_args
 
+    env = {**os.environ, **browser_type_launch_args.get("env", {})}
+    env.setdefault("MOZ_WEBGL_FORCE_EGL", "1")
     return {
         **browser_type_launch_args,
+        "env": env,
         "firefox_user_prefs": {
             "webgl.force-enabled": True,
             "webgl.disabled": False,
             "gfx.webrender.all": True,
         },
     }
+
+
+# The reason every drawn-map test skips with when the browser has no WebGL2.
+NO_WEBGL2 = "no WebGL2 context in this browser/environment"
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Fail, not skip, a test that needs WebGL2 where `Q2W_REQUIRE_WEBGL2` is set.
+
+    Skipping is right on a machine that cannot draw, and wrong on one that is
+    meant to: CI sets the variable, so a runner that loses WebGL2 turns the
+    job red instead of passing every drawn-map test by skipping it.
+    """
+    report = yield
+    if (
+        report.skipped
+        and os.environ.get("Q2W_REQUIRE_WEBGL2")
+        and NO_WEBGL2 in str(report.longrepr)
+    ):
+        report.outcome = "failed"
+        report.longrepr = f"{NO_WEBGL2}, and Q2W_REQUIRE_WEBGL2 says this run must draw"
+    return report
+
+
+# How long one browser test may run. Playwright bounds its waits, but not an
+# `evaluate` whose promise never settles, nor `set_viewport_size`: either one
+# blocks for ever.
+TEST_LIMIT_S = 180
+# How long a test whose pages were closed may take to fail before the whole
+# run is stopped.
+STOP_AFTER_S = 60
+
+
+@pytest.fixture(autouse=True)
+def fail_a_test_left_hanging(request):
+    """Close a hanging test's pages, and stop the run if even that does not help.
+
+    A hang holds both machine-wide test slots until someone kills the run. At
+    `TEST_LIMIT_S` the browser's contexts are closed, which ends whatever
+    Playwright call is waiting: the test fails, naming the limit, and the rest
+    of the run carries on. A test still running `STOP_AFTER_S` later is stuck
+    outside the browser, so the process exits with every thread's traceback.
+    """
+    browser = (
+        request.getfixturevalue("browser")
+        if "browser" in request.fixturenames
+        else None
+    )
+    closed = threading.Event()
+
+    def close_pages() -> None:
+        closed.set()
+        if browser is None:
+            return
+        # Playwright's sync objects belong to the test's thread; the close is
+        # handed to the event loop that thread is waiting on.
+        impl = browser._impl_obj
+        for context in impl.contexts:
+            asyncio.run_coroutine_threadsafe(context.close(), impl._loop)
+
+    timer = threading.Timer(TEST_LIMIT_S, close_pages)
+    timer.daemon = True
+    timer.start()
+    # Replaces pytest's own `faulthandler_timeout` dump for this test, and
+    # writes where that one does.
+    stderr = request.config.stash.get(fault_handler_stderr_fd_key, sys.__stderr__)
+    faulthandler.dump_traceback_later(
+        TEST_LIMIT_S + STOP_AFTER_S, exit=True, file=stderr
+    )
+    yield
+    faulthandler.cancel_dump_traceback_later()
+    timer.cancel()
+    if closed.is_set():
+        pytest.fail(
+            f"the test ran over {TEST_LIMIT_S} s, so its pages were closed",
+            pytrace=False,
+        )
 
 
 @pytest.fixture(scope="session")

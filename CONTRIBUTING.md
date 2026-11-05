@@ -299,9 +299,21 @@ Chrome and Edge are both Chromium: `--browser chromium` covers the engine, and
 `--browser-channel msedge` is for the branded run in the release matrix.
 
 Tests that need a rendered map skip where the browser cannot create a WebGL2
-context. Headless Firefox has no bundled software renderer (Chromium has
-SwiftShader), so on a machine with no GPU it skips one check rather than
-reporting a failure the export did not cause.
+context, rather than report a failure the export did not cause. Set
+`Q2W_REQUIRE_WEBGL2=1` to fail them instead, as CI does: a run that is meant
+to draw then cannot pass by skipping.
+
+Firefox gets WebGL2 headless through EGL (`tests/browser/conftest.py` sets
+`MOZ_WEBGL_FORCE_EGL=1`), so it needs Mesa's EGL and a driver - on Ubuntu
+`libegl1 libegl-mesa0 libgl1-mesa-dri`, which Mesa answers with llvmpipe on a
+machine with no GPU. Run it headless: headed under Xvfb it draws too, but
+`page.set_viewport_size` never returns there, and a dozen test files call it.
+
+Each browser test has 180 s (`TEST_LIMIT_S`). Past that its pages are closed,
+which ends whatever Playwright call it waits on, and it fails; a test still
+running a minute later is stuck outside the browser, and the run stops with
+every thread's traceback. Playwright bounds its own waits, but not an
+`evaluate` whose promise never settles.
 
 > **NixOS note.** Playwright's downloaded browsers will not run — they are not
 > patched for the Nix dynamic linker, and fail with exit code 127. Use the
@@ -313,6 +325,15 @@ reporting a failure the export did not cause.
 >
 > The nixpkgs `playwright-driver` version must match the `playwright` Python
 > package, or it will not find the browser it expects.
+>
+> Firefox finds no EGL on NixOS by itself. For a Firefox run, point it at
+> libglvnd and the system's Mesa:
+>
+> ```bash
+> export LD_LIBRARY_PATH=$(nix build --no-link --print-out-paths nixpkgs#libglvnd)/lib:/run/opengl-driver/lib
+> export __EGL_VENDOR_LIBRARY_DIRS=/run/opengl-driver/share/glvnd/egl_vendor.d
+> pytest tests/browser --browser firefox
+> ```
 
 ## Previewing the docs site
 

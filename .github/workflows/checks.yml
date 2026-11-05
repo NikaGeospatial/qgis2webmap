@@ -444,17 +444,24 @@ jobs:
         run: playwright install --with-deps ${{ matrix.browser }}
       - if: steps.browsers.outputs.cache-hit == 'true'
         run: playwright install-deps ${{ matrix.browser }}
+      # Headless Firefox draws through EGL (tests/browser/conftest.py), which
+      # Playwright's Firefox dependencies do not include; Mesa answers it
+      # with llvmpipe on a runner with no GPU.
+      - if: matrix.browser == 'firefox'
+        run: sudo apt-get install -y --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri
       - name: Fetch the pinned OnlyMap runtime
         run: |
           echo "ONLYMAP_RUNTIME_DIR=$(python scripts/fetch_runtime.py)" >> "$GITHUB_ENV"
-      # `-rs` keeps skips visible. Firefox skips the WebGL2 tests where the
-      # runner has no WebGL2; that is an environment limit, not a pass.
+      # `-rs` keeps skips visible. Q2W_REQUIRE_WEBGL2 fails a drawn-map test
+      # that finds no WebGL2 instead of skipping it, so a runner that loses
+      # WebGL2 turns the job red rather than passing it untested.
       - run: python -m pytest tests/browser -q -rs
              --browser ${{ matrix.browser }}
              --durations=25 --junitxml=reports/browser-${{ matrix.browser }}.xml
              -o junit_duration_report=total
         env:
           PYTHONPATH: ${{ github.workspace }}
+          Q2W_REQUIRE_WEBGL2: "1"
           CARTOGRAPH_FIXTURES_DIR: ${{ github.workspace }}/cartograph-fixtures
           GROUND_SIZE_FIXTURES_DIR: ${{ github.workspace }}/ground-size-fixtures
           LEGEND_FIT_FIXTURES_DIR: ${{ github.workspace }}/legend-fit-fixtures
