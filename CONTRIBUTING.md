@@ -12,7 +12,7 @@
    **One deliberate exception: the OnlyMap runtime.** It cannot ship with the
    plugin. QGIS requires that "all code included in any plugin should be made
    clearly and easily available in source form" and refuses plugins carrying
-   binaries; the runtime is a 5.7 MB minified build of a closed-source library,
+   binaries; the runtime is a 9.4 MB minified build of a closed-source library,
    so putting it in the zip would ask plugins.qgis.org to redistribute
    unreviewable proprietary code. It is therefore downloaded once per machine,
    under these conditions:
@@ -24,7 +24,9 @@
    - It goes through QGIS's own network stack, so a user's configured proxy
      applies.
    - Nothing else may use this exception. A new dependency is a design problem,
-     not a download.
+     not a download. The one open-source file that rides along is the vector
+     tile decoder worker the runtime starts (`workers` in the lock), fetched
+     from its own npm package in the same download and verified the same way.
 3. **Never write a *silently* broken artifact.** Anything that will not survive
    the export must appear in the fidelity report before the user exports, and
    the artifact itself must explain any gap to whoever opens it. Informed
@@ -38,8 +40,10 @@
    in 0.1.3; `tests/browser/test_exported_map.py` pins the permitted endpoint so
    a second one cannot appear unnoticed, and `docs/privacy.md` says what a
    report contains. Everything else about the *exported map* still holds with
-   the cable unplugged. Exporting is also local — the plugin's only other
-   network request in its whole life is the one-time runtime download in rule 2.
+   the cable unplugged. Exporting is also local, beyond reading a layer QGIS
+   itself reads from the web — the plugin's only other network requests are the
+   one-time runtime download in rule 2 and the language packs, fetched from the
+   GitHub release only when someone chooses a language.
 
 ## Architecture
 
