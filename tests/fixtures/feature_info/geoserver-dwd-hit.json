@@ -1,0 +1,70 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "Warngebiete_Kreise.fid--7727ebd6_1a1aa95061f_78a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       0,
+       0
+      ]
+     ]
+    ]
+   },
+   "geometry_name": "SHAPE",
+   "properties": {
+    "FID": 277,
+    "MIN_HEIGHT": 40,
+    "MAX_HEIGHT": 130,
+    "WARNCELLID": 115003000,
+    "TYPE": 1,
+    "NAME": "Stadt Magdeburg",
+    "KURZNAME": "Magdeburg",
+    "CCC": "MDX",
+    "BL": "ST",
+    "STATE": 15,
+    "RZ": "LZ",
+    "WARNCENTER": 205,
+    "ZUSATZ": null,
+    "COPYRIGHT": "© GeoBasis-DE / BKG 2021 (Daten modifiziert)"
+   },
+   "bbox": [
+    11.5191,
+    52.0255,
+    11.7567,
+    52.2281
+   ]
+  }
+ ],
+ "totalFeatures": "unknown",
+ "numberReturned": 1,
+ "timeStamp": "2026-11-05T07:21:07.428Z",
+ "crs": {
+  "type": "name",
+  "properties": {
+   "name": "urn:ogc:def:crs:EPSG::4326"
+  }
+ },
+ "bbox": [
+  11.5191,
+  52.0255,
+  11.7567,
+  52.2281
+ ]
+}

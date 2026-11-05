@@ -82,6 +82,14 @@ def _read(layer, map_time=None):
     return read_layer(layer, report, map_time=map_time), report
 
 
+def _refused(report) -> bool:
+    """Whether the layer itself was left out, whatever its clicks do."""
+    return any(
+        item.status is FidelityStatus.UNSUPPORTED and item.subject.startswith("Layer ")
+        for item in report.items
+    )
+
+
 def _rows(report, status: FidelityStatus) -> str:
     return " ".join(item.detail for item in report.items if item.status is status)
 
@@ -147,7 +155,7 @@ class TestWms:
         assert "in EPSG:25832, as QGIS does, and warps each picture" in row
         # A CRS the runtime carries: no lookup for the reader's browser.
         assert "epsg.io" not in row
-        assert not _rows(report, FidelityStatus.UNSUPPORTED)
+        assert not _refused(report)
 
     def test_a_crs_the_runtime_must_look_up_says_so(self, qgis_app) -> None:
         exported, report = _read(_wms(OFFLINE, crs="EPSG:3067"))
@@ -169,7 +177,7 @@ class TestWms:
         assert exported.tiles.url.endswith(
             "&CRS=EPSG:25832&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-25832}"
         )
-        assert not _rows(report, FidelityStatus.UNSUPPORTED)
+        assert not _refused(report)
 
     def test_a_crs_the_map_cannot_name_is_refused(self, qgis_app) -> None:
         exported, report = _read(_wms(OFFLINE, crs="ESRI:54009"))
@@ -623,6 +631,12 @@ class TestCartographLegend:
         report = self._report(project, services, legend_hides_it=True)
         assert not [i for i in report.items if i.subject == "Legend 'WMS'"]
 
+    def test_a_frame_is_a_picture_no_click_asks(self, project, services) -> None:
+        """The web map's WMS answers clicks; a cartograph's frame of it does not,
+        so the report says nothing about clicks."""
+        report = self._report(project, services)
+        assert not [i for i in report.items if i.subject == "Clicks on 'WMS'"]
+
 
 YEAR_EXTENT = (
     "&type=wmst&timeDimensionExtent=2020-01-01T00:00:00Z/2020-12-31T00:00:00Z/P1D"
@@ -662,6 +676,147 @@ def _qgis_time(services, layer, map_time) -> str | None:
         r for r in services.requests[before:] if r["params"].get("REQUEST") == "GetMap"
     ]
     return get_map["params"].get("TIME")
+
+
+def _qgis_identify(services, layer) -> list[dict[str, str]]:
+    """The GetFeatureInfo requests QGIS's own Identify sends for a click on
+    `layer` asking for features: the ground truth, from what reached the
+    service."""
+    rectangle = qgis_core.QgsRectangle(*TARGET)
+    before = len(services.requests)
+    layer.dataProvider().identify(
+        rectangle.center(),
+        qgis_core.Qgis.RasterIdentifyFormat.Feature,
+        rectangle,
+        101,
+        101,
+    )
+    return [
+        r["params"]
+        for r in services.requests[before:]
+        if r["params"].get("REQUEST") == "GetFeatureInfo"
+    ]
+
+
+def _identifiable(layer, on: bool) -> None:
+    flag = qgis_core.QgsMapLayer.LayerFlag.Identifiable
+    flags = layer.flags()
+    if bool(flags & flag) != on:
+        # The flags' own type: an enum on Qt 6, a QFlags on Qt 5.
+        layer.setFlags(type(flags)(int(flags) ^ int(flag)))
+
+
+class TestClicks:
+    """Which WMS layers answer a click on the web map, as QGIS's Identify
+    tool decides it: identifiable layers, about their queryable sublayers.
+    What the click asks is unit-tested (`tests/unit/test_map_services.py`);
+    what the page does with it, in `tests/browser/test_feature_info.py`."""
+
+    @pytest.mark.parametrize("service", ["cors/wms", "cors/wms111"])
+    def test_it_asks_about_the_sublayers_qgis_identifies(
+        self, qgis_app, services, service
+    ) -> None:
+        """`boundary` is not queryable: QGIS asks about the other two, and so
+        does the click, for as many features and in the same answer."""
+        layer = _wms(
+            services.url(service),
+            layers=("target", "boundary", "utm_only"),
+            crs="EPSG:3857",
+            extra="&featureCount=7",
+        )
+        assert layer.isValid()
+        exported, report = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.feature_info is not None
+        ours = dict(parse_qsl(urlsplit(exported.tiles.feature_info).query))
+        tiles = dict(parse_qsl(urlsplit(exported.tiles.url).query))
+
+        qgis = _qgis_identify(services, layer)
+        assert sorted(ours["QUERY_LAYERS"].split(",")) == sorted(
+            params["QUERY_LAYERS"] for params in qgis
+        )
+        assert {ours["INFO_FORMAT"], ours["FEATURE_COUNT"]} == {
+            qgis[0]["INFO_FORMAT"],
+            qgis[0]["FEATURE_COUNT"],
+        }
+        # The map the click is on is the layer's own GetMap.
+        assert ours["LAYERS"] == tiles["LAYERS"]
+        assert ours["REQUEST"] == "GetFeatureInfo"
+        row = _rows(report, FidelityStatus.PRESERVED)
+        assert "says is there" in row and "CORS" in row
+
+    def test_a_layer_set_not_identifiable_asks_nothing(
+        self, qgis_app, services
+    ) -> None:
+        layer = _wms(services.url("cors/wms"), crs="EPSG:3857")
+        _identifiable(layer, False)
+        exported, report = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.feature_info is None
+        assert not [i for i in report.items if i.subject == "Clicks on 'WMS'"]
+        _identifiable(layer, True)
+        exported, _ = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.feature_info is not None
+
+    def test_a_layer_with_no_queryable_sublayer_is_not_clickable(
+        self, qgis_app, services
+    ) -> None:
+        """As in QGIS, where Identify asks such a layer nothing."""
+        layer = _wms(services.url("cors/wms"), layers=("boundary",), crs="EPSG:3857")
+        exported, report = _read(layer)
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.feature_info is None
+        assert _qgis_identify(services, layer) == []
+        assert not [i for i in report.items if i.subject == "Clicks on 'WMS'"]
+
+    def test_a_layer_answering_only_where_no_click_can_be_placed_says_so(
+        self, qgis_app, services
+    ) -> None:
+        """`utm_only` offers EPSG:25832 alone; the page places a click only in
+        Web Mercator or longitude and latitude."""
+        exported, report = _read(_wms(services.url("cors/wms"), layers=("utm_only",)))
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.feature_info is None
+        assert "only in EPSG:25832" in _rows(report, FidelityStatus.UNSUPPORTED)
+
+    def test_without_capabilities_a_click_asks_nothing_and_says_why(
+        self, qgis_app
+    ) -> None:
+        exported, report = _read(_wms(OFFLINE, crs="EPSG:3857"))
+        assert exported is not None
+        assert exported.tiles is not None
+        assert exported.tiles.feature_info is None
+        assert "whether and how it answers clicks" in _rows(
+            report, FidelityStatus.UNSUPPORTED
+        )
+
+    def test_making_a_layer_identifiable_is_a_change_the_dialog_sees(
+        self, qgis_app, project, services
+    ) -> None:
+        """The dialog's read is kept until the project changes; whether a WMS
+        answers clicks is part of what it read."""
+        from qgis.PyQt.QtCore import QCoreApplication
+
+        from nika_onlymap_exporter.ui.layer_watcher import LayerContentWatcher
+
+        layer = _wms(services.url("cors/wms"), crs="EPSG:3857")
+        project.addMapLayer(layer)
+        watcher = LayerContentWatcher(project)
+        fired: list[bool] = []
+        watcher.changed.connect(lambda: fired.append(True))
+        try:
+            _identifiable(layer, False)
+            for _ in range(5):
+                QCoreApplication.processEvents()
+            assert fired
+        finally:
+            watcher.disconnect_all()
 
 
 class TestTime:

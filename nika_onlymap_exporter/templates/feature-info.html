@@ -1,0 +1,504 @@
+    <!--
+      A click on a WMS layer shows what its service says is there, as QGIS's
+      Identify tool does. Each layer that answers clicks carries the
+      GetFeatureInfo it sends as `data-q2w-feature-info`, a template written
+      at export (`core/map_services.py`); this fills it from the click and
+      shows the answers, through the runtime's public surface only: its
+      `om-map-point` event, `project`, `unproject` and `getCamera`.
+
+      - The click is the middle pixel of a small map, 101 pixels square, at
+        the map's own scale, asked in the CRS the template names: Web
+        Mercator metres, or longitude and latitude, latitude first where a
+        WMS 1.3.0 request in EPSG:4326 wants it (as the runtime fills a
+        tile's box). The pixel is I/J in WMS 1.3.0 and X/Y in 1.1.1.
+      - Each layer is asked on its own, only while it shows: switched on in
+        the layer switcher and inside its zoom range. A click a feature popup
+        opens for is that popup's (the click popups close on any pick and the
+        one picked opens, so the map shows one popup at a time), and a click
+        the measure tool takes is a measurement: neither asks anything.
+      - The answers share one popup in the look of the feature popups, the
+        top layer first, as QGIS's Identify lists them top down. A structured
+        answer (JSON, GML, a server's own XML) lists each feature's fields,
+        and one that found nothing shows nothing. Plain text shows when it
+        has text; a page (HTML) shows when it has visible text, as the
+        service wrote it, in a frame that runs none of its scripts and
+        reaches nothing of this page. A service exception shows nothing and
+        is written to the browser's console.
+      - A layer whose service does not answer a web page (CORS, no
+        connection, an HTTP error) is named once in the layer notice
+        (`templates/layer-notice.html`), told by the `q2w-feature-info` event
+        this fires on the map once a click's answers are all in.
+
+      A plain script after the map, so file:// is the same.
+    -->
+    <script>
+      (function (setup) {
+        var map = document.querySelector("om-map");
+        if (!map) return;
+
+        // reader:start - what an answer says, from its text and type alone.
+        var nameOf = function (node) {
+          return node.localName || String(node.nodeName).replace(/^.*:/, "");
+        };
+        var isGml = function (element) {
+          return String(element.namespaceURI || "").indexOf("http://www.opengis.net/gml") === 0;
+        };
+        var written = function (found) {
+          if (found === null || found === undefined) return "";
+          if (typeof found === "object") return JSON.stringify(found);
+          return String(found).trim();
+        };
+        // A feature as [field, value] rows, its empty fields left out as a
+        // feature popup leaves them out.
+        var rowsOf = function (pairs) {
+          return pairs.filter(function (pair) {
+            return pair[1] !== "";
+          });
+        };
+        var found = function (features) {
+          var kept = features.filter(function (rows) {
+            return rows.length > 0;
+          });
+          return kept.length ? { kind: "features", features: kept } : { kind: "empty" };
+        };
+        var fromJson = function (data) {
+          var list =
+            data && data.type === "FeatureCollection"
+              ? data.features
+              : data && data.type === "Feature"
+                ? [data]
+                : null;
+          if (!Array.isArray(list)) return null;
+          return found(
+            list.map(function (feature) {
+              var properties = (feature && feature.properties) || {};
+              return rowsOf(
+                Object.keys(properties).map(function (key) {
+                  return [key, written(properties[key])];
+                })
+              );
+            })
+          );
+        };
+        var parseXml = function (text) {
+          var doc = new DOMParser().parseFromString(text, "application/xml");
+          return doc.getElementsByTagName("parsererror").length ? null : doc;
+        };
+        var elements = function (root, name) {
+          var all = root.getElementsByTagName("*");
+          var kept = [];
+          for (var i = 0; i < all.length; i += 1) {
+            if (nameOf(all[i]) === name) kept.push(all[i]);
+          }
+          return kept;
+        };
+        var childElements = function (element) {
+          var kept = [];
+          for (var node = element.firstChild; node; node = node.nextSibling) {
+            if (node.nodeType === 1) kept.push(node);
+          }
+          return kept;
+        };
+        var fromXml = function (doc) {
+          var root = doc.documentElement;
+          if (/ExceptionReport$/.test(nameOf(root))) {
+            return { kind: "exception", message: root.textContent.replace(/\s+/g, " ").trim() };
+          }
+          // QGIS Server: <Feature><Attribute name="..." value="..."/>, its
+          // geometry among them as WKT.
+          var attributes = elements(root, "Attribute").filter(function (element) {
+            return element.hasAttribute("name");
+          });
+          if (attributes.length) {
+            var holders = [];
+            attributes.forEach(function (element) {
+              if (holders.indexOf(element.parentNode) === -1) holders.push(element.parentNode);
+            });
+            return found(
+              holders.map(function (holder) {
+                return rowsOf(
+                  childElements(holder)
+                    .filter(function (element) {
+                      return (
+                        nameOf(element) === "Attribute" &&
+                        element.getAttribute("name") !== "geometry"
+                      );
+                    })
+                    .map(function (element) {
+                      return [element.getAttribute("name"), written(element.getAttribute("value"))];
+                    })
+                );
+              })
+            );
+          }
+          // ArcGIS Server: a feature's fields as the attributes of <FIELDS>.
+          var fields = elements(root, "FIELDS");
+          if (fields.length) {
+            return found(
+              fields.map(function (element) {
+                return rowsOf(
+                  Array.prototype.map.call(element.attributes, function (attribute) {
+                    return [attribute.name, written(attribute.value)];
+                  })
+                );
+              })
+            );
+          }
+          // GML (GeoServer, deegree, QGIS Server) and MapServer's: a feature
+          // is a featureMember's child, or a `<layer>_feature`; its fields
+          // are its own elements holding text, not GML's, nor a geometry.
+          var features = [];
+          elements(root, "featureMember")
+            .concat(elements(root, "featureMembers"))
+            .forEach(function (member) {
+              features = features.concat(childElements(member));
+            });
+          features = features.concat(
+            Array.prototype.filter.call(root.getElementsByTagName("*"), function (element) {
+              return /_feature$/.test(nameOf(element));
+            })
+          );
+          return found(
+            features.map(function (feature) {
+              return rowsOf(
+                childElements(feature)
+                  .filter(function (element) {
+                    return !isGml(element) && childElements(element).length === 0;
+                  })
+                  .map(function (element) {
+                    return [nameOf(element), written(element.textContent)];
+                  })
+              );
+            })
+          );
+        };
+        var visibleText = function (html) {
+          var doc = new DOMParser().parseFromString(html, "text/html");
+          var hidden = doc.querySelectorAll("script, style, noscript, template");
+          for (var i = 0; i < hidden.length; i += 1) hidden[i].remove();
+          return /\S/.test(doc.body ? doc.body.textContent : "");
+        };
+        // { kind: "features", features: [[[field, value], ...], ...] },
+        // "text" or "html" (with what to show), "empty", "exception" (with
+        // its message), or "unreadable".
+        var readAnswer = function (text, type) {
+          var body = String(text || "").replace(/^﻿/, "");
+          var trimmed = body.trim();
+          var lowered = String(type || "").toLowerCase();
+          if (!trimmed) return { kind: "empty" };
+          var first = trimmed.charAt(0);
+          if (/json/.test(lowered) || first === "{" || first === "[") {
+            try {
+              var read = fromJson(JSON.parse(trimmed));
+              if (read) return read;
+            } catch (error) {
+              // Not JSON after all: an exception sent as XML, say.
+            }
+            if (first !== "<") return { kind: "unreadable" };
+          }
+          if (first === "<") {
+            var doc = /xml|gml/.test(lowered) || /^<\?xml/i.test(trimmed) ? parseXml(trimmed) : null;
+            if (doc && !/^html$/i.test(nameOf(doc.documentElement))) return fromXml(doc);
+            if (/html/.test(lowered) || /<html[\s>]/i.test(trimmed)) {
+              return visibleText(trimmed) ? { kind: "html", html: trimmed } : { kind: "empty" };
+            }
+            doc = doc || parseXml(trimmed);
+            return doc ? fromXml(doc) : { kind: "unreadable" };
+          }
+          return { kind: "text", text: body.replace(/\s+$/, "") };
+        };
+        // reader:end
+
+        // The small map around the click: HALF pixels each side of it.
+        var HALF = 50;
+        var SIZE = 2 * HALF + 1;
+        var RADIUS = 6378137;
+        var WORLD = 2 * Math.PI * RADIUS;
+        // How long a service has to answer.
+        var TIMEOUT_MS = 20000;
+        var mercator = function (point) {
+          var lat = Math.max(-85.06, Math.min(85.06, point[1]));
+          return [
+            (point[0] * Math.PI * RADIUS) / 180,
+            RADIUS * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)),
+          ];
+        };
+        var degrees = function (point) {
+          return [point[0], point[1]];
+        };
+        // A step across the map, the short way round the antimeridian.
+        var across = function (a, b, period) {
+          var step = b - a;
+          return step - period * Math.round(step / period);
+        };
+        var number = function (value, digits) {
+          return String(parseFloat(value.toFixed(digits)));
+        };
+        var fill = function (template, layer, click) {
+          var at = map.project(click);
+          if (!at) return null;
+          var spots = [
+            map.unproject([at[0] - HALF, at[1]]),
+            map.unproject([at[0] + HALF, at[1]]),
+            map.unproject([at[0], at[1] - HALF]),
+            map.unproject([at[0], at[1] + HALF]),
+          ];
+          if (spots.some(function (spot) { return !spot; })) return null;
+          var metres = template.indexOf("{bbox-epsg-3857}") !== -1;
+          var place = metres ? mercator : degrees;
+          var period = metres ? WORLD : 360;
+          var middle = place(click);
+          var ends = spots.map(place);
+          var step = function (a, b) {
+            return Math.sqrt(Math.pow(across(a[0], b[0], period), 2) + Math.pow(b[1] - a[1], 2)) / (2 * HALF);
+          };
+          var dx = step(ends[0], ends[1]);
+          var dy = step(ends[2], ends[3]);
+          var digits = metres ? 3 : 9;
+          var box = [
+            middle[0] - (HALF + 0.5) * dx,
+            middle[1] - (HALF + 0.5) * dy,
+            middle[0] + (HALF + 0.5) * dx,
+            middle[1] + (HALF + 0.5) * dy,
+          ].map(function (value) {
+            return number(value, digits);
+          });
+          // WMS 1.3.0 names EPSG:4326 latitude first; 1.1.1 (`SRS=`) and
+          // CRS:84 longitude first.
+          var latitudeFirst = [box[1], box[0], box[3], box[2]].join(",");
+          var legacy = /[?&]SRS=/i.test(template);
+          var time = layer.getAttribute("time") || "";
+          var tokens = {
+            "{bbox-epsg-3857}": box.join(","),
+            "{bbox-epsg-4326}": legacy ? box.join(",") : latitudeFirst,
+            "{bbox-crs84}": box.join(","),
+            "{width}": String(SIZE),
+            "{height}": String(SIZE),
+            "{i}": String(HALF),
+            "{j}": String(HALF),
+            "{time}": encodeURIComponent(time).replace(/%3A/gi, ":"),
+          };
+          return template.replace(/\{[a-z0-9-]+\}/gi, function (token) {
+            return Object.prototype.hasOwnProperty.call(tokens, token) ? tokens[token] : token;
+          });
+        };
+        var askedFormat = function (url) {
+          var match = /[?&]INFO_FORMAT=([^&]*)/i.exec(url);
+          return match ? decodeURIComponent(match[1]) : "";
+        };
+
+        // Which layers a click asks, top first: later layers draw above.
+        var shown = function () {
+          var camera = typeof map.getCamera === "function" ? map.getCamera() : null;
+          var zoom = camera ? camera.zoom : null;
+          var all = map.querySelectorAll(":scope > om-layer[data-q2w-feature-info]");
+          var kept = [];
+          for (var i = all.length - 1; i >= 0; i -= 1) {
+            var layer = all[i];
+            if (layer.getAttribute("visible") === "false") continue;
+            var range = null;
+            try {
+              range = JSON.parse(layer.getAttribute("visible-zoom-range") || "null");
+            } catch (error) {
+              range = null;
+            }
+            if (Array.isArray(range) && zoom !== null && !(zoom >= range[0] && zoom < range[1])) {
+              continue;
+            }
+            kept.push(layer);
+          }
+          return kept;
+        };
+
+        // The text of a value, kept from the overlay's `{{field}}` filling:
+        // the overlay fills its markup once, and nothing in an answer is a
+        // field of this map.
+        var text = function (parent, value) {
+          var parts = String(value).split("{{");
+          parts.forEach(function (part, index) {
+            if (index > 0) {
+              parent.appendChild(document.createTextNode("{"));
+              parent.appendChild(document.createComment(""));
+              parent.appendChild(document.createTextNode("{"));
+            }
+            if (part) parent.appendChild(document.createTextNode(part));
+          });
+          return parent;
+        };
+        var element = function (tag, className) {
+          var made = document.createElement(tag);
+          if (className) made.className = className;
+          return made;
+        };
+        var popup = null;
+        var close = function () {
+          if (popup) popup.remove();
+          popup = null;
+        };
+        var show = function (click, answers) {
+          close();
+          var shownAnswers = answers.filter(function (answer) {
+            return answer.read && /^(features|text|html)$/.test(answer.read.kind);
+          });
+          if (!shownAnswers.length) return;
+          popup = element("om-overlay");
+          popup.setAttribute("anchor", JSON.stringify(click));
+          popup.setAttribute("id", "q2w-feature-info-popup");
+          popup.setAttribute("visible", "true");
+          var style = element("style");
+          style.textContent = setup.styles;
+          var box = element("div", "om-popup q2w-info");
+          shownAnswers.forEach(function (answer) {
+            var section = element("div", "q2w-info-layer");
+            section.appendChild(text(element("div", "om-popup-title"), answer.name));
+            var read = answer.read;
+            if (read.kind === "features") {
+              read.features.forEach(function (rows) {
+                var feature = element("div", "q2w-info-feature");
+                rows.forEach(function (row) {
+                  var line = element("div", "om-popup-row");
+                  line.appendChild(text(element("span", "om-popup-label"), row[0]));
+                  line.appendChild(text(element("span", "om-popup-value"), row[1]));
+                  feature.appendChild(line);
+                });
+                section.appendChild(feature);
+              });
+            } else if (read.kind === "text") {
+              section.appendChild(text(element("div", "q2w-info-text"), read.text));
+            } else {
+              // No scripts, no forms, nothing of this page's origin.
+              var frame = element("iframe", "q2w-info-page");
+              frame.setAttribute("sandbox", "");
+              frame.setAttribute("title", answer.name);
+              frame.setAttribute("srcdoc", read.html.split("{{").join("{&#123;"));
+              section.appendChild(frame);
+            }
+            box.appendChild(section);
+          });
+          popup.appendChild(style);
+          popup.appendChild(box);
+          map.appendChild(popup);
+        };
+
+        // A feature popup that opened for the click: its `visible` set to
+        // "true" since the click. The click popups' reset sets every one to
+        // "false" on any pick, then the picked layer's own to "true".
+        var opened = false;
+        var watcher = new MutationObserver(function (records) {
+          records.forEach(function (record) {
+            if (record.target.getAttribute("visible") === "true") opened = true;
+          });
+        });
+        var popups = map.querySelectorAll(':scope > om-overlay[selection-type="click"]');
+        for (var p = 0; p < popups.length; p += 1) {
+          watcher.observe(popups[p], { attributes: true, attributeFilter: ["visible"] });
+        }
+        // Whether the measure tool takes the click: one of its modes is on.
+        var measuring = function () {
+          var widget = map.querySelector('om-widget[type="measure"]');
+          var root = widget && widget.shadowRoot;
+          return !!(root && root.querySelector("button[data-act='mode'].active"));
+        };
+        var measureClick = false;
+        map.addEventListener(
+          "pointerdown",
+          function () {
+            measureClick = measuring();
+          },
+          true
+        );
+
+        var round = 0;
+        var pending = [];
+        map.addEventListener("om-map-point", function (event) {
+          var detail = event.detail || {};
+          if (detail.kind !== "click") return;
+          round += 1;
+          var mine = round;
+          pending.forEach(function (controller) {
+            controller.abort();
+          });
+          pending = [];
+          close();
+          var click = detail.coordinate;
+          if (!click || measureClick) return;
+          opened = false;
+          // After the runtime has acted on the click: it picks, and opens a
+          // feature popup, once this event is handled.
+          setTimeout(function () {
+            watcher.takeRecords().forEach(function (record) {
+              if (record.target.getAttribute("visible") === "true") opened = true;
+            });
+            if (mine !== round || opened) return;
+            var layers = shown();
+            if (!layers.length) return;
+            var answers = layers.map(function (layer) {
+              return {
+                layerId: layer.getAttribute("id"),
+                name: layer.getAttribute("label") || layer.getAttribute("id"),
+                read: null,
+                status: "asking",
+              };
+            });
+            var settled = 0;
+            var done = function () {
+              settled += 1;
+              if (mine !== round) return;
+              show(click, answers);
+              if (settled < answers.length) return;
+              map.dispatchEvent(
+                new CustomEvent("q2w-feature-info", {
+                  detail: {
+                    coordinate: click,
+                    answers: answers.map(function (answer) {
+                      return { layerId: answer.layerId, name: answer.name, status: answer.status };
+                    }),
+                  },
+                })
+              );
+            };
+            layers.forEach(function (layer, index) {
+              var answer = answers[index];
+              var template = layer.getAttribute("data-q2w-feature-info") || "";
+              var url = fill(template, layer, click);
+              if (!url) {
+                answer.status = "empty";
+                done();
+                return;
+              }
+              var controller = new AbortController();
+              pending.push(controller);
+              var timer = setTimeout(function () {
+                controller.abort();
+              }, TIMEOUT_MS);
+              fetch(url, { signal: controller.signal })
+                .then(function (response) {
+                  if (!response.ok) throw new Error("HTTP " + response.status);
+                  return response.text().then(function (body) {
+                    return readAnswer(body, response.headers.get("content-type") || askedFormat(url));
+                  });
+                })
+                .then(
+                  function (read) {
+                    answer.read = read;
+                    answer.status = read.kind;
+                    if (read.kind === "exception" || read.kind === "unreadable") {
+                      console.warn(
+                        "[qgis2webmap] " + answer.name + " answered a click with " +
+                          (read.kind === "exception" ? "an exception: " + read.message : "nothing readable")
+                      );
+                    }
+                  },
+                  function () {
+                    answer.status = mine === round ? "failed" : "cancelled";
+                  }
+                )
+                .then(function () {
+                  clearTimeout(timer);
+                  done();
+                });
+            });
+          }, 0);
+        });
+      })(@FEATURE_INFO_SETUP@);
+    </script>

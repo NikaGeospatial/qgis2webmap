@@ -95,7 +95,11 @@ is carried with the map and read from it. Both kinds of vector tiles - a
 PMTiles archive, local or not, and a vector tile layer - are decoded by a
 script the reader's browser loads from unpkg.com when it draws them, so
 unpkg.com sees that request, and without it these layers stay empty. A WMS or WMTS layer's legend picture is
-loaded from the service the same way when the map opens. An address that
+loaded from the service the same way when the map opens. A click on a WMS
+layer that answers clicks (see [supported features](supported-features.md))
+sends that service the position clicked, as a small map around it, to ask
+what is there; nothing is sent until someone clicks, and a layer that is not
+identifiable in QGIS is never asked. An address that
 carries an access key is never written into the map: such a layer is refused,
 and such a legend picture left out.
 

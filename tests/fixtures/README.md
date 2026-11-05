@@ -73,3 +73,39 @@ real services are replayed with no network. Sources:
 The PDOK WMTS case reads `pdok-brt-wmts-capabilities.xml`, which the unit tests
 read too.
 Capabilities © their publishers.
+
+`feature_info/` holds what four government WMS servers of different software
+answered a click (GetFeatureInfo), fetched once on 2026-11-05, each request a
+101 x 101 pixel map around the point with I/J (X/Y) = 50, trimmed to what the
+tests read (geometry coordinates shortened, capabilities cut to the request
+section and the layers asked). `tests/unit/test_map_services.py` builds the
+requests from the capabilities; `tests/browser/test_feature_info.py` reads
+every answer and replays some through the local fake WMS.
+
+- `geoserver-dwd-*`: GeoServer, Deutscher Wetterdienst
+  (`https://maps.dwd.de/geoserver/dwd/ows`), layer `Warngebiete_Kreise`,
+  WMS 1.3.0 in EPSG:4326 (latitude first). A hit on Magdeburg (11.62 E,
+  52.13 N) as `application/json` and as GML 3.1.1, an empty answer at sea
+  (4.0 E, 55.5 N) as JSON and as `text/html` (an empty page with a style),
+  and the exception for an unknown QUERY_LAYERS, sent as `text/xml` to a
+  JSON request. Sends `Access-Control-Allow-Origin: *`.
+- `mapserver-pdok-*`: MapServer, PDOK / Kadaster
+  (`https://service.pdok.nl/kadaster/brk-bestuurlijke-gebieden/wms/v1_0`),
+  layer `Gemeentegebied`, WMS 1.3.0 in EPSG:3857. A hit on Amsterdam (4.9 E,
+  52.37 N) as JSON and as `application/vnd.ogc.gml` (`msGMLOutput`), and an
+  empty one in the North Sea (3.0 E, 53.5 N) as JSON and as `text/plain`,
+  which still says something ("Search returned no results.").
+- `arcgis-usgs-*`: ArcGIS Server, USGS National Map
+  (`https://carto.nationalmap.gov/arcgis/services/govunits/MapServer/WMSServer`),
+  layer `19` (County or Equivalent), WMS 1.1.1 in EPSG:4326 with X/Y. A hit
+  on Denver (-104.99, 39.74) as `application/geo+json`, `text/xml` (fields as
+  the attributes of `<FIELDS>`) and `text/html`, an empty one in the Pacific
+  (-140, 30) as GeoJSON and HTML, and the 1.1.1 exception for QUERY_LAYERS=999
+  (`application/vnd.ogc.se_xml`, with a DOCTYPE).
+- `qgis-solothurn-*`: QGIS Server behind its own GetFeatureInfo address,
+  Kanton Solothurn (`https://geo.so.ch/api/wms`, answering at
+  `https://geo.so.ch/api/v1/featureinfo/somap`), layer
+  `ch.so.alw.strukturverbesserungen.gemeinde_flurreglemente`, which offers only
+  text/plain, text/html and text/xml, inside a group that is not queryable.
+  A hit on Solothurn (7.537 E, 47.208 N, EPSG:3857) and an empty answer in
+  Zurich (8.5 E, 47.37 N, CRS:84) as `text/xml` (`<Attribute name value>`).

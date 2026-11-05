@@ -36,6 +36,8 @@ from ..core.license_policy import CapVerdict, LicensePolicy, default_policy
 from ..core.manifest_builder import (
     BOTTOM_LEFT_ORDER,
     FALLBACK_SCRIPT_TYPE,
+    FEATURE_INFO_STYLES,
+    POPUP_STYLES,
     WIDGET_POSITIONS,
     build_manifest,
     collect_attributions,
@@ -69,6 +71,7 @@ from ..packaging.tile_archives import stage_tile_archives
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
 # The measure tool's page script and styles, on a map that has the tool.
 MEASURE_TOOL_PATH = TEMPLATE_PATH.with_name("measure-tool.html")
+FEATURE_INFO_PATH = TEMPLATE_PATH.with_name("feature-info.html")
 LAYER_NOTICE_PATH = TEMPLATE_PATH.with_name("layer-notice.html")
 METADATA_PATH = Path(__file__).resolve().parent.parent / "metadata.txt"
 
@@ -225,6 +228,9 @@ class OnlyMapWriter:
             manifest += "\n" + _NO_TICKS_HOOK
         if project.settings.show_measure:
             manifest += "\n" + MEASURE_TOOL_PATH.read_text(encoding="utf-8").rstrip()
+        clicks = _feature_info_block(project)
+        if clicks:
+            manifest += "\n" + clicks
         notice = _layer_notice_block(project)
         if notice:
             manifest += "\n" + notice
@@ -874,6 +880,23 @@ def loads_layers_from_the_web(project: ExportProject) -> bool:
         or (layer.vector_tiles is not None and not layer.vector_tiles.is_archive)
         for layer in project.exportable_layers
     )
+
+
+def _feature_info_block(project: ExportProject) -> str:
+    """The page's answer to a click on a WMS layer that answers clicks: it
+    asks the service what is there and shows the answer in a popup in the
+    feature popups' look (`templates/feature-info.html`). Empty for a map
+    with no such layer.
+    """
+    if not any(
+        layer.tiles is not None and layer.tiles.feature_info is not None
+        for layer in project.exportable_layers
+    ):
+        return ""
+    setup = json.dumps({"styles": POPUP_STYLES + "\n" + FEATURE_INFO_STYLES})
+    template = FEATURE_INFO_PATH.read_text(encoding="utf-8").rstrip()
+    # Inside a script: no `</` may close it early.
+    return template.replace("@FEATURE_INFO_SETUP@", setup.replace("</", "<\\/"))
 
 
 def _layer_notice_block(project: ExportProject) -> str:

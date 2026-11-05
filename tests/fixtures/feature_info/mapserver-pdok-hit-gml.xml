@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<msGMLOutput 
+	 xmlns:gml="http://www.opengis.net/gml"
+	 xmlns:xlink="http://www.w3.org/1999/xlink"
+	 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<Gemeentegebied_layer>
+	<gml:name>Gemeentegebied</gml:name>
+		<Gemeentegebied_feature>
+			<gml:boundedBy>
+				<gml:Box srsName="EPSG:3857">
+					<gml:coordinates>526402.957808,6850544.157809 568585.763454,6878445.792246</gml:coordinates>
+				</gml:Box>
+			</gml:boundedBy>
+			<geom>
+			<gml:MultiPolygon srsName="EPSG:3857">
+			<gml:polygonMember>
+			  <gml:Polygon>
+			    <gml:outerBoundaryIs>
+			      <gml:LinearRing>
+			        <gml:coordinates>564777.862798,6850559.715993 564805.107093,6850558.136632 564777.862798,6850559.715993</gml:coordinates>
+			      </gml:LinearRing>
+			    </gml:outerBoundaryIs>
+			  </gml:Polygon>
+			</gml:polygonMember>
+			<gml:polygonMember>
+			  <gml:Polygon>
+			    <gml:outerBoundaryIs>
+			      <gml:LinearRing>
+			        <gml:coordinates>564777.862798,6850559.715993 564805.107093,6850558.136632 564777.862798,6850559.715993</gml:coordinates>
+			      </gml:LinearRing>
+			    </gml:outerBoundaryIs>
+			  </gml:Polygon>
+			</gml:polygonMember>
+			</gml:MultiPolygon>
+			</geom>
+			<identificatie>GM0363</identificatie>
+			<naam>Amsterdam</naam>
+			<code>0363</code>
+			<ligtInProvincieCode>27</ligtInProvincieCode>
+			<ligtInProvincieNaam>Noord-Holland</ligtInProvincieNaam>
+			<fuuid>gemeentegebied.201985ef-60bd-4c97-a864-e38622a4eb00</fuuid>
+		</Gemeentegebied_feature>
+	</Gemeentegebied_layer>
+</msGMLOutput>

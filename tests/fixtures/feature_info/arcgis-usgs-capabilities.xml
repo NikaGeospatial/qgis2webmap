@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<WMS_Capabilities xmlns="http://www.opengis.net/wms" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.3.0" xsi:schemaLocation="http://www.opengis.net/wms http://schemas.opengis.net/wms/1.3.0/capabilities_1_3_0.xsd http://www.esri.com/wms https://carto.nationalmap.gov:443/arcgis/services/govunits/MapServer/WMSServer?version=1.3.0%26service=WMS%26request=GetSchemaExtension">
+  <Service>
+    <Name>WMS</Name>
+    <Title>WMS</Title>
+    <OnlineResource xlink:type="simple" xlink:href="https://carto.nationalmap.gov:443/arcgis/services/govunits/MapServer/WMSServer?" />
+    </Service>
+  <Capability>
+    <Request>
+      <GetMap>
+        <Format>image/png</Format>
+        <DCPType>
+          <HTTP><Get><OnlineResource xlink:type="simple" xlink:href="https://carto.nationalmap.gov:443/arcgis/services/govunits/MapServer/WMSServer?" /></Get></HTTP>
+        </DCPType>
+      </GetMap>
+      <GetFeatureInfo>
+        <Format>application/vnd.esri.wms_raw_xml</Format>
+        <Format>application/vnd.esri.wms_featureinfo_xml</Format>
+        <Format>application/vnd.ogc.wms_xml</Format>
+        <Format>application/geo+json</Format>
+        <Format>text/xml</Format>
+        <Format>text/html</Format>
+        <Format>text/plain</Format>
+        <DCPType>
+          <HTTP><Get><OnlineResource xlink:type="simple" xlink:href="https://carto.nationalmap.gov:443/arcgis/services/govunits/MapServer/WMSServer?" /></Get></HTTP>
+        </DCPType>
+      </GetFeatureInfo>
+      </Request>
+    <Exception>
+      <Format>application/vnd.ogc.se_xml</Format>
+      <Format>application/vnd.ogc.se_inimage</Format>
+      <Format>application/vnd.ogc.se_blank</Format>
+      <Format>text/xml</Format>
+      <Format>XML</Format>
+    </Exception>
+    <Layer>
+      <Title>govunits</Title>
+<CRS>CRS:84</CRS>
+<CRS>EPSG:4326</CRS>
+<CRS>EPSG:3857</CRS>
+ 
+<CRS>EPSG:102100</CRS>
+<Layer queryable="1">
+        <Title>Features</Title>
+        <CRS>CRS:84</CRS>
+<CRS>EPSG:4326</CRS>
+<CRS>EPSG:3857</CRS>
+ 
+<CRS>EPSG:102100</CRS>
+<Layer queryable="1">
+        <Name>19</Name>
+        <Title>County or Equivalent</Title>
+        <CRS>CRS:84</CRS>
+<CRS>EPSG:4326</CRS>
+<CRS>EPSG:3857</CRS>
+ 
+<CRS>EPSG:102100</CRS>
+</Layer>
+      </Layer>
+      <Layer queryable="1">
+        <Title>Labels</Title>
+        <CRS>CRS:84</CRS>
+<CRS>EPSG:4326</CRS>
+<CRS>EPSG:3857</CRS>
+ 
+<CRS>EPSG:102100</CRS>
+<Layer queryable="1">
+        <Name>23</Name>
+        <Title>Congressional District labels</Title>
+        <CRS>CRS:84</CRS>
+<CRS>EPSG:4326</CRS>
+<CRS>EPSG:3857</CRS>
+ 
+<CRS>EPSG:102100</CRS>
+</Layer>
+      </Layer>
+    </Layer>
+  </Capability>
+</WMS_Capabilities>

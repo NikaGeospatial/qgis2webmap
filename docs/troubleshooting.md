@@ -320,6 +320,25 @@ tiles too, as plain pictures. Those sit under every other layer of the map,
 whatever the layer order, are hidden while the map is tilted or rotated, and
 are left out of pictures the map saves of itself.
 
+### Clicking a WMS layer shows nothing
+
+A click asks the service what is there from the reader's browser, so the
+popup stays closed when the service found nothing at that spot, and also:
+
+- **The layer is not identifiable in QGIS** (Project Properties, Data
+  Sources), its service names none of its sublayers as answering clicks, or
+  it answers only in a form or coordinate system the map cannot use. The
+  Fidelity tab's *Clicks on* row says which.
+- **The layer is switched off or outside its zoom range**, or a feature
+  popup opened for the click instead: that popup is shown, as only one
+  popup opens at a time.
+- **The service does not allow web pages to read its answers (CORS)**, is
+  offline, or answers with an error: the map's notice says "Could not get
+  details from" and the layer's name. Only the service's provider can allow
+  web pages; a service on `http://` is blocked in a map served over
+  `https://`. An error message the service sends back is written to the
+  browser's developer tools (Console).
+
 ### A WMS or WMTS layer's legend shows no picture
 
 The legend lists the layer by name, without the picture QGIS's legend shows.

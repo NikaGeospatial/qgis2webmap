@@ -107,6 +107,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     )
 
     from .cartograph_export import LayerScans
+    from .map_services import FeatureInfoRequest, WmsCapabilities
 
 WGS84 = "EPSG:4326"
 
@@ -1595,6 +1596,7 @@ def read_map_service(
     visible: bool = True,
     map_time: MapTime | None = None,
     time_slider: bool = True,
+    clickable: bool = True,
 ) -> ExportLayer | None:
     """Read a WMS or WMTS layer as a live tile layer, or refuse it with a reason.
 
@@ -1616,7 +1618,10 @@ def read_map_service(
     controls), the layer is a snapshot of that time.
 
     The legend pictures QGIS's legend shows for the layer travel the same
-    way, as addresses the browser loads (`TileSpec.legend`).
+    way, as addresses the browser loads (`TileSpec.legend`). So does what a
+    click on a WMS layer asks the service, when the layer is identifiable in
+    QGIS and `clickable` (not in a cartograph's frame, which is a picture):
+    see `_wms_feature_info`.
     """
     from urllib.parse import urlsplit
 
@@ -1802,6 +1807,26 @@ def read_map_service(
     # QGIS's "Use contextual WMS legend", read as QGIS reads it: a whole
     # number, on when it is not 0. Its legend then shows only what is in view.
     contextual = map_services.value(pairs, "contextualWMSLegend").strip()
+    feature_info = (
+        _wms_feature_info(
+            layer,
+            report,
+            parsed,
+            pairs,
+            map_services.FeatureInfoRequest(
+                url=url,
+                version=version,
+                layers=tuple(layers[::-1]),
+                styles=tuple(styles[::-1]),
+                image_format=image_format,
+                crs=request_crs,
+                extra=tuple(extra),
+                time=map_services.TIME_TOKEN if isinstance(slider, tuple) else time,
+            ),
+        )
+        if clickable
+        else None
+    )
     tiles = TileSpec(
         template,
         0,
@@ -1811,6 +1836,7 @@ def read_map_service(
         contextual_legend=contextual.lstrip("+-").isdigit() and int(contextual) != 0,
         time=slider[1] if isinstance(slider, tuple) else None,
         times=slider[0] if isinstance(slider, tuple) else None,
+        feature_info=feature_info,
     )
     if web_mercator is not None:
         projection = (
@@ -1835,6 +1861,140 @@ def read_map_service(
     if takes_time:
         report.approximated(f"Time of '{name}'", _wms_time_row(time, slider), layer_id)
     return _map_service_layer(layer, tiles, dependency, group_path, visible)
+
+
+def _wms_feature_info(
+    layer: QgsRasterLayer,
+    report: FidelityReportBuilder,
+    parsed: WmsCapabilities | None,
+    pairs: list[tuple[str, str]],
+    request: FeatureInfoRequest,
+) -> str | None:
+    """What a click on a WMS layer asks its service (`TileSpec.feature_info`),
+    or `None` when a click asks nothing.
+
+    As QGIS's Identify tool: only a layer identifiable in QGIS (Project
+    Properties, Data Sources), about its sublayers the capabilities call
+    queryable - a layer with none is not clickable there either - at the
+    GetFeatureInfo address they give (unless the layer is set to ignore it),
+    for as many features as QGIS asks. Everything is read from the
+    capabilities QGIS stored: whether the layer answers, how, and in which
+    CRS a click can be placed. Each outcome a reader would miss has its row.
+    """
+    from urllib.parse import urlsplit
+
+    from qgis.core import QgsMapLayer
+
+    from . import map_services
+
+    if not layer.flags() & QgsMapLayer.LayerFlag.Identifiable:
+        return None
+    name = layer.name()
+    layer_id = layer.id()
+    subject = f"Clicks on '{name}'"
+    nothing = "clicking the layer on the web map shows nothing"
+    if parsed is None:
+        report.unsupported(
+            subject,
+            "QGIS has no stored copy of this WMS's capabilities, which say "
+            "whether and how it answers clicks, and exporting never contacts "
+            f"the service to find out, so {nothing}. Open the project once while "
+            "online so QGIS reloads the service, and export again.",
+            layer_id,
+        )
+        return None
+    queried = [
+        found for found in request.layers if parsed.layer_queryable.get(found, False)
+    ]
+    if not queried:
+        return None
+    info_format = map_services.feature_info_format(parsed.feature_info_formats)
+    if info_format is None:
+        offered = ", ".join(parsed.feature_info_formats) or "none"
+        report.unsupported(
+            subject,
+            "The service offers no answer to a click that the web map can show "
+            f"(it offers: {offered}), so {nothing}.",
+            layer_id,
+        )
+        return None
+    crs = map_services.feature_info_crs(
+        parsed, request.layers, request.crs, request.version
+    )
+    if crs is None:
+        report.unsupported(
+            subject,
+            f"The service answers clicks on this layer only in {request.crs}, and "
+            "the web map can place a click only in Web Mercator or in longitude "
+            f"and latitude, so {nothing}.",
+            layer_id,
+        )
+        return None
+    address = request.url
+    if parsed.get_feature_info_url and "IgnoreGetFeatureInfoUrl" not in (
+        key for key, _ in pairs
+    ):
+        address = parsed.get_feature_info_url
+    count = map_services.value(pairs, "featureCount").strip()
+    template = map_services.wms_feature_info_template(
+        map_services.prepare_url(address).rstrip("?&"),
+        request.version,
+        request.layers,
+        request.styles,
+        request.image_format,
+        crs,
+        queried,
+        info_format,
+        int(count)
+        if count.isdigit() and int(count) > 0
+        else map_services.DEFAULT_FEATURE_COUNT,
+        request.extra,
+        request.time,
+    )
+    host = urlsplit(template).netloc.rpartition("@")[2]
+    if not template.lower().startswith(("http://", "https://")) or _carries_key(
+        template
+    ):
+        report.unsupported(
+            subject,
+            f"The address {host or 'the service'} answers clicks at is not a "
+            "keyless web address, which the map would write into the page for "
+            f"anyone who receives it, so {nothing}.",
+            layer_id,
+        )
+        return None
+    if map_services.is_structured_format(info_format):
+        report.preserved(
+            subject,
+            f"Clicking the layer on the web map shows what {host} says is there, "
+            "as QGIS's Identify tool does: the reader's browser asks the service "
+            "about the spot clicked, and the popup lists the fields of each "
+            f"feature it finds. {_CLICK_CORS_NOTE}",
+            layer_id,
+        )
+    else:
+        written = "plain text" if info_format.lower() == "text/plain" else "a web page"
+        shown = (
+            "as the service writes it"
+            if written == "plain text"
+            else "as the service writes it, without its scripts"
+        )
+        report.approximated(
+            subject,
+            f"Clicking the layer on the web map shows what {host} says is there, "
+            f"but the service answers clicks only as {written}, which the popup "
+            f"shows {shown}: an answer that nothing is there still shows, in the "
+            f"service's own words. {_CLICK_CORS_NOTE}",
+            layer_id,
+        )
+    return template
+
+
+# Clicks reach the service from the reader's browser, as its tiles do.
+_CLICK_CORS_NOTE = (
+    "A service that does not allow web pages to read its answers (CORS) "
+    "answers no click, and the map says so once."
+)
 
 
 def _takes_qgis_time(pairs: list[tuple[str, str]]) -> bool:
@@ -2166,6 +2326,7 @@ def read_raster(
     visible: bool = True,
     map_time: MapTime | None = None,
     time_slider: bool = True,
+    clickable: bool = True,
 ) -> ExportLayer | PendingRemoteRaster | None:
     """Read one raster layer into the normalized model.
 
@@ -2211,6 +2372,7 @@ def read_raster(
             visible=visible,
             map_time=map_time,
             time_slider=time_slider,
+            clickable=clickable,
         )
 
     if provider_key == "arcgismapserver":
@@ -3035,6 +3197,7 @@ def read_layer(
     filter_field: str | None = None,
     time_slider: bool = True,
     live_choice: LiveMode | None = None,
+    clickable: bool = True,
 ) -> ExportLayer | None:
     """Read one layer into the normalized model, on the calling thread.
 
@@ -3060,6 +3223,7 @@ def read_layer(
         filter_field=filter_field,
         time_slider=time_slider,
         live_choice=live_choice,
+        clickable=clickable,
     )
     if isinstance(prepared, (PendingLayer, PendingRemoteRaster)):
         return prepared.finish(report)
@@ -3087,6 +3251,7 @@ def prepare_layer(
     map_crs: QgsCoordinateReferenceSystem | None = None,
     time_slider: bool = True,
     live_choice: LiveMode | None = None,
+    clickable: bool = True,
 ) -> ExportLayer | PendingLayer | PendingRemoteRaster | None:
     """Read one layer into the normalized model, up to its features. **GUI
     thread only** - it reads the live layer.
@@ -3125,6 +3290,9 @@ def prepare_layer(
     frame): a WMS-T or vector layer that follows QGIS's time is then a
     snapshot of the time QGIS draws (`core.vector_time` for a vector's).
 
+    `clickable` is off where a click asks a WMS nothing (a cartograph's
+    frame, which is a picture on a page).
+
     `live_choice` is the Layers tab's Features choice for a WFS, OGC API
     Features or ArcGIS FeatureServer layer (`read_live_source`): `None` is
     automatic, `LiveMode.EMBEDDED` keeps the features in the file alone.
@@ -3143,6 +3311,7 @@ def prepare_layer(
             visible=visible,
             map_time=map_time,
             time_slider=time_slider,
+            clickable=clickable,
         )
 
     if layer.type() == QgsMapLayerType.VectorTileLayer:
