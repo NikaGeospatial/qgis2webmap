@@ -212,7 +212,7 @@ Dialog design: [`docs/ui-design.md`](docs/ui-design.md).
 
 ```bash
 python scripts/package_plugin.py                                   # build the zip
-python scripts/verify_package.py dist/qgis2webmap-*.zip  # check its shape
+python scripts/verify_package.py dist/qgis2webmap-[0-9]*.zip  # check its shape
 python -m pytest tests/unit                                        # unit tests
 ```
 
