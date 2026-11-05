@@ -19,6 +19,11 @@
         reports it - a feature layer whose next request succeeded, or a
         tile layer whose failure it retracted. The map's own diagnostics are
         watched for that, switched on only once a layer has failed.
+      - A WMS layer whose service gave a click no answer - it does not let
+        web pages read it (CORS), or did not answer at all - is named on a
+        line of its own, once, until a click on it is answered. The page's
+        click script says so with its `q2w-feature-info` event
+        (`templates/feature-info.html`).
 
       A plain script after the map, so file:// is the same.
     -->
@@ -31,6 +36,8 @@
         // listed the failure, so the report that was already on its way
         // when the error fired cannot withdraw it.
         var failed = {};
+        // Layer id -> name: a layer whose service answered no click.
+        var unanswered = {};
         var notice = null;
         var watching = false;
         var layerOf = function (id) {
@@ -58,7 +65,10 @@
           var names = Object.keys(failed).map(function (id) {
             return failed[id].name;
           });
-          if (!names.length) return;
+          var silent = Object.keys(unanswered).map(function (id) {
+            return unanswered[id];
+          });
+          if (!names.length && !silent.length) return;
           notice = document.createElement("om-widget");
           notice.setAttribute("position", place.position);
           notice.setAttribute("order", String(place.order));
@@ -78,7 +88,14 @@
           var panel = document.createElement("div");
           panel.className = "q2w-notice";
           panel.setAttribute("role", "status");
-          panel.textContent = "Could not load: " + names.join(", ");
+          var lines = [];
+          if (names.length) lines.push("Could not load: " + names.join(", "));
+          if (silent.length) lines.push("Could not get details from: " + silent.join(", "));
+          lines.forEach(function (line) {
+            var row = document.createElement("div");
+            row.textContent = line;
+            panel.appendChild(row);
+          });
           notice.appendChild(style);
           notice.appendChild(panel);
           map.appendChild(notice);
@@ -117,6 +134,20 @@
         });
         map.addEventListener("om-validation-error", function (event) {
           if (watching) check(event.detail);
+        });
+        map.addEventListener("q2w-feature-info", function (event) {
+          var changed = false;
+          ((event.detail && event.detail.answers) || []).forEach(function (answer) {
+            var known = Object.prototype.hasOwnProperty.call(unanswered, answer.layerId);
+            if (answer.status === "failed" && !known) {
+              unanswered[answer.layerId] = answer.name;
+              changed = true;
+            } else if (answer.status !== "failed" && answer.status !== "cancelled" && known) {
+              delete unanswered[answer.layerId];
+              changed = true;
+            }
+          });
+          if (changed) show();
         });
       })(@NOTICE_PLACE@);
     </script>

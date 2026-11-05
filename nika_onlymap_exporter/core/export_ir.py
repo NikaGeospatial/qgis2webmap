@@ -1011,6 +1011,10 @@ class TileSpec:
     # them (a comma list or `start/end/period`).
     time: str | None = None
     times: str | None = None
+    # A WMS layer that answers clicks: the GetFeatureInfo a click sends, as
+    # a template the page fills from it (`map_services.
+    # wms_feature_info_template`).
+    feature_info: str | None = None
 
     def snapshot(self) -> dict[str, Any]:
         snapshot: dict[str, Any] = {
@@ -1029,6 +1033,8 @@ class TileSpec:
         if self.times is not None:
             snapshot["time"] = self.time
             snapshot["times"] = self.times
+        if self.feature_info is not None:
+            snapshot["featureInfo"] = self.feature_info
         return snapshot
 
 

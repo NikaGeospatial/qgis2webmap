@@ -1118,7 +1118,7 @@ def build_tile_layer_element(
     (or a WMS's `{bbox-epsg-3857}` one),
     so the element is all attributes: where to ask, between which zooms, and
     the universal opacity, visibility and zoom range - and for a national
-    WMTS grid or a WMS-T, `_tile_service_attributes`.
+    WMTS grid, a WMS-T or a WMS that answers clicks, `_tile_service_attributes`.
     """
     inner = indent + "  "
     attributes: list[tuple[str, str | None]] = [
@@ -1149,15 +1149,25 @@ def build_tile_layer_element(
 
 
 def _tile_service_attributes(tiles: TileSpec) -> list[tuple[str, str | None]]:
-    """What a national WMTS grid or a WMS-T adds to its tile layer: the grid
-    its `{TileMatrix}` template addresses, and the `{time}` the map opens
-    at. Nothing for any other tile layer, whose element stays as it was."""
+    """What a national WMTS grid, a WMS-T or a WMS that answers clicks adds
+    to its tile layer: the grid its `{TileMatrix}` template addresses, the
+    `{time}` the map opens at, and the GetFeatureInfo a click sends, which
+    the page's click script fills (`templates/feature-info.html`). Nothing
+    for any other tile layer, whose element stays as it was."""
     attributes: list[tuple[str, str | None]] = []
     if tiles.tile_matrix_set is not None:
         attributes.append(("tile-matrix-set", tiles.tile_matrix_set))
     if tiles.times is not None and tiles.time is not None:
         attributes.append(("time", tiles.time))
+    if tiles.feature_info is not None:
+        attributes.append((FEATURE_INFO_ATTRIBUTE, tiles.feature_info))
     return attributes
+
+
+# The attribute a WMS layer that answers clicks carries its GetFeatureInfo
+# template in. The runtime reads no `data-` attribute; the page's click
+# script reads this one.
+FEATURE_INFO_ATTRIBUTE = "data-q2w-feature-info"
 
 
 # The runtime's vector tile layer, for a PMTiles archive and for a vector tile
@@ -1866,6 +1876,37 @@ POPUP_STYLES = """.om-popup {
   max-width: 100%;
   max-height: 15rem;
   border-radius: 4px;
+}"""
+
+
+# What a WMS layer's answer to a click adds to the popup's look, for the
+# page's click script (`templates/feature-info.html`): an answer can hold
+# many features and several layers, so the popup scrolls, and keeps the
+# pointer for that; a page the service wrote shows in a frame of its own.
+FEATURE_INFO_STYLES = """.q2w-info {
+  max-height: 20rem;
+  overflow: auto;
+  pointer-events: auto;
+}
+.q2w-info-layer + .q2w-info-layer {
+  margin-top: 0.6rem;
+}
+.q2w-info-feature + .q2w-info-feature {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid #e5e7eb;
+}
+.q2w-info-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.q2w-info-page {
+  display: block;
+  width: 20rem;
+  max-width: 100%;
+  height: 12rem;
+  border: 0;
+  background: #ffffff;
 }"""
 
 
