@@ -17,8 +17,11 @@
       - The units are the author's, set on the Appearance tab and written on
         the widget as `units` (the scale bar's too), so the panel's own Units
         row is removed. To keep the panel compact the mode buttons read
-        Distance and Area, named in full for a screen reader, and the Clear
-        button sits beside the readout, smaller.
+        Distance and Area, named in full for a screen reader, the readout
+        shows only while it has a reading - the runtime's descriptions of what
+        to do, such as "Pick a mode, then click the map.", are left to a
+        screen reader - and Clear is a smaller button on a row of its own
+        under it.
 
       The last point is placed the way the runtime closes a shape on a
       double-click: `draw-commit` ends it at the pointer, which the runtime
@@ -66,16 +69,20 @@
           : (mac ? "Cmd" : "Ctrl") + " + click to place the last point";
         var STYLE =
           // The runtime's own 200px minimum stays: it keeps the hint on one
-          // line and the readout on two beside Clear.
+          // line and a reading on at most two.
           ".omni-measure { padding: 6px; font-size: 12px; }" +
           ".omni-measure .row.modes { margin-bottom: 0; gap: 4px; flex-wrap: nowrap; }" +
           ".omni-measure .row.modes button { padding: 4px 8px; }" +
-          ".q2w-measure-foot { display: flex; align-items: center; gap: 4px;" +
-          "  margin-top: 6px; width: 0; min-width: 100%; }" +
-          ".q2w-measure-foot .readout { flex: 1 1 auto; min-width: 0; margin: 0;" +
+          // A reading wraps rather than widen the panel.
+          ".omni-measure .readout { width: 0; min-width: 100%; margin: 6px 0 0;" +
           "  min-height: 0; line-height: 1.35; }" +
-          ".q2w-measure-foot .clear { flex: 0 0 auto; width: auto; padding: 2px 6px;" +
-          "  font-size: 11px; border-radius: 4px; }" +
+          // Out of sight, not out of a screen reader's hearing: it is still
+          // the panel's live region.
+          ".omni-measure .readout.q2w-quiet { position: absolute; width: 1px;" +
+          "  height: 1px; min-width: 0; margin: 0; overflow: hidden;" +
+          "  clip-path: inset(50%); white-space: nowrap; }" +
+          ".omni-measure .clear { margin-top: 6px; padding: 2px 6px; font-size: 11px;" +
+          "  border-radius: 4px; }" +
           ".q2w-measure-hint { position: relative; box-sizing: border-box; width: 0;" +
           "  min-width: 100%; margin-bottom: 7px; padding: 4px 8px; border-radius: 6px;" +
           "  background: var(--om-widget-fg, #111827); color: var(--om-widget-bg, #fff);" +
@@ -156,14 +163,21 @@
           }
           var units = panel.querySelector(".units");
           if (units && units.parentElement !== panel) units.parentElement.remove();
+          // The readout shows only while it holds a reading, which always
+          // has a figure in it. Between readings the runtime writes what to
+          // do next there ("Pick a mode, then click the map.", "Click the map
+          // to place points."), which the buttons and the hint say already.
           var readout = panel.querySelector(".readout");
-          var clear = panel.querySelector("button[data-act='clear']");
-          if (readout && clear) {
-            var foot = document.createElement("div");
-            foot.className = "q2w-measure-foot";
-            readout.parentElement.insertBefore(foot, readout);
-            foot.appendChild(readout);
-            foot.appendChild(clear);
+          if (readout) {
+            var follow = function () {
+              readout.classList.toggle("q2w-quiet", !/\d/.test(readout.textContent));
+            };
+            new MutationObserver(follow).observe(readout, {
+              childList: true,
+              characterData: true,
+              subtree: true,
+            });
+            follow();
           }
           hint = document.createElement("div");
           hint.className = "q2w-measure-hint";

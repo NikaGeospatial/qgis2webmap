@@ -1447,9 +1447,9 @@ def _rects_overlap(a: dict, b: dict) -> bool:
 # `TestTallControls`' crowded map. The layer list takes half the map, and the
 # bottom-left stack (measure tool, scale bar, zoom, on the licence badge) grows
 # with the Size. With the compact measure panel, measured in chromium at 1280
-# wide, Large meets the list on a window under 600px (it fits at 600) and Larger
-# under 680px, so neither folds on a laptop window. Largest folds on any
-# window up to 1280px wide (`_fold_rules`).
+# wide in 20px steps, Large folds on a 520px window (it fits at 540) and Larger
+# on a 580px one (it fits at 600), so neither folds on a laptop window. Largest
+# folds on any window up to 1280px wide (`_fold_rules`).
 LAPTOP_FOLDS = {700: (2.0,), 800: (2.0,)}
 # The smallest common window each Size's controls fit in unfolded, so the
 # panels are still cut short at half the map.
