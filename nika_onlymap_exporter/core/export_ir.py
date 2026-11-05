@@ -971,8 +971,10 @@ class LayerTimeSpec:
     lies within `window` milliseconds before its own time, or, with no
     `window`, every one up to it (QGIS's "Accumulate features"). It opens at
     `start` with the layer filtered to `low` up to `start`. `duration` is one
-    sweep's playing time in milliseconds; `date_style` and `time_zone` label
-    the slider's time as QGIS's temporal controller shows it.
+    sweep's playing time in milliseconds; `date_style` labels the slider's
+    time as QGIS's temporal controller shows it. Every time is a date and
+    time of day counted as UTC, the clock QGIS compares times on, so the
+    slider labels it in UTC.
     """
 
     field_name: str
@@ -981,7 +983,6 @@ class LayerTimeSpec:
     window: int | None
     duration: int
     date_style: str
-    time_zone: str
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -991,7 +992,6 @@ class LayerTimeSpec:
             "window": self.window,
             "duration": self.duration,
             "dateStyle": self.date_style,
-            "timeZone": self.time_zone,
         }
 
 

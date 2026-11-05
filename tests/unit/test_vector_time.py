@@ -70,9 +70,7 @@ def _qgis(spans, t: int, accumulate: bool, end_inclusive: bool) -> set[int]:
             if span is not None and drawn((span[0], None), frame, True)
         }
     return {
-        index
-        for index, span in enumerate(spans)
-        if drawn(span, frame, end_inclusive)
+        index for index, span in enumerate(spans) if drawn(span, frame, end_inclusive)
     }
 
 
@@ -213,7 +211,6 @@ def _request(**changes) -> TimeRequest:
         "frame": FRAME,
         "starts_at_midnight": True,
         "fps": 1.0,
-        "time_zone": "Asia/Singapore",
         "columns": frozenset({"t"}),
         "fields": None,
         "context": None,
@@ -253,12 +250,13 @@ class TestApplyTime:
         assert isinstance(spec, LayerTimeSpec)
         assert spec.field_name == "qgis_time_ms_"
         assert (spec.start, spec.window, spec.date_style) == (B, DAY_MS, "date")
-        assert spec.time_zone == "Asia/Singapore"
         for feature in geojson["features"]:
             assert SPAN_PROPERTY not in feature["properties"]
             assert feature["properties"]["qgis_time_ms"] == "a field of the same name"
         rows = [item.detail for item in report.items]
-        assert any("opens at 2020-03-05" in row and "1 day frame" in row for row in rows)
+        assert any(
+            "opens at 2020-03-05" in row and "1 day frame" in row for row in rows
+        )
         assert any("does not reach the layer's labels" in row for row in rows)
 
     @pytest.mark.parametrize("accumulate", [False, True])

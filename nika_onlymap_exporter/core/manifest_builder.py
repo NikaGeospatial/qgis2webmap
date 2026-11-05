@@ -2435,7 +2435,8 @@ def build_vector_time_slider(layer: ExportLayer, indent: str) -> str:
     """The runtime's time slider over a vector `layer`'s carried times
     (`LayerTimeSpec`), headed by the layer's name as a WMS-T's is. It opens
     where the layer's filter ends, the time QGIS draws, and labels its time
-    in the computer's zone, as QGIS's temporal controller shows it."""
+    in UTC, the clock its times are counted on (`LayerTimeSpec`), so it
+    reads as QGIS's temporal controller shows it."""
     time = layer.time
     if time is None:
         return ""
@@ -2447,7 +2448,7 @@ def build_vector_time_slider(layer: ExportLayer, indent: str) -> str:
         f'title="{escape_attr(layer.name)}" '
         f'{window}duration="{time.duration}" format="date" '
         f'date-style="{time.date_style}" '
-        f'time-zone="{escape_attr(time.time_zone)}" '
+        'time-zone="UTC" '
         f'position="{WIDGET_POSITIONS["time-slider"]}"></om-widget>'
     )
 

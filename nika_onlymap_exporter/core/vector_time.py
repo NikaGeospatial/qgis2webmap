@@ -26,6 +26,9 @@ exactly a frame's start or end, as dates and whole hours are, then lies well
 inside or outside the slider's window, as QGIS has it, rather than on its
 rounded edge.
 
+Times are compared as QGIS compares them, by their date and time of day
+whatever their time zone (`Frame`), and the slider labels them so.
+
 The pure part is here and unit-tested without QGIS; `TimeRequest` reads each
 feature's span with QGIS's own expressions, as its filter does.
 
@@ -37,6 +40,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import re
 from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -51,6 +55,9 @@ if TYPE_CHECKING:
 Span = tuple[int | None, int | None]
 
 DAY_MS = 86_400_000
+# How far before its midnight a date the expression mode compares as text
+# stands (`_milliseconds`): more than the slider's float margin to 2100.
+DATE_LEAD_MS = 3_600_000
 
 # The shortest a played sweep takes, so a slider over a few frames does not
 # flash by.
@@ -59,12 +66,15 @@ MIN_SWEEP_MS = 2_000
 
 @dataclasses.dataclass(frozen=True)
 class Frame:
-    """The frame QGIS draws, in milliseconds as QGIS compares it.
+    """The frame QGIS draws, in milliseconds on QGIS's comparison clock.
 
-    QGIS writes the frame's ends into its filter as `make_datetime(...)` of
-    their date and time of day, which is local time: `begin` and `end` are
-    those wall-clock times read in the computer's time zone. A temporal
-    controller frame leaves its end out (`includes_end` off).
+    QGIS compares two dates and times by their date and time of day alone,
+    whatever zone each is in (`QgsExpressionNodeBinaryOperator` sets both to
+    UTC first), and writes the frame's ends into its filter as
+    `make_datetime(...)` of their own date and time of day. So every time
+    here is a date and time of day counted as UTC: `begin` and `end`, and
+    each feature's (`TimeRequest.spans`). A temporal controller frame leaves
+    its end out (`includes_end` off).
     """
 
     begin: int
@@ -250,8 +260,9 @@ class TimeRequest:
     the layer's fields and expression context and plain values, as
     `RuleMatcher` carries them. `start` and `end` are expressions whose value
     is a feature's start and end, read as QGIS's filter reads them (through
-    `to_datetime`, which reads a date as local midnight and a text as QGIS
-    parses it); `end` is `None` for a point in time, which lasts `fixed`
+    `to_datetime`, which reads a date as its midnight and a text as QGIS
+    parses it), on its comparison clock (`Frame`); `end` is `None` for a
+    point in time, which lasts `fixed`
     milliseconds (QGIS's "Event duration"). `open_ends` is on for the field
     modes, where a NULL time leaves its side open, and off for the expression
     mode, where QGIS never draws such a feature.
@@ -269,7 +280,6 @@ class TimeRequest:
     frame: Frame
     starts_at_midnight: bool
     fps: float
-    time_zone: str
     columns: frozenset[str] | None
     fields: Any
     context: Any
@@ -287,12 +297,11 @@ class TimeRequest:
         from qgis.core import QgsExpression, QgsExpressionContext
 
         context = QgsExpressionContext(self.context)
-        start = QgsExpression(f"epoch(to_datetime(({self.start})))")
-        end = (
-            QgsExpression(f"epoch(to_datetime(({self.end})))")
-            if self.end is not None
-            else None
-        )
+        # The field modes' filter reads a field through `to_datetime`; the
+        # expression mode's compares each expression's value as it is.
+        read = "to_datetime(({}))" if self.open_ends else "({})"
+        start = QgsExpression(read.format(self.start))
+        end = QgsExpression(read.format(self.end)) if self.end is not None else None
         duration = (
             QgsExpression(
                 f"{QgsExpression.quotedColumnRef(self.duration_field)} IS NULL"
@@ -326,27 +335,49 @@ class TimeRequest:
 
 
 def _milliseconds(value: object) -> int | None:
-    if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+    """A time on QGIS's comparison clock (`Frame`), `None` for NULL.
+
+    A date, or a text that is one, is compared with a frame's date and time
+    as text (QGIS compares unlike values so), where `2020-03-06` comes just
+    before `2020-03-06T00:00:00`: it stands just before its midnight - an
+    hour, so the slider's rounded edges (`float32_margin`) keep it on the
+    side of a midnight frame edge QGIS has it. Any other text is read as
+    `to_datetime` reads it.
+    """
+    from qgis.core import QgsExpression, QgsExpressionContext
+    from qgis.PyQt.QtCore import QDate, QDateTime, Qt, QTime
+
+    if isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        value = QDate.fromString(value, Qt.DateFormat.ISODate)
+    if isinstance(value, QDate):
+        if not value.isValid():
+            return None
+        return clock_ms(QDateTime(value, QTime(0, 0))) - DATE_LEAD_MS
+    if isinstance(value, str):
+        expression = QgsExpression(f"to_datetime({QgsExpression.quotedString(value)})")
+        value = expression.evaluate(QgsExpressionContext())
+    if not isinstance(value, QDateTime) or not value.isValid():
         return None
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
-    return int(value)
+    return clock_ms(value)
+
+
+def clock_ms(moment: Any) -> int:
+    """A `QDateTime`'s date and time of day, counted as UTC: how QGIS
+    compares it (`Frame`)."""
+    from qgis.PyQt.QtCore import QDateTime, Qt
+
+    return int(
+        QDateTime(moment.date(), moment.time(), Qt.TimeSpec.UTC).toMSecsSinceEpoch()
+    )
 
 
 def frame_from(time_range: Any) -> tuple[Frame, bool] | None:
     """The frame of a `QgsDateTimeRange` as QGIS's filter compares it, and
     whether it starts at midnight; `None` when either end is open."""
-    from qgis.PyQt.QtCore import QDateTime
-
     begin, end = time_range.begin(), time_range.end()
     if not (begin.isValid() and end.isValid()):
         return None
-
-    def local(moment: Any) -> int:
-        # `make_datetime(y, m, d, h, mi, s)`: the wall-clock time, local.
-        return int(QDateTime(moment.date(), moment.time()).toMSecsSinceEpoch())
-
-    frame = Frame(local(begin), local(end), bool(time_range.includeEnd()))
+    frame = Frame(clock_ms(begin), clock_ms(end), bool(time_range.includeEnd()))
     midnight = begin.time().hour() == 0 and begin.time().minute() == 0
     return frame, midnight and begin.time().second() == 0 and begin.time().msec() == 0
 
@@ -360,14 +391,6 @@ def interval_expression(field: str, unit_name: str) -> str | None:
     if arguments is None:
         return None
     return f"make_interval({arguments.format(QgsExpression.quotedColumnRef(field))})"
-
-
-def system_time_zone() -> str:
-    """The computer's time zone, as an IANA name the runtime labels times in."""
-    from qgis.PyQt.QtCore import QTimeZone
-
-    zone = bytes(QTimeZone.systemTimeZoneId()).decode("ascii", "replace")
-    return zone or "UTC"
 
 
 # The property a feature's span travels in from the feature read to
@@ -578,7 +601,6 @@ def read_vector_time(
         frame=frame,
         starts_at_midnight=midnight,
         fps=fps,
-        time_zone=system_time_zone(),
         columns=None if columns is None else frozenset(columns),
         fields=layer.fields(),
         context=context,
@@ -676,6 +698,5 @@ def apply_time(
         window=plan.window,
         duration=sweep_ms(plan.values, request.frame.length, request.fps),
         date_style=date_style(request.frame, request.starts_at_midnight),
-        time_zone=request.time_zone,
     )
     return {**geojson, "features": features}, spec
