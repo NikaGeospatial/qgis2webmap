@@ -4,7 +4,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.2] - Unreleased
+## [0.3.2] - 2026-11-05
 
 ### Added
 - **Rule-based styling exports.** Any rule-based layer is drawn with one
