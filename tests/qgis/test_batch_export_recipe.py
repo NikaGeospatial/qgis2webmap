@@ -101,8 +101,14 @@ def _towns_project(project, folder: Path, name: str = "towns", choose=None) -> P
 
 
 def _process_env(tmp_path: Path, **overrides: str) -> dict[str, str]:
-    """A throwaway QGIS profile that loads the plugin from this checkout."""
+    """A throwaway QGIS profile that loads the plugin from this checkout.
+
+    The run's working folder is `tmp_path`, so a runtime folder named
+    relative to ours (as CI names it) is made absolute first."""
     env = dict(os.environ)
+    for name in ("ONLYMAP_RUNTIME_DIR", "ONLYMAP_RUNTIME_CACHE"):
+        if env.get(name):
+            env[name] = str(Path(env[name]).resolve())
     env.update(
         QGIS_CUSTOM_CONFIG_PATH=str(tmp_path / "qgis-profile"),
         QGIS_PLUGINPATH=str(REPO_ROOT),
