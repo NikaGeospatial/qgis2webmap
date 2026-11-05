@@ -70,9 +70,9 @@ map:
   projection - or a **geographic** one such as EPSG:4326, which is drawn as
   QGIS draws it: one scale in degrees on both axes;
 - is not rotated;
-- carries only vector layers and image tiles (an XYZ layer whose address
-  names no vector format - `.png` tiles, or an address with no extension -
-  or a WMS or WMTS layer).
+- carries only vector layers, PMTiles archives and image tiles (an XYZ layer
+  whose address names no vector format - `.png` tiles, or an address with no
+  extension - or a WMS or WMTS layer).
 
 The Checks tab then marks the frame **Kept**. An interactive frame has no basemap in
 a projected CRS; add an XYZ layer to the map for one.
@@ -82,8 +82,8 @@ Otherwise it is redrawn in Web Mercator, and the Checks tab marks it
 differ slightly from the layout. That happens for
 
 - a **rotated** map - the rotation is kept, in Web Mercator;
-- a map carrying an embedded **raster** or **vector tiles** - the row names
-  the layer.
+- a map carrying a **raster**, or a **vector tile** layer drawn in its
+  publisher's style - the row names the layer.
 
 ## When to keep a map as an Image
 

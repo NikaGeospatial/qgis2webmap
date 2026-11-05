@@ -51,7 +51,7 @@ QGIS drew, so its layers come across as they look.
 | In the layout | In the cartograph |
 |---|---|
 | Map item, **Image** frame | **Changed** - a pixel-exact image in the map's own CRS, at the DPI chosen in Map frames. Each layer it draws gets a **Rasterised** row: it looks exactly as in QGIS, but is part of the picture |
-| Map item, **Interactive** frame | **Kept** - an interactive map, in EPSG:3857 or in the map's own CRS (projected, or geographic such as EPSG:4326) when its layers are vectors or image tiles. Drawn in Web Mercator, and marked **Changed**, when the map is rotated or when it carries a raster or vector tiles ([which CRS an interactive frame draws in](live-or-static-frames.md#which-crs-an-interactive-frame-draws-in)) |
+| Map item, **Interactive** frame | **Kept** - an interactive map, in EPSG:3857 or in the map's own CRS (projected, or geographic such as EPSG:4326) when its layers are vectors, PMTiles archives or image tiles. Drawn in Web Mercator, and marked **Changed**, when the map is rotated or when it carries a raster or a vector tile layer drawn in its publisher's style ([which CRS an interactive frame draws in](live-or-static-frames.md#which-crs-an-interactive-frame-draws-in)) |
 | Map rotation | **Kept** |
 | A layer drawn in more than one interactive frame | **Kept** in each - its features are written into the file once |
 | A vector layer that follows QGIS's time (Layer Properties > Temporal), in an interactive frame | **Changed** - every feature, as QGIS draws the layer with its temporal controller off - a cartograph has no QGIS map view to read the time from - and Checks says so. A frame has no time slider, which the [web map](supported-features.md#layers) has |
