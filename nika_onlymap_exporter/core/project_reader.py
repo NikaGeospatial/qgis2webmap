@@ -198,7 +198,8 @@ def extent_from_canvas(canvas: Any) -> Extent | None:
 
 
 def map_time_from_canvas(canvas: Any) -> MapTime | None:
-    """The time the QGIS canvas draws, for WMS-T layers that follow it.
+    """The time the QGIS canvas draws, for WMS-T and vector layers that
+    follow it.
 
     Beside `extent_from_canvas` for the same reason. `None` on anything
     unreadable, which the reader treats as having no view to read.
@@ -215,7 +216,8 @@ def map_time_from_canvas(canvas: Any) -> MapTime | None:
 def needs_map_time(project: QgsProject) -> bool:
     """Whether any layer of `project` reads the time the QGIS view draws.
 
-    Only a WMS-T snapshot that follows QGIS's time does (`follows_map_time`);
+    Only a WMS-T or a vector layer that follows QGIS's time does
+    (`follows_map_time`);
     without one the time is neither read nor part of the dialog's read cache,
     so moving the temporal controller costs nothing.
     """
@@ -847,7 +849,9 @@ def _declutter(
     """
     decluttered: list[ExportLayer] = []
     for layer in layers:
-        if layer.filter is not None and layer.cluster_allowed:
+        if (layer.filter is not None or layer.time is not None) and (
+            layer.cluster_allowed
+        ):
             layer = _unclustered_for_its_filter(layer, report)
         layer, stacked, repeated = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)
         _report_repeats(layer, repeated, report)
@@ -911,18 +915,20 @@ def _resolve_live(
 def _unclustered_for_its_filter(
     layer: ExportLayer, report: FidelityReportBuilder
 ) -> ExportLayer:
-    """`layer`, which has a filter, kept from clustering - and said so when it
-    would have clustered.
+    """`layer`, which has a filter or a time slider, kept from clustering -
+    and said so when it would have clustered.
 
     The runtime's filter hides points but does not count the bubbles again,
-    so a bubble would go on counting the points the reader filtered out.
+    so a bubble would go on counting the points the reader filtered out. A
+    time slider is that filter too.
     """
     clustered = declutter_noting_stacks(layer, DEFAULT_LABEL_SIZE)[0]
     if clustered.cluster_max_zoom is not None:
+        what = "a filter" if layer.filter is not None else "a time slider"
         report.approximated(
             f"Markers of '{layer.name}'",
             f"{layer.feature_count:,} points pile up when zoomed out, but they "
-            "are not merged into count bubbles, because the layer has a filter "
+            f"are not merged into count bubbles, because the layer has {what} "
             "and the map's filter cannot count the bubbles again. Every point "
             "shows at every zoom.",
             layer.layer_id,

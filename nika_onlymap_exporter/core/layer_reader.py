@@ -86,6 +86,13 @@ from .renderer_translator import (
     translate_renderer,
 )
 from .symbol_rasterizer import build_icon_atlas
+from .vector_time import (
+    SPAN_PROPERTY,
+    TimeRequest,
+    VectorTime,
+    apply_time,
+    read_vector_time,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Iterable, Mapping
@@ -433,6 +440,9 @@ class LayerFeatures:
     # of those kept - read, not written. `None` when they read every field.
     rules: RuleMatcher | None = None
     rule_indexes: tuple[int, ...] | None = ()
+    # How each feature's time span is read, for a layer that follows QGIS's
+    # time (`core.vector_time`); its fields are read like the label's.
+    time: TimeRequest | None = None
 
     def display_values(self, features: list[QgsFeature]) -> list[dict[str, Any]]:
         """Per feature, each formatted field's shown value under its display name."""
@@ -735,13 +745,14 @@ def snapshot_features(
     scans: LayerScans | None = None,
     label: LabelExpression | None = None,
     rules: RuleMatcher | None = None,
+    time: TimeRequest | None = None,
 ) -> LayerFeatures:
     """Copy out what `export_geojson_from` needs. **GUI thread only.**
 
     `display_names` is `popup_display_names`: the fields to write a shown-value
     copy of, which is none for a caller that has no popup. `keep` is the names
     of the fields the export keeps, which are then the only ones read, with
-    those `label`'s expression reads (written, then dropped by
+    those `label`'s and `time`'s expressions read (written, then dropped by
     `keep_only_fields`) and those `rules` read (read, never written); `None`
     reads them all. `scans` as for `prepare_layer`.
     """
@@ -751,6 +762,8 @@ def snapshot_features(
     fields = layer.fields()
     attribute_indexes = None
     reads = frozenset() if label is None else label.columns
+    if time is not None:
+        reads = None if reads is None or time.columns is None else reads | time.columns
     if keep is not None and reads is not None:
         # The expression's fields are read but not kept: only its text is
         # written, so a field it reads that the popup hides stays out.
@@ -779,6 +792,7 @@ def snapshot_features(
         label=label,
         rules=rules,
         rule_indexes=rule_indexes,
+        time=time,
     )
 
 
@@ -870,6 +884,16 @@ def export_geojson_from(
                 report,
                 features.layer_name,
                 layer_id,
+            )
+        if features.time is not None:
+            # Taken out again by `vector_time.apply_time`, once the features
+            # QGIS hides by their class are gone.
+            _add_display_values(
+                collection,
+                [
+                    {SPAN_PROPERTY: None if span is None else list(span)}
+                    for span in features.time.spans(collected)
+                ],
             )
     except (OSError, ValueError, RuntimeError) as exc:
         report.blocked(
@@ -1822,13 +1846,23 @@ def _takes_qgis_time(pairs: list[tuple[str, str]]) -> bool:
 def follows_map_time(layer: QgsMapLayer) -> bool:
     """Whether reading `layer` uses the time the QGIS map view draws.
 
-    True only for what `_wms_snapshot_time` reads `map_time` for: a WMS-T
-    that takes its time from QGIS, with its dynamic temporal control on. For
-    every other layer the time is never read, so a project without one does
-    not need it at all.
+    True only for what `_wms_snapshot_time` and `vector_time.read_vector_time`
+    read `map_time` for: a WMS-T that takes its time from QGIS, with its
+    dynamic temporal control on, and a vector layer whose temporal properties
+    are on (but for one QGIS only redraws). For every other layer the time is
+    never read, so a project without one does not need it at all.
     """
+    from qgis.core import Qgis
+
     from . import map_services
 
+    if layer.type() == QgsMapLayerType.VectorLayer:
+        properties = layer.temporalProperties()
+        return (
+            properties is not None
+            and bool(properties.isActive())
+            and properties.mode() != Qgis.VectorTemporalMode.RedrawLayerOnly
+        )
     if (layer.providerType() or "").lower() != "wms":
         return False
     pairs = map_services.source_pairs(layer.source())
@@ -2779,6 +2813,8 @@ class PendingLayer:
     renumber_ids: bool = False
     # The dialog's "Filter by", worked out in `finish` from the data itself.
     filter_request: FilterRequest | None = None
+    # How the layer follows QGIS's time: its slider, or the snapshot it is.
+    time: VectorTime | None = None
 
     def finish(self, report: FidelityReportBuilder) -> ExportLayer | None:
         """Read the features and complete the layer. **Safe off the GUI thread.**"""
@@ -2797,6 +2833,16 @@ class PendingLayer:
         # the style. The count has to reflect what actually ships.
         read_count = len(geojson.get("features") or ())
         geojson = drop_hidden_features(geojson, base.renderer)
+        layer_time = None
+        if self.time is not None:
+            geojson, layer_time = apply_time(
+                geojson,
+                self.time,
+                base.name,
+                base.layer_id,
+                base.labeling.enabled,
+                report,
+            )
 
         # Only the attributes something still reads survive: what the popup shows,
         # plus what the map draws with. A value the user hid must leave the file,
@@ -2808,6 +2854,8 @@ class PendingLayer:
         # too: what the popup reads is a copy, and a map or atlas that reads the
         # field by its own name still gets the value it was built against.
         keep |= {fmt.name for fmt in self.features.formats}
+        if layer_time is not None:
+            keep.add(layer_time.field_name)
         geojson = keep_only_fields(geojson, keep)
         feature_ids: tuple[tuple[int, int], ...] = ()
         if self.renumber_ids:
@@ -2870,6 +2918,7 @@ class PendingLayer:
             geojson=geojson,
             feature_ids=feature_ids,
             filter=layer_filter,
+            time=layer_time,
             live=live,
         )
 
@@ -3058,8 +3107,8 @@ def prepare_layer(
     points in the artifact, and the fidelity report should not list translation
     notes for something the user asked not to export.
 
-    `map_time` is the time the QGIS map view draws, for a WMS-T layer that
-    follows it; `None` when there is no view (see `MapTime`).
+    `map_time` is the time the QGIS map view draws, for a WMS-T or vector
+    layer that follows it; `None` when there is no view (see `MapTime`).
 
     `filter_field` is the dialog's "Filter by": the field the web map's filter
     panel filters this vector layer by, kept in the data whatever the popup
@@ -3069,7 +3118,8 @@ def prepare_layer(
     placed along (`translate_labeling`); `None` is the project's.
 
     `time_slider` is off where the map has no controls (a cartograph's
-    frame): a WMS-T is then a snapshot of the time QGIS draws.
+    frame): a WMS-T or vector layer that follows QGIS's time is then a
+    snapshot of the time QGIS draws (`core.vector_time` for a vector's).
 
     `live_choice` is the Layers tab's Features choice for a WFS, OGC API
     Features or ArcGIS FeatureServer layer (`read_live_source`): `None` is
@@ -3235,6 +3285,13 @@ def prepare_layer(
     live = read_live_source(
         layer, live_choice, keep, bool(display_names), clip_extent is not None
     )
+    time = read_vector_time(layer, report, map_time, time_slider)
+    if live is not None and time is not None and time.request is not None:
+        # Which features show when is worked out from their times at export.
+        live = dataclasses.replace(
+            live,
+            embedded_only=(*live.embedded_only, "the times its features show at"),
+        )
     # The rules are matched as the features are read, from the renderer as it
     # is now - the one just translated.
     rules = (
@@ -3250,6 +3307,7 @@ def prepare_layer(
         scans,
         label=label_expression(layer, labeling),
         rules=rules,
+        time=time.request if time is not None else None,
     )
 
     base = ExportLayer(
@@ -3257,7 +3315,8 @@ def prepare_layer(
         name=name,
         geometry_kind=kind,
         source_kind=source_kind(layer),
-        visible=visible,
+        # Not drawn by QGIS at the time it draws now: off as the map opens.
+        visible=visible and not (time is not None and time.hidden),
         opacity=float(layer.opacity()),
         scale_range=scale_range(layer),
         renderer=renderer,
@@ -3280,4 +3339,5 @@ def prepare_layer(
         drawing=frozenset(drawing),
         renumber_ids=renumber_ids,
         filter_request=filter_request,
+        time=time if time is not None and time.request is not None else None,
     )

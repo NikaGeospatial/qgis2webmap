@@ -961,6 +961,41 @@ class LayerFilterSpec:
 
 
 @dataclass(frozen=True)
+class LayerTimeSpec:
+    """A time slider over a vector layer that follows QGIS's time.
+
+    `field_name` is the property the slider filters on: each feature's time
+    in milliseconds since 1970, worked out at export and shifted so that a
+    slider at `start` shows exactly what QGIS draws for the frame beginning
+    there (`core.vector_time`). The slider shows the features whose value
+    lies within `window` milliseconds before its own time, or, with no
+    `window`, every one up to it (QGIS's "Accumulate features"). It opens at
+    `start` with the layer filtered to `low` up to `start`. `duration` is one
+    sweep's playing time in milliseconds; `date_style` and `time_zone` label
+    the slider's time as QGIS's temporal controller shows it.
+    """
+
+    field_name: str
+    start: int
+    low: int
+    window: int | None
+    duration: int
+    date_style: str
+    time_zone: str
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "field": self.field_name,
+            "start": self.start,
+            "low": self.low,
+            "window": self.window,
+            "duration": self.duration,
+            "dateStyle": self.date_style,
+            "timeZone": self.time_zone,
+        }
+
+
+@dataclass(frozen=True)
 class LegendImage:
     """A legend picture a map service draws, loaded by the viewer's browser.
 
@@ -1337,6 +1372,9 @@ class ExportLayer:
     cluster_allowed: bool = True
     # The dialog's per-layer "Filter by"; `None` - the default - is no filter.
     filter: LayerFilterSpec | None = None
+    # A time slider for a layer that follows QGIS's time; `None` for every
+    # other layer, and for one exported as a snapshot of the time QGIS draws.
+    time: LayerTimeSpec | None = None
     renderer: RendererSpec = field(
         default_factory=lambda: RendererSpec(kind=RendererKind.UNSUPPORTED)
     )
@@ -1444,6 +1482,8 @@ class ExportLayer:
         }
         if self.filter is not None:
             data["filter"] = self.filter.snapshot()
+        if self.time is not None:
+            data["time"] = self.time.snapshot()
         if self.live is not None:
             data["live"] = self.live.snapshot()
         if self.vector_tiles is not None:

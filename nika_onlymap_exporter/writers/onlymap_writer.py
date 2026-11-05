@@ -834,7 +834,7 @@ def _top_left_stack_block(project: ExportProject) -> str:
 
     A transform moves nothing out of the way, so each panel scaled on its own
     grew down over the one under it. The layer switcher was alone up there
-    until the filter panels and the WMS-T time sliders joined it; with
+    until the filter panels and the time sliders joined it; with
     company, the corner's slot is scaled from its corner instead, and the
     panels in it are not scaled again.
     A narrow map that folds them into a drawer takes them out of the slot,
@@ -843,6 +843,7 @@ def _top_left_stack_block(project: ExportProject) -> str:
     """
     if not any(
         layer.filter is not None
+        or layer.time is not None
         or (layer.tiles is not None and layer.tiles.times is not None)
         for layer in project.exportable_layers
     ):

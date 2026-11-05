@@ -1461,8 +1461,7 @@ def build_layer_element(
         )
         attributes.append(("get-cluster-radius", cluster_radius_expression(layer)))
 
-    if layer.filter is not None:
-        attributes.extend(_filter_attributes(layer.filter))
+    attributes.extend(_layer_filter_attributes(layer))
 
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))
@@ -2346,6 +2345,31 @@ def _legend_image_markup(layer: ExportLayer, indent: str) -> list[str]:
     return lines
 
 
+def _layer_filter_attributes(layer: ExportLayer) -> list[tuple[str, str | None]]:
+    """The filters a layer opens with: its filter panel's and its time
+    slider's. A slider over a number or date beside a time slider are two
+    ranges, which the runtime takes together as `filter-fields`; each
+    control then moves its own."""
+    attributes = _filter_attributes(layer.filter) if layer.filter is not None else []
+    time = layer.time
+    if time is None:
+        return attributes
+    if attributes and attributes[0][0] == "filter-field":
+        panel = layer.filter
+        assert panel is not None
+        low, high = panel.value_range or (0.0, 0.0)
+        ranges = [
+            {"field": panel.field_name, "range": [low, high]},
+            {"field": time.field_name, "range": [time.low, time.start]},
+        ]
+        return [("filter-fields", json.dumps(ranges, ensure_ascii=False))]
+    return [
+        *attributes,
+        ("filter-field", time.field_name),
+        ("filter-range", f"[{time.low}, {time.start}]"),
+    ]
+
+
 def _filter_attributes(spec: LayerFilterSpec) -> list[tuple[str, str | None]]:
     """The filter a layer's filter panel drives, as the map opens: a range
     over every value, or every value kept. The panel reads its mode - slider
@@ -2391,7 +2415,11 @@ def build_filter_widget(layer: ExportLayer, indent: str) -> str:
 def build_time_slider_widget(layer: ExportLayer, indent: str) -> str:
     """The runtime's time slider for a WMS-T `layer`: play and scrub through
     the times its service lists, headed by the layer's name. It opens where
-    the layer's `time` is, the time QGIS draws."""
+    the layer's `time` is, the time QGIS draws. For a vector layer that
+    follows QGIS's time, the slider over its features' times instead
+    (`build_vector_time_slider`)."""
+    if layer.time is not None:
+        return build_vector_time_slider(layer, indent)
     tiles = layer.tiles
     if tiles is None or tiles.times is None:
         return ""
@@ -2399,6 +2427,27 @@ def build_time_slider_widget(layer: ExportLayer, indent: str) -> str:
         f'{indent}<om-widget type="time-slider" '
         f'layer="{escape_attr(layer.layer_id)}" '
         f'times="{escape_attr(tiles.times)}" '
+        f'position="{WIDGET_POSITIONS["time-slider"]}"></om-widget>'
+    )
+
+
+def build_vector_time_slider(layer: ExportLayer, indent: str) -> str:
+    """The runtime's time slider over a vector `layer`'s carried times
+    (`LayerTimeSpec`), headed by the layer's name as a WMS-T's is. It opens
+    where the layer's filter ends, the time QGIS draws, and labels its time
+    in the computer's zone, as QGIS's temporal controller shows it."""
+    time = layer.time
+    if time is None:
+        return ""
+    window = f'window="{time.window}" ' if time.window is not None else ""
+    return (
+        f'{indent}<om-widget type="time-slider" '
+        f'layer="{escape_attr(layer.layer_id)}" '
+        f'field="{escape_attr(time.field_name)}" '
+        f'title="{escape_attr(layer.name)}" '
+        f'{window}duration="{time.duration}" format="date" '
+        f'date-style="{time.date_style}" '
+        f'time-zone="{escape_attr(time.time_zone)}" '
         f'position="{WIDGET_POSITIONS["time-slider"]}"></om-widget>'
     )
 
@@ -2583,11 +2632,13 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
         for layer in project.exportable_layers
         if layer.filter is not None
     )
-    # And one time slider per WMS-T, under them.
+    # And one time slider per WMS-T or vector layer that follows QGIS's
+    # time, under them.
     widgets.extend(
         build_time_slider_widget(layer, indent)
         for layer in project.exportable_layers
-        if layer.tiles is not None and layer.tiles.times is not None
+        if layer.time is not None
+        or (layer.tiles is not None and layer.tiles.times is not None)
     )
     # The units are the author's, the measure tool's and the scale bar's
     # alike: the page's `templates/measure-tool.html` takes the measure
