@@ -62,9 +62,11 @@ from qgis.PyQt.QtGui import (
     QPalette,
     QResizeEvent,
     QShowEvent,
+    QValidator,
     QWheelEvent,
 )
 from qgis.PyQt.QtWidgets import (
+    QAbstractSpinBox,
     QAction,
     QBoxLayout,
     QButtonGroup,
@@ -239,6 +241,17 @@ _OSM_FILE_NOTE_FOR_CATALOGUE = N_(
 _PANEL_SIZE_ATTRIBUTES = {
     "legend": ("legend_width", "legend_height"),
     "layerSwitcher": ("layer_switcher_width", "layer_switcher_height"),
+}
+
+# Where each one's width and height boxes step from when they leave Auto, which
+# has no size of its own: what Auto gives a typical panel at Normal size,
+# measured in chromium at 1280x800 on a map of five layers, two of them
+# categorized - a legend 164x319, a layer switcher 164x162. 164 is any panel
+# whose rows are narrower than its own 140px minimum, so that is kept; the
+# heights depend on the rows and are rounded.
+_PANEL_AUTO_STARTS = {
+    "legend": (164, 320),
+    "layerSwitcher": (164, 160),
 }
 
 # The Share rows that act on the map file, so need one to have been chosen.
@@ -648,16 +661,20 @@ def _search_key(text: str) -> str:
 class _PanelSizeBox(QSpinBox):
     """A legend or layer switcher dimension in pixels, or Auto when empty.
 
-    Auto is the value one below the range, shown as its special text, so the
-    down arrow from the smallest size reaches it and clearing the box picks
-    it. A typed number outside the range is clamped into it rather than
-    thrown away - 50 is the smallest size, not Auto. The wheel is ignored,
+    Auto is the value one below the range, shown as its special text, and
+    clearing the box picks it. Auto has no size of its own, so the arrows
+    leave it from `start`, the size Auto gives a typical panel: up to a step
+    past it, down to a step short of it. Down stops at the smallest size;
+    back to Auto is the row's reset button or an empty box. A typed number
+    outside the range is clamped into it rather than thrown away - the one
+    below the range is the smallest size, not Auto. The wheel is ignored,
     like the cartograph's spin boxes: it scrolls the tab behind.
     """
 
-    def __init__(self, low: int, high: int, parent: QWidget) -> None:
+    def __init__(self, low: int, high: int, start: int, parent: QWidget) -> None:
         super().__init__(parent)
         self._low = low
+        self._start = start
         self.setRange(low - 1, high)
         self.setSpecialValueText(tr("Auto"))
         self.setSuffix(" px")
@@ -671,6 +688,36 @@ class _PanelSizeBox(QSpinBox):
 
     def set_pixels(self, value: int | None) -> None:
         self.setValue(self.minimum() if value is None else value)
+
+    def validate(self, text: str | None, pos: int) -> tuple[QValidator.State, str, int]:
+        state, text, pos = super().validate(text, pos)
+        # Only the special text is Auto: a number typed under the range is
+        # unfinished, and `fixup` brings it up to the smallest size.
+        if (
+            state == QValidator.State.Acceptable
+            and text != self.specialValueText()
+            and self.valueFromText(text) < self._low
+        ):
+            state = QValidator.State.Intermediate
+        return state, text, pos
+
+    def stepBy(self, steps: int) -> None:  # noqa: N802 - Qt override
+        # What was typed counts, as for QSpinBox's own step.
+        self.interpretText()
+        current = self._start if self.pixels() is None else self.value()
+        target = current + steps * self.singleStep()
+        self.setValue(max(self._low, min(self.maximum(), target)))
+        self.selectAll()
+
+    def stepEnabled(self) -> QAbstractSpinBox.StepEnabledFlag:  # noqa: N802
+        flags = QAbstractSpinBox.StepEnabledFlag
+        if self.isReadOnly():
+            return super().stepEnabled()
+        if self.pixels() is None:
+            return flags.StepUpEnabled | flags.StepDownEnabled
+        up = flags.StepUpEnabled if self.value() < self.maximum() else flags.StepNone
+        down = flags.StepDownEnabled if self.value() > self._low else flags.StepNone
+        return up | down
 
     def fixup(self, text: str | None) -> str:
         digits = "".join(ch for ch in (text or "") if ch.isdigit())
@@ -2537,10 +2584,12 @@ class MainDialog(QDialog):
         # set; zoom controls, scale bar and measure tool have fixed sizes. The
         # measure tool has its units there instead.
         self.widget_sizes: dict[str, tuple[_PanelSizeBox, _PanelSizeBox]] = {}
+        # And the button after them that puts both back to Auto.
+        self.widget_size_resets: dict[str, QToolButton] = {}
         # One grid for the switches, so what is beside them starts in one
         # column whichever switch's label is the longest.
         sizes_grid = QGridLayout()
-        sizes_grid.setColumnStretch(4, 1)
+        sizes_grid.setColumnStretch(5, 1)
         chrome_layout.addLayout(sizes_grid)
         for key, label, current in (
             ("legend", tr("Legend"), self.state.show_legend),
@@ -2731,8 +2780,9 @@ class MainDialog(QDialog):
         """`check` with the panel's width and height beside it, shown while
         the panel is on the map, as the next row of `grid`."""
         width_attribute, height_attribute = _PANEL_SIZE_ATTRIBUTES[key]
-        width = _PanelSizeBox(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH, page)
-        height = _PanelSizeBox(MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT, page)
+        width_start, height_start = _PANEL_AUTO_STARTS[key]
+        width = _PanelSizeBox(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH, width_start, page)
+        height = _PanelSizeBox(MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT, height_start, page)
         width.set_pixels(getattr(self.state, width_attribute))
         height.set_pixels(getattr(self.state, height_attribute))
         width.setToolTip(
@@ -2763,13 +2813,35 @@ class MainDialog(QDialog):
             )
         )
         times = QLabel("\N{MULTIPLICATION SIGN}", page)
+        # Both boxes back to Auto at once; greyed while both already are.
+        reset = QToolButton(page)
+        reset.setText("\N{ANTICLOCKWISE OPEN CIRCLE ARROW}")
+        reset.setAutoRaise(True)
+        reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset.setToolTip(tr("Back to Auto"))
+        reset.setAccessibleName(
+            tr("{control} size back to Auto").format(control=check.text())
+        )
+
+        def back_to_auto() -> None:
+            width.set_pixels(None)
+            height.set_pixels(None)
+
+        def enable_reset() -> None:
+            reset.setEnabled(width.pixels() is not None or height.pixels() is not None)
+
+        enable_reset()
+        reset.clicked.connect(back_to_auto)
+        width.valueChanged.connect(enable_reset)
+        height.valueChanged.connect(enable_reset)
         row = _next_row(grid)
         grid.addWidget(check, row, 0)
-        for column, widget in enumerate((width, times, height), start=1):
+        for column, widget in enumerate((width, times, height, reset), start=1):
             grid.addWidget(widget, row, column)
             widget.setVisible(check.isChecked())
             check.toggled.connect(widget.setVisible)
         self.widget_sizes[key] = (width, height)
+        self.widget_size_resets[key] = reset
 
     def _add_measure_units_row(
         self, grid: QGridLayout, check: QCheckBox, page: QWidget
@@ -2818,9 +2890,10 @@ class MainDialog(QDialog):
         show_units()
         check.toggled.connect(show_units)
         scale_bar.toggled.connect(show_units)
-        # Across the size boxes' columns and the stretch after them, so the
-        # radio buttons widen none of the columns the boxes are in.
-        grid.addLayout(units_row, row, 1, 1, 4)
+        # Across the size boxes' columns, their reset button's and the stretch
+        # after them, so the radio buttons widen none of the columns the boxes
+        # are in.
+        grid.addLayout(units_row, row, 1, 1, 5)
 
     def _on_widget_toggled(self, key: str, value: bool) -> None:
         attribute = {

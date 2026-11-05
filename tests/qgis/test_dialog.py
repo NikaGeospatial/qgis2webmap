@@ -603,7 +603,7 @@ class TestPanelSizes:
         )
         project.writeEntry("qgis2webmap", "widgets", json.dumps(widgets))
         state = load_state(project)
-        assert (state.legend_width, state.legend_height) == (600, 100)
+        assert (state.legend_width, state.legend_height) == (600, 50)
         assert state.layer_switcher_width is None
         assert state.layer_switcher_height is None
 
@@ -654,7 +654,16 @@ class TestPanelSizes:
 
     @pytest.mark.parametrize(
         ("typed", "expected"),
-        [("320", 320), ("50", 140), ("9000", 600), ("", None)],
+        # 104 is one below the smallest width, which the box keeps for Auto;
+        # 139 was that, before the smallest width came down from 140.
+        [
+            ("320", 320),
+            ("50", 105),
+            ("104", 105),
+            ("139", 139),
+            ("9000", 600),
+            ("", None),
+        ],
     )
     def test_what_is_typed_is_clamped_into_the_range(
         self, qgis_app, project, make_memory_layer, typed, expected
@@ -676,17 +685,169 @@ class TestPanelSizes:
         dialog = TestTabCorner()._dialog(project, make_memory_layer)
         try:
             _width, height = dialog.widget_sizes["legend"]
-            for typed, expected in (("5", 100), ("1200", 1000), ("750", 750)):
+            for typed, expected in (
+                ("5", 50),
+                ("49", 50),
+                ("99", 99),
+                ("1200", 1000),
+                ("750", 750),
+            ):
                 height.lineEdit().setText(typed)
                 height.interpretText()
                 assert dialog.state.legend_height == expected
-            # The step below the smallest size is Auto.
-            height.set_pixels(100)
+            # Down stops at the smallest size: Auto is not below it.
+            height.set_pixels(50)
             height.stepDown()
-            assert height.text() == "Auto"
-            assert dialog.state.legend_height is None
+            assert height.text() == "50 px"
+            assert dialog.state.legend_height == 50
         finally:
             dialog.close()
+
+    @pytest.mark.parametrize("key", ["legend", "layerSwitcher"])
+    def test_the_arrows_leave_auto_either_side_of_its_usual_size(
+        self, qgis_app, project, make_memory_layer, key
+    ) -> None:
+        """Auto has no number, so its arrows start from the size Auto gives a
+        typical panel: up is a step bigger, down a step smaller - by the
+        arrow buttons and by the keyboard alike."""
+        from qgis.PyQt.QtCore import Qt
+        from qgis.PyQt.QtTest import QTest
+        from qgis.PyQt.QtWidgets import QAbstractSpinBox
+
+        from nika_onlymap_exporter.ui.main_dialog import _PANEL_AUTO_STARTS
+
+        flags = QAbstractSpinBox.StepEnabledFlag
+        attributes = {
+            "legend": ("legend_width", "legend_height"),
+            "layerSwitcher": ("layer_switcher_width", "layer_switcher_height"),
+        }[key]
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            boxes = dialog.widget_sizes[key]
+            for box, start, attribute in zip(
+                boxes, _PANEL_AUTO_STARTS[key], attributes
+            ):
+                box.set_pixels(None)
+                # Both arrows are live on Auto.
+                assert box.stepEnabled() == flags.StepUpEnabled | flags.StepDownEnabled
+                box.stepUp()
+                assert box.pixels() == start + 1
+                assert getattr(dialog.state, attribute) == start + 1
+                box.set_pixels(None)
+                box.stepDown()
+                assert box.pixels() == start - 1
+                assert getattr(dialog.state, attribute) == start - 1
+                box.set_pixels(None)
+                QTest.keyClick(box, Qt.Key.Key_Down)
+                assert box.pixels() == start - 1
+                box.set_pixels(None)
+                QTest.keyClick(box, Qt.Key.Key_Up)
+                assert box.pixels() == start + 1
+                # From a number it steps from that number.
+                box.set_pixels(300)
+                box.stepUp()
+                assert box.pixels() == 301
+        finally:
+            dialog.close()
+
+    def test_down_stops_at_the_smallest_size(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QAbstractSpinBox
+
+        flags = QAbstractSpinBox.StepEnabledFlag
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            width, height = dialog.widget_sizes["layerSwitcher"]
+            for box, low in ((width, 105), (height, 50)):
+                box.set_pixels(low + 3)
+                box.stepBy(-10)
+                assert box.pixels() == low
+                assert box.stepEnabled() == flags.StepUpEnabled
+        finally:
+            dialog.close()
+
+    def test_the_reset_button_puts_both_back_to_auto(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """One button per row, after its boxes: greyed while both say Auto,
+        hidden with them when the control is off, and Auto for both when
+        pressed."""
+        from qgis.PyQt.QtCore import QPoint
+
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            assert set(dialog.widget_size_resets) == {"legend", "layerSwitcher"}
+            width, height = dialog.widget_sizes["legend"]
+            reset = dialog.widget_size_resets["legend"]
+            assert reset.toolTip() == "Back to Auto"
+            assert reset.accessibleName() == "Legend size back to Auto"
+            assert not reset.isEnabled()
+            width.set_pixels(300)
+            assert reset.isEnabled()
+            width.set_pixels(None)
+            assert not reset.isEnabled()
+            height.set_pixels(80)
+            assert reset.isEnabled()
+            width.set_pixels(250)
+            # The other row's button is its own.
+            assert not dialog.widget_size_resets["layerSwitcher"].isEnabled()
+            reset.click()
+            assert width.text() == height.text() == "Auto"
+            assert dialog.state.legend_width is None
+            assert dialog.state.legend_height is None
+            assert not reset.isEnabled()
+
+            dialog.show()
+            titles = [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]
+            dialog.tabs.setCurrentIndex(titles.index("Appearance"))
+            qgis_app.processEvents()
+            group = width.parentWidget()
+            assert (
+                reset.mapTo(group, QPoint(0, 0)).x()
+                > height.mapTo(group, QPoint(0, 0)).x()
+            )
+            assert not reset.isHidden()
+            dialog.widget_checks["legend"].setChecked(False)
+            assert reset.isHidden()
+            dialog.widget_checks["legend"].setChecked(True)
+            assert not reset.isHidden()
+        finally:
+            dialog.close()
+
+    @pytest.mark.parametrize(
+        ("width", "height"),
+        # The new smallest, the old Auto values (one below the old smallest)
+        # and the old smallest, the largest, and Auto.
+        [(105, 50), (139, 99), (140, 100), (600, 1000), (None, None)],
+    )
+    def test_any_saved_size_opens_and_saves_unchanged(
+        self, qgis_app, project, make_memory_layer, width, height
+    ) -> None:
+        save_state(
+            project,
+            DialogState(
+                legend_width=width,
+                legend_height=height,
+                layer_switcher_width=width,
+                layer_switcher_height=height,
+            ),
+        )
+        dialog = TestTabCorner()._dialog(project, make_memory_layer)
+        try:
+            for key in ("legend", "layerSwitcher"):
+                boxes = dialog.widget_sizes[key]
+                assert (boxes[0].pixels(), boxes[1].pixels()) == (width, height)
+                assert dialog.widget_size_resets[key].isEnabled() == (width is not None)
+            save_state(project, dialog.state)
+        finally:
+            dialog.close()
+        state = load_state(project)
+        assert (state.legend_width, state.legend_height) == (width, height)
+        assert (state.layer_switcher_width, state.layer_switcher_height) == (
+            width,
+            height,
+        )
 
     def test_it_opens_with_the_sizes_the_project_saved(
         self, qgis_app, project, make_memory_layer

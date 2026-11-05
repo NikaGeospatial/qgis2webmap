@@ -9,7 +9,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 ### Changed
 - The map runtime is OnlyMap 0.13.4.
 
-## [0.3.2] - Unreleased
+## [0.3.2] - 2026-11-05
 
 ### Added
 - **Rule-based styling exports.** Any rule-based layer is drawn with one
@@ -35,9 +35,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   closes on **Ctrl + click** (**Cmd + click** on a Mac) at its last point, as
   well as on a double-click, a double-tap or Enter, and a hint above the tool
   says so while one is being drawn. The panel is compact: its buttons read
-  **Distance** and **Area**, and Clear sits beside the readout. It sits
-  bottom left, just above the licence notice, and is not drawn in a
-  cartograph's interactive frames.
+  **Distance** and **Area**, the reading shows under them only while there
+  is one, with no description of the tool, and **Clear** is a row under
+  that. It sits bottom left, just above the licence notice, and is not drawn
+  in a cartograph's interactive frames.
 - **Filter by**, a new choice on a vector layer's *This layer only* row in
   the Layers tab: the web map gets a panel, top left, that filters the layer
   by that field - a slider for a number or a date, a tick box per value for
@@ -55,10 +56,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   network dependencies name every provider the panel can reach. Not available
   with no basemap or with a ground surface.
 - **A width and a height for the legend and the layer switcher**, beside
-  their switches on the Appearance tab: 140 to 600 pixels wide and 100 to
+  their switches on the Appearance tab: 105 to 600 pixels wide and 50 to
   1000 tall, and never bigger than the map, so the page does not scroll; on a
-  narrow screen the width yields. Auto, the default, keeps them exactly as
-  they were. A WMS or WMTS legend picture follows the legend's size.
+  narrow screen the width yields, and a panel narrower than its rows wraps
+  them. Auto, the default, keeps them exactly as they were. From Auto the
+  arrows go either way, from the size Auto gives a typical panel, and **↺**
+  at the end of the row puts both boxes back on Auto. A WMS or WMTS legend
+  picture follows the legend's size.
 - **Exporting without the dialog**, a new guide: batch exports from the
   Processing toolbox, the QGIS Python console and `qgis_process`, and the
   one-time runtime setup they need first.

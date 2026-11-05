@@ -241,6 +241,14 @@ def _hint_shown(page) -> bool:
     return page.locator(HINT).is_visible()
 
 
+def _reading_shown(page) -> bool:
+    """Whether the readout takes a line of the panel. Between readings it is
+    kept, out of sight, for a screen reader: a pixel, which Playwright still
+    counts as visible."""
+    box = page.locator(READOUT).bounding_box()
+    return box is not None and box["height"] > 2
+
+
 def _open(page, result) -> None:
     page.set_viewport_size({"width": 1000, "height": 800})
     open_map(page, result.entry_path)
@@ -571,13 +579,14 @@ class TestClosingAnArea:
 
 class TestACompactPanel:
     def test_it_is_smaller_than_the_runtimes_own(self, page, measure_map) -> None:
-        """The runtime's panel measured 279x146 at Normal size, its Units row
-        and a full-width Clear button under the readout; this one 214x76."""
+        """The runtime's panel measured 279x146 at Normal size, its Units row,
+        a description ("Pick a mode, then click the map.") and a full-width
+        Clear button under it; this one 214x63 until something is measured."""
         _open(page, measure_map)
 
         box = page.locator(MEASURE).bounding_box()
         assert box is not None
-        assert box["width"] <= 220 and box["height"] <= 80, box
+        assert box["width"] <= 220 and box["height"] <= 66, box
         # Short names on the buttons, the full ones for a screen reader.
         for button, text, name in (
             (DISTANCE, "Distance", "Measure distance"),
@@ -585,16 +594,76 @@ class TestACompactPanel:
         ):
             assert page.locator(button).inner_text() == text
             assert page.get_by_role("button", name=name, exact=True).count() == 1
-        # Clear is still a button of its own, beside the readout, big enough
-        # to hit and reached by the keyboard.
+        # No description: the readout is not shown until it has a reading.
+        assert not _reading_shown(page)
+        # Clear is a row of its own under the buttons, as wide as they are,
+        # big enough to hit and reached by the keyboard.
         clear = page.locator(f"{MEASURE} button[data-act='clear']")
-        readout = page.locator(READOUT).bounding_box()
+        distance = page.locator(DISTANCE).bounding_box()
+        area = page.locator(AREA).bounding_box()
         clear_box = clear.bounding_box()
-        assert readout is not None and clear_box is not None
-        assert clear_box["x"] >= readout["x"] + readout["width"] - 1
-        assert clear_box["y"] < readout["y"] + readout["height"]
+        assert distance is not None and area is not None and clear_box is not None
+        assert clear_box["y"] >= distance["y"] + distance["height"]
+        assert clear_box["x"] == pytest.approx(distance["x"], abs=1)
+        assert clear_box["x"] + clear_box["width"] == pytest.approx(
+            area["x"] + area["width"], abs=1
+        )
         assert clear_box["height"] >= 18
         page.locator(DISTANCE).focus()
         page.keyboard.press("Tab")
         page.keyboard.press("Tab")
         assert clear.evaluate("b => b.getRootNode().activeElement === b")
+
+    def test_the_reading_shows_between_the_buttons_and_clear(
+        self, page, measure_map
+    ) -> None:
+        """While nothing is measured the panel has no readout; a measurement's
+        reading takes a line of its own over Clear, no wider than the panel,
+        and Clear with nothing armed takes it away again."""
+        _open(page, measure_map)
+        idle = page.locator(MEASURE).bounding_box()
+        page.locator(AREA).click(timeout=10_000)
+        assert _hint_shown(page)
+        # Armed, with no point placed: still nothing to read.
+        assert not _reading_shown(page)
+        page.locator(AREA).click(timeout=10_000)
+
+        reading = _measure(page)
+        assert "Total" in reading
+        readout = page.locator(READOUT)
+        assert _reading_shown(page)
+        box = readout.bounding_box()
+        distance = page.locator(DISTANCE).bounding_box()
+        clear = page.locator(f"{MEASURE} button[data-act='clear']").bounding_box()
+        panel = page.locator(MEASURE).bounding_box()
+        assert None not in (idle, box, distance, clear, panel)
+        assert distance["y"] + distance["height"] <= box["y"]
+        assert box["y"] + box["height"] <= clear["y"]
+        assert panel["width"] == pytest.approx(idle["width"], abs=1)
+        assert panel["height"] <= 90, panel
+
+        # A longer reading, an area's, wraps rather than widen the panel.
+        page.locator(AREA).click(timeout=10_000)
+        assert not _reading_shown(page)
+        _click_at(page, CORNERS[0])
+        _click_at(page, CORNERS[1])
+        _click_at(page, CORNERS[2], "Control")
+        assert "Perimeter" in readout.inner_text(timeout=10_000)
+        assert _reading_shown(page)
+        panel = page.locator(MEASURE).bounding_box()
+        assert panel is not None
+        assert panel["width"] == pytest.approx(idle["width"], abs=1)
+
+        page.locator(f"{MEASURE} button[data-act='clear']").click(timeout=10_000)
+        page.wait_for_function(
+            f"""() => document.querySelector('{MEASURE}').shadowRoot
+                 .querySelector('.readout').getBoundingClientRect().height <= 2""",
+            timeout=10_000,
+        )
+        # Still the panel's live region, with the runtime's words in it.
+        assert page.locator(READOUT).get_attribute("role") == "status"
+        assert page.locator(READOUT).inner_text().strip()
+        back = page.locator(MEASURE).bounding_box()
+        assert back is not None and back["height"] == pytest.approx(
+            idle["height"], abs=1
+        )

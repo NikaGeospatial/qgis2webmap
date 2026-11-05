@@ -342,7 +342,17 @@ def test_the_widget_attribute_names_are_the_runtimes() -> None:
     runtime = os.environ.get("ONLYMAP_RUNTIME_DIR")
     if not runtime:
         pytest.skip("set ONLYMAP_RUNTIME_DIR")
-    data = json.loads((Path(runtime).parent / "onlymapjs.html-data.json").read_text())
+    # A fetched runtime keeps the contract beside the scripts; a package's
+    # plain `dist/` has it one level up, at the package root.
+    contract = next(
+        p
+        for p in (
+            Path(runtime) / "onlymapjs.html-data.json",
+            Path(runtime).parent / "onlymapjs.html-data.json",
+        )
+        if p.is_file()
+    )
+    data = json.loads(contract.read_text())
     tags = {tag["name"]: {a["name"] for a in tag["attributes"]} for tag in data["tags"]}
     assert {"layer", "field", "title", "format", "date-style", "time-zone"} <= tags[
         "om-widget"

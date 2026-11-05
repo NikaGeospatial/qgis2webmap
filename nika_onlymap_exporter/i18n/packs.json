@@ -1,10 +1,10 @@
 {
   "packs": {
-    "ar": {"sha256": "32ee8ce243652faa8e0c7faad8767c6e8501599c495ed8ae98ac6ee5c0d2cc36", "_": "checksum of a released pack # pragma: allowlist secret"},
-    "es": {"sha256": "196dd546770991b900ea4175007fe4a950769f8b372ea37f4796fc8edfdd268a", "_": "checksum of a released pack # pragma: allowlist secret"},
-    "fr": {"sha256": "c850d90d81ce7ec325a8f4509bad1962db48592444bb2ef0d1c03f5c5c9eae0a", "_": "checksum of a released pack # pragma: allowlist secret"},
-    "hi": {"sha256": "c0c41b2534ac272c9dd3257eb70cbe096a3889d03097e14ab51474c82cae4805", "_": "checksum of a released pack # pragma: allowlist secret"},
-    "pt_BR": {"sha256": "3d128c852807b481b3e0889c7f4d582614ca5cbb43bd54c04c55a0f42aabd087", "_": "checksum of a released pack # pragma: allowlist secret"},
-    "zh_CN": {"sha256": "c9943944e0f7d8ce7fa611becdf481a7ba8b9ffd6551314c8b755abc569a39f7", "_": "checksum of a released pack # pragma: allowlist secret"}
+    "ar": {"sha256": "d5ebcdc57e8caba404a6bff032d0ea6a741b7f19b57d7b2f10b72b9247c760aa", "_": "checksum of a released pack # pragma: allowlist secret"},
+    "es": {"sha256": "7b4975e422a50caacb6ee0b1f1c686d6f5e8ce4081be517297b250a1b58f94fc", "_": "checksum of a released pack # pragma: allowlist secret"},
+    "fr": {"sha256": "8e16219548609cf279ac04fed73a349af7b379ec0951564b42f7fdbb5a087aa1", "_": "checksum of a released pack # pragma: allowlist secret"},
+    "hi": {"sha256": "7fe3a836f8681127e2cdd79b2c745e44ecc6a9a01503a110548c4ab12b39f876", "_": "checksum of a released pack # pragma: allowlist secret"},
+    "pt_BR": {"sha256": "ccef00ba4a46e86dcba87cb22c664b1ee03d1c1f8c5ae29a3027fbb4c1e77d50", "_": "checksum of a released pack # pragma: allowlist secret"},
+    "zh_CN": {"sha256": "61488033afd975e09584ae8468461098ec2efb9f6647d7d458e3551a361e7457", "_": "checksum of a released pack # pragma: allowlist secret"}
   }
 }

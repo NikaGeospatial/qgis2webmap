@@ -64,6 +64,7 @@ PANELS = """
     out[name] = { left: r.left, top: r.top, right: r.right, bottom: r.bottom,
                   width: r.width, height: r.height,
                   scrolls: host.scrollHeight - host.clientHeight,
+                  sideways: host.scrollWidth - host.clientWidth,
                   content: panel.scrollWidth };
   }
   return out;
@@ -173,6 +174,62 @@ class TestASetSize:
         finally:
             server.stop()
         assert (state["legend"]["width"], state["legend"]["height"]) == (300, 250)
+
+
+class TestTheSmallestSize:
+    @pytest.mark.parametrize("tiles", [False, True], ids=["legend", "static-legend"])
+    def test_at_105_by_50_it_scrolls_down_not_sideways(
+        self, page, runtime, tmp_path, tiles
+    ) -> None:
+        """Narrower than the panels' own 140px minimum: their rows take the
+        width set rather than run past it, so the panel scrolls one way only,
+        and nothing leaves the map or covers another control. The legend is
+        the runtime's or, for a tile layer, our own."""
+        entry = _export(
+            runtime,
+            tmp_path,
+            30,
+            tiles=tiles,
+            legend_width=105,
+            legend_height=50,
+            layer_switcher_width=105,
+            layer_switcher_height=50,
+        )
+        legend = STATIC_LEGEND if tiles else LEGEND
+        page.set_viewport_size({"width": 1280, "height": 700})
+        open_map(page, entry)
+        for selector in (legend, SWITCHER):
+            page.wait_for_function(
+                """(selector) => document.querySelector(selector)
+                     ?.shadowRoot?.querySelector('.omni-panel')""",
+                arg=selector,
+                timeout=30_000,
+            )
+        next_frames(page)
+        state = page.evaluate(PANELS.replace(LEGEND, legend))
+        page_width, page_height, inner_width, inner_height = state["page"]
+        assert page_width <= inner_width and page_height <= inner_height, state
+        for name in ("legend", "switcher"):
+            panel = state[name]
+            assert (panel["width"], panel["height"]) == (105, 50), name
+            assert panel["sideways"] == 0, (name, panel)
+            assert panel["scrolls"] > 0, (name, panel)
+        boxes = page.evaluate(
+            """() => [...document.querySelectorAll(
+                  'om-widget, .om-credit, [data-om-badge]')]
+                .map((e) => { const r = e.getBoundingClientRect();
+                  return [r.left, r.top, r.right, r.bottom]; })
+                .filter((r) => r[2] > r[0] && r[3] > r[1])"""
+        )
+        for place, box in enumerate(boxes):
+            for other in boxes[place + 1 :]:
+                apart = (
+                    box[2] <= other[0]
+                    or other[2] <= box[0]
+                    or box[3] <= other[1]
+                    or other[3] <= box[1]
+                )
+                assert apart, (box, other)
 
 
 class TestAuto:
