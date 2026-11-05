@@ -39,6 +39,7 @@ from nika_onlymap_exporter.core.map_services import (
     parse_wms_capabilities,
     prepare_url,
     runtime_knows_crs,
+    shown_host,
     source_pairs,
     values,
     web_mercator_code,
@@ -863,6 +864,24 @@ class TestTimeDimension:
 )
 def test_which_crs_the_runtime_places_without_a_lookup(code, known) -> None:
     assert runtime_knows_crs(code) is known
+
+
+@pytest.mark.parametrize(
+    ("address", "shown"),
+    [
+        # ArcGIS Server's capabilities name the scheme's own port.
+        (
+            "https://basemap.nationalmap.gov:443/arcgis/services/WMSServer?",
+            "basemap.nationalmap.gov",
+        ),
+        ("http://maps.example.org:80/wms", "maps.example.org"),
+        ("https://maps.example.org:8443/wms", "maps.example.org:8443"),
+        ("http://maps.example.org:443/wms", "maps.example.org:443"),
+        ("https://user@maps.example.org/wms", "maps.example.org"),
+    ],
+)
+def test_a_row_names_the_host_without_the_schemes_own_port(address, shown) -> None:
+    assert shown_host(address) == shown
 
 
 # PDOK's BRT Achtergrondkaart WMTS capabilities, as served on 2026-11-04: a

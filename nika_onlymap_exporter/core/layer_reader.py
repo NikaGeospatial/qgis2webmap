@@ -1534,6 +1534,8 @@ def _service_legend(
     """
     from urllib.parse import urlsplit
 
+    from . import map_services
+
     images: list[LegendImage] = []
     for title, address in found:
         scheme = urlsplit(address).scheme.lower()
@@ -1548,7 +1550,7 @@ def _service_legend(
             )
             continue
         if _carries_key(address):
-            host = urlsplit(address).netloc.rpartition("@")[2]
+            host = map_services.shown_host(address)
             report.unsupported(
                 f"Legend picture of '{name}'",
                 f"The address of this layer's legend picture on {host} carries "
@@ -1623,8 +1625,6 @@ def read_map_service(
     QGIS and `clickable` (not in a cartograph's frame, which is a picture):
     see `_wms_feature_info`.
     """
-    from urllib.parse import urlsplit
-
     from . import map_services
 
     layer_id = layer.id()
@@ -1685,7 +1685,7 @@ def read_map_service(
             )
             return None
         template, dependency = _live_dependency(found.template, name)
-        host = urlsplit(template).netloc
+        host = map_services.shown_host(template)
         legend_url = map_services.wmts_legend_url(
             capabilities,
             layer=(map_services.values(pairs, "layers") or [""])[0],
@@ -1786,7 +1786,7 @@ def read_map_service(
         time=map_services.TIME_TOKEN if isinstance(slider, tuple) else time,
     )
     template, dependency = _live_dependency(template, name)
-    host = urlsplit(template).netloc
+    host = map_services.shown_host(template)
     # The legend pictures QGIS's legend shows, from the same capabilities;
     # none without them, since nothing else says where the service draws one.
     # Top first, as a legend lists layers: the reverse of the GetMap's order.
@@ -1881,8 +1881,6 @@ def _wms_feature_info(
     capabilities QGIS stored: whether the layer answers, how, and in which
     CRS a click can be placed. Each outcome a reader would miss has its row.
     """
-    from urllib.parse import urlsplit
-
     from qgis.core import QgsMapLayer
 
     from . import map_services
@@ -1951,7 +1949,7 @@ def _wms_feature_info(
         request.extra,
         request.time,
     )
-    host = urlsplit(template).netloc.rpartition("@")[2]
+    host = map_services.shown_host(template)
     if not template.lower().startswith(("http://", "https://")) or _carries_key(
         template
     ):

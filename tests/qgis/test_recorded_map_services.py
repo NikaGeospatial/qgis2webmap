@@ -317,6 +317,8 @@ def test_a_recorded_service_exports_as_it_did_live(offline, case) -> None:
     assert exported.tiles is not None
     assert exported.tiles.url == tiles
     assert [image.url for image in exported.tiles.legend] == legend
+    # ArcGIS Server's addresses name port 443; a row names just the host.
+    assert ":443" not in " ".join(item.detail for item in report.items)
     if time is None:
         assert exported.tiles.times is None
     else:
