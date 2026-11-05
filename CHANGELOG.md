@@ -93,7 +93,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   with any rasters, which opens by double-click), or beside the page in a
   Folder or Share ZIP (which has to be served, as with rasters - the Fidelity
   tab and the zip's README say so); an archive at an `https://` address stays
-  there and is read live. Reported in the Fidelity tab: labels and the filter
+  there and is read live. The map carries the script that decodes the
+  tiles, so a carried archive draws with no internet connection, and no
+  archive or vector tile layer contacts anyone but its own server. That
+  script (loaders.gl's open-source MVT decoder) is downloaded from npm with
+  the OnlyMap runtime, pinned like it; on a computer that already has the
+  runtime, the first export downloads just the script (about 240 KB).
+  Reported in the Fidelity tab: labels and the filter
   panel are not exported for such a layer, rule-based styling draws in the
   first rule's symbol, markers QGIS draws itself become circles, and an
   archive compressed with zstd, which browsers cannot read, is left out.
@@ -106,6 +112,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   style QGIS kept no copy of. Vector tile layers were not exported before.
 
 ### Changed
+- The one-time runtime download is about 6.1 MB (it was 5.9 MB): it now
+  includes the vector tile decoder that maps with PMTiles or vector tile
+  layers carry, which the licence dialog names.
 - The map runtime is OnlyMap 0.13.4. What readers will notice: the scale bar
   now reads the true distance - it read twice the distance it covered, so a
   bar labelled 50 km spanned 25 km - and clicking a cluster bubble of a layer
