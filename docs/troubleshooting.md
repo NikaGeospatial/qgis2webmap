@@ -33,7 +33,7 @@ faq:
   - q: Why is the Export button greyed out?
     a: >-
       The reason is printed at the foot of the dialog. Either the project has no
-      vector or raster layer to export, or every layer is unticked in the
+      layers, or every layer is unticked in the
       Include column on the Layers tab. A Blocked item does not grey it out:
       Export asks first, and the Fidelity tab names the layer and
       the reason.
@@ -166,7 +166,7 @@ The reason is printed at the foot of the dialog. It is one of two:
 
 | The reason says | What to do |
 |---|---|
-| *Add a vector or raster layer to the project to export.* | The project has no layer the web map can draw - for example only ArcGIS map services or attribute tables |
+| *Add a vector or raster layer to the project to export.* | The project has no layers. One whose layers the web map cannot draw (only ArcGIS map services or attribute tables, say) is not greyed out: its export stops with *There are no layers to export* |
 | *Tick at least one layer to include.* | Everything is unticked in the **Include** column on the Layers tab |
 
 Export and Preview also go dark while a job is running, and come back when it
