@@ -153,7 +153,7 @@ class TestReadingAnswers:
         if kind == "html":
             assert "Denver" in read["html"]
 
-    def test_a_field_holding_braces_is_kept_as_written(self, page) -> None:
+    def test_values_are_written_as_text(self, page) -> None:
         page.set_content("<!doctype html><title>reader</title>")
         body = '{"type":"Feature","properties":{"a":"{{b}}","n":3,"o":{"x":1}}}'
         read = page.evaluate(READ, [_reader_source(), body, "application/json"])
@@ -367,8 +367,8 @@ class TestClicks:
         """One request per layer, at the clicked pixel of a small map at the
         map's scale: Web Mercator metres, latitude first for EPSG:4326 in WMS
         1.3.0, longitude first in 1.1.1 and for CRS:84. The answers share one
-        popup, the top layer first, and the field the service left empty is
-        not shown."""
+        popup, the top layer first; the field the service left empty is not
+        shown, and one that reads like a popup template is shown as written."""
         layers = [
             _wms_layer(services, "mercator", "Mercator 1.3.0"),
             _wms_layer(services, "lat_first", "EPSG:4326 1.3.0", crs="EPSG:4326"),
@@ -435,7 +435,7 @@ class TestClicks:
             "Mercator 1.3.0",
         ]
         for layer in popup["layers"]:
-            assert layer["rows"] == [["name", "Found in target"]]
+            assert layer["rows"] == [["name", "Found in target"], ["note", "{{name}}"]]
 
     @pytest.mark.parametrize(
         ("reply", "content_type", "shows"),
@@ -548,6 +548,25 @@ class TestClicks:
         (answer,) = _answered(page, _click(page, CLICK))["answers"]
         assert answer["status"] == "features"
         assert len(_feature_info_requests(services, before)) == 1
+
+    def test_a_click_the_measure_tool_takes_asks_nothing(
+        self, page, runtime, services, tmp_path
+    ) -> None:
+        """A distance's two points are a measurement; once it is measured the
+        tool lets go of the map, and the next click asks the service."""
+        layer = _wms_layer(services, "wms", "Districts")
+        _open(page, _export(runtime, tmp_path, layer))
+        page.locator('om-widget[type="measure"] button[data-mode="distance"]').click(
+            timeout=10_000
+        )
+        before = len(services.requests)
+        _click(page, CLICK)
+        page.wait_for_timeout(400)
+        _click(page, STATION)
+        page.wait_for_timeout(800)
+        assert _feature_info_requests(services, before) == []
+        (answer,) = _answered(page, _click(page, CLICK))["answers"]
+        assert answer["status"] == "features"
 
     @pytest.mark.parametrize("hidden", ["switched-off", "zoomed-out"])
     def test_a_layer_that_is_not_showing_is_not_asked(

@@ -250,12 +250,17 @@ def _feature_info_request(online: str) -> str:
 
 def feature_info_json(query_layers: str) -> bytes:
     """The answer a click gets by default: one feature, naming the layers it
-    was asked about."""
+    was asked about, with an empty field and one holding what a popup
+    template would read as a field (`{{name}}`)."""
     feature = {
         "type": "Feature",
         "id": f"{query_layers}.1",
         "geometry": None,
-        "properties": {"name": f"Found in {query_layers}", "empty": None},
+        "properties": {
+            "name": f"Found in {query_layers}",
+            "empty": None,
+            "note": "{{name}}",
+        },
     }
     return json.dumps({"type": "FeatureCollection", "features": [feature]}).encode()
 
