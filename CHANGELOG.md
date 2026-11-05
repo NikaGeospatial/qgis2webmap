@@ -12,7 +12,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   such as EPSG:25832 - is now exported: the map asks it for each tile in the
   coordinate system QGIS asks it in, and warps the picture into place, on
   ordinary and projected maps alike. So is a WMS whose capabilities QGIS
-  has no stored copy of, in the coordinate system the layer was added in. A
+  has no stored copy of, in the coordinate system the layer was added in;
+  its legend then lists it by name, and the Fidelity tab says so and what to
+  do - for a service that tells QGIS not to store them (NASA GIBS does), add
+  the layer in EPSG:3857 to have it asked in Web Mercator. A
   service that offers Web Mercator is asked in it, exactly as before. A
   coordinate system the map does not carry (most outside the UTM zones and
   the common national grids) is looked up at epsg.io by the reader's
