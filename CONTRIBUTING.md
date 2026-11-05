@@ -245,6 +245,16 @@ Point the writer and packaging tests at a build to run them:
 export ONLYMAP_RUNTIME_DIR=/path/to/@nika-js/onlymap/dist
 ```
 
+A package's `dist/` has no vector tile decoder worker (`mvt-worker.js`, from
+`@loaders.gl/mvt`), so the vector tile browser tests, which refuse every host
+but their own, cannot draw from it. `python scripts/fetch_runtime.py` fetches
+the pinned runtime with the worker beside it and prints the directory, as CI
+uses it:
+
+```bash
+export ONLYMAP_RUNTIME_DIR=$(python scripts/fetch_runtime.py)
+```
+
 Without it those tests **skip** rather than fail. If you are changing the writer,
 check the summary for skips — a green run that skipped the artifact tests has not
 tested your change.
