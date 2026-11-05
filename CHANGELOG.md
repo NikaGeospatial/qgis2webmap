@@ -146,6 +146,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `https://`.
 
 ### Fixed
+- The README inside a Share ZIP or Folder no longer promises that the map
+  works offline and sends nothing else when it reads a basemap, relief, live
+  features or a web service: it then says the map needs an internet
+  connection and names each server the map asks.
 - The Fidelity tab names a WMS or WMTS service's host without the port its
   address spells out when that is the usual one: `basemap.nationalmap.gov`,
   not `basemap.nationalmap.gov:443`, for the USGS National Map.

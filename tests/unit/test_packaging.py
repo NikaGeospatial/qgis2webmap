@@ -41,7 +41,10 @@ from nika_onlymap_exporter.core.portable_names import avoid_windows_reserved
 from nika_onlymap_exporter.exporters.folder import FolderExporter
 from nika_onlymap_exporter.exporters.share_zip import ShareZipExporter, archive_root
 from nika_onlymap_exporter.packaging import asset_embedder, runtime_manager
-from nika_onlymap_exporter.packaging.artifact_builder import build_artifact
+from nika_onlymap_exporter.packaging.artifact_builder import (
+    build_artifact,
+    build_readme,
+)
 from nika_onlymap_exporter.packaging.asset_embedder import (
     DATA_COMPRESSION_THRESHOLD_BYTES,
     GZIP_SCRIPT_TYPE,
@@ -459,6 +462,37 @@ class TestExporters:
             readme = archive.read("map/README.txt").decode()
         assert "HOW TO OPEN IT" in readme
         assert "sends one anonymous usage report to NIKA" in readme
+
+    def test_an_offline_map_says_it_needs_no_internet(self, tmp_path) -> None:
+        result = ArtifactResult(
+            entry_path=tmp_path / "index.html", mode=OutputMode.FOLDER
+        )
+        readme = build_readme(make_project(), result, "Open index.html.")
+        assert "or an internet connection" in readme
+        assert "works offline" in readme
+        assert "asks these servers" not in readme
+        assert "Nothing else leaves your machine." in readme
+
+    def test_a_map_that_reads_the_web_names_each_server_once(self, tmp_path) -> None:
+        """A basemap, a live layer or a web service is read as the map is
+        used: the README must not promise it works offline, and names who
+        sees the requests, as the Fidelity tab does."""
+        result = ArtifactResult(
+            entry_path=tmp_path / "index.html",
+            mode=OutputMode.SHARE_ZIP,
+            network_dependencies=(
+                "tiles.openfreemap.org",
+                "https://service.pdok.nl/wms?LAYERS=a&BBOX={bbox-epsg-3857}",
+                "https://service.pdok.nl/legend.png",
+            ),
+        )
+        readme = build_readme(make_project(), result, "Open index.html.")
+        assert "you do need an internet connection" in readme
+        assert "works offline" not in readme
+        assert "or an internet connection" not in readme
+        assert "  - tiles.openfreemap.org\n  - service.pdok.nl\n" in readme
+        assert readme.count("service.pdok.nl") == 1
+        assert "@" not in readme.replace("@GENERATOR@", "")
 
     def test_a_title_that_looks_like_a_token_is_not_substituted_twice(
         self, tmp_path

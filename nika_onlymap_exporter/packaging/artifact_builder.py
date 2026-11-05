@@ -14,6 +14,7 @@ import re
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from ..core.cancellation import raise_if_cancelled
 from ..core.export_ir import ExportProject, OutputMode
@@ -45,6 +46,30 @@ def build_readme(
     named README is the one thing they will find.
     """
     template = README_TEMPLATE.read_text(encoding="utf-8")
+    hosts = list(dict.fromkeys(_host(entry) for entry in result.network_dependencies))
+    if hosts:
+        connection = (
+            "You do not need\nQGIS or an account, but you do need an internet "
+            "connection: parts of this\nmap are read from the web as it is used."
+        )
+        contents = (
+            "The map, its styling and the data it carries are in here, so you can "
+            "copy it\nanywhere. What it reads from the web is listed under PRIVACY."
+        )
+        others = (
+            "To draw the map, your browser also asks these servers for what it "
+            "shows, so\nthey see those requests and the part of the map being "
+            "looked at:\n\n"
+            + "".join(f"  - {host}\n" for host in hosts)
+            + "\nNothing else leaves your machine."
+        )
+    else:
+        connection = "You do not\nneed QGIS, an account, or an internet connection."
+        contents = (
+            "Everything. The map, its styling and all of its data are in here, "
+            "which is\nwhy it works offline and why you can copy it anywhere."
+        )
+        others = "Nothing else leaves your machine."
     size_line = (
         f"This map is {result.total_bytes / 1024 / 1024:.1f} MB and contains "
         f"{sum(layer.feature_count for layer in project.layers):,} map features."
@@ -54,6 +79,9 @@ def build_readme(
         "@UNDERLINE@": "=" * len(project.title),
         "@OPEN_INSTRUCTION@": open_instruction,
         "@SIZE_LINE@": size_line,
+        "@CONNECTION@": connection,
+        "@CONTENTS@": contents,
+        "@OTHER_REQUESTS@": others,
         "@GENERATOR@": "-- " + generator_line_first_line(result),
     }
     # One regex pass, for the same reason `OnlyMapWriter.render_html` uses one:
@@ -62,6 +90,12 @@ def build_readme(
     # own heading. A single pass can only ever match the template's own tokens.
     pattern = re.compile("|".join(re.escape(token) for token in replacements))
     return pattern.sub(lambda match: replacements[match.group(0)], template)
+
+
+def _host(entry: str) -> str:
+    """A network dependency as the README names it: its host, or the entry
+    itself where it is one already."""
+    return urlsplit(entry).hostname or entry
 
 
 def generator_line_first_line(result: ArtifactResult) -> str:

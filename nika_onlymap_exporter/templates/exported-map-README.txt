@@ -9,15 +9,13 @@ HOW TO OPEN IT
 
 @OPEN_INSTRUCTION@
 
-It works in any modern web browser - Chrome, Edge, Firefox or Safari. You do not
-need QGIS, an account, or an internet connection.
+It works in any modern web browser - Chrome, Edge, Firefox or Safari. @CONNECTION@
 
 
 WHAT IS IN THE FILE
 -------------------
 
-Everything. The map, its styling and all of its data are inside the file itself,
-which is why it works offline and why you can copy it anywhere.
+@CONTENTS@
 
 @SIZE_LINE@
 
@@ -30,7 +28,7 @@ that draws it. That report can say which version drew the map, how many layers
 and features it had, and the address of the page it ran on. It never contains
 the map's data, and never anything about who opened it.
 
-Nothing else leaves your machine.
+@OTHER_REQUESTS@
 
 
 IF THE MAP DOES NOT APPEAR
