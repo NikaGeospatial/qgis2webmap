@@ -636,8 +636,14 @@ class TestWmsTimeSlider:
             " === '2020-03-07T00:00:00Z'",
             timeout=10_000,
         )
+        # The tiles of the time before still show while the new ones are
+        # asked for, and WebKit asks a moment later than Chromium: wait for
+        # the request rather than for crimson, which is already there.
+        deadline = time.monotonic() + 15
+        while "2020-03-07T00:00:00Z" not in self._times_asked(services, before):
+            assert time.monotonic() < deadline, self._times_asked(services, before)
+            page.wait_for_timeout(250)
         measured = _measure_drawn(page)
-        assert "2020-03-07T00:00:00Z" in self._times_asked(services, before)
         assert page.evaluate(SLIDER)["shown"] == "2020-03-07T00:00:00Z"
         assert measured["crimson"] > 0
 
