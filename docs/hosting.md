@@ -51,9 +51,13 @@ opened, including from your own disk and your own web server. See
 [privacy](privacy.md) for exactly what the report contains.
 
 Nothing else leaves the page, unless the map has a basemap, relief, a live
-web layer (XYZ, WMS, WMTS or a Cloud Optimized GeoTIFF at a web address) or a
-popup picture that is a web address: the reader's browser fetches those from
-their own servers as the map is used.
+web layer (XYZ, WMS, WMTS or vector tile, a Cloud Optimized GeoTIFF or PMTiles
+archive at a web address, or a WFS, OGC API Features or ArcGIS FeatureServer
+layer that loads live), a WMS layer that answers clicks, a coordinate system
+the map looks up at epsg.io, or a popup picture that is a web address: the
+reader's browser fetches those from their own servers as the map is used. The
+Fidelity tab names each host, and [privacy](privacy.md#live-web-layers-and-their-legends)
+says what each one sees.
 
 ## If your site sets a Content Security Policy
 
@@ -99,6 +103,19 @@ Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data: h
 Without it the legend lists the layer by name, with no picture. A popup
 picture that is a web address is an image from its host in the same way, so
 the policy has to allow that host too for the picture to show.
+
+A map with a PMTiles archive or a vector tile layer starts the decoder it
+carries for their tiles as a worker from a `data:` address, so the policy has
+to allow workers from `data:` too, or those layers stay empty:
+
+```
+Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data:; worker-src data:
+```
+
+A policy that also sets `connect-src` (or `default-src`) has to allow the
+hosts the map reads from as it is used - a live feature layer's service, a WMS
+asked about a click, epsg.io for a coordinate system the map does not carry -
+which the Fidelity tab names.
 
 If your organisation cannot relax that policy, serve the map from its own page
 or subdomain with its own policy, and link or iframe it from the strict one.
