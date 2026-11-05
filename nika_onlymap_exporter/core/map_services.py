@@ -159,6 +159,18 @@ def on_https_as_added(address: str, added: str) -> str:
     return address
 
 
+def shown_host(address: str) -> str:
+    """The host a Fidelity row names for `address`: without a login, and
+    without its port where that is the scheme's own (`:443` on `https://`,
+    `:80` on `http://`), which ArcGIS Server's capabilities spell out."""
+    parts = urlsplit(address)
+    host = parts.netloc.rpartition("@")[2]
+    default = {"http": ":80", "https": ":443"}.get(parts.scheme.lower(), "")
+    if default and host.endswith(default):
+        return host[: -len(default)]
+    return host
+
+
 def is_wmts_url(url: str) -> bool:
     """`QgsWmsProvider::isUrlForWMTS`: the URL is a WMTS capabilities address."""
     lowered = url.lower()

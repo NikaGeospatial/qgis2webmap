@@ -1534,6 +1534,8 @@ def _service_legend(
     """
     from urllib.parse import urlsplit
 
+    from . import map_services
+
     images: list[LegendImage] = []
     for title, address in found:
         scheme = urlsplit(address).scheme.lower()
@@ -1548,7 +1550,7 @@ def _service_legend(
             )
             continue
         if _carries_key(address):
-            host = urlsplit(address).netloc.rpartition("@")[2]
+            host = map_services.shown_host(address)
             report.unsupported(
                 f"Legend picture of '{name}'",
                 f"The address of this layer's legend picture on {host} carries "
@@ -1623,8 +1625,6 @@ def read_map_service(
     QGIS and `clickable` (not in a cartograph's frame, which is a picture):
     see `_wms_feature_info`.
     """
-    from urllib.parse import urlsplit
-
     from . import map_services
 
     layer_id = layer.id()
@@ -1685,7 +1685,7 @@ def read_map_service(
             )
             return None
         template, dependency = _live_dependency(found.template, name)
-        host = urlsplit(template).netloc
+        host = map_services.shown_host(template)
         legend_url = map_services.wmts_legend_url(
             capabilities,
             layer=(map_services.values(pairs, "layers") or [""])[0],
@@ -1786,7 +1786,7 @@ def read_map_service(
         time=map_services.TIME_TOKEN if isinstance(slider, tuple) else time,
     )
     template, dependency = _live_dependency(template, name)
-    host = urlsplit(template).netloc
+    host = map_services.shown_host(template)
     # The legend pictures QGIS's legend shows, from the same capabilities;
     # none without them, since nothing else says where the service draws one.
     # Top first, as a legend lists layers: the reverse of the GetMap's order.
@@ -1858,9 +1858,49 @@ def read_map_service(
         f"{asked}. " + (_CORS_NOTE if web_mercator is not None else _WARPED_CORS_NOTE),
         layer_id,
     )
+    if parsed is None:
+        report.approximated(
+            f"Capabilities of '{name}'",
+            _no_capabilities_row(None if web_mercator is not None else request_crs),
+            layer_id,
+        )
     if takes_time:
         report.approximated(f"Time of '{name}'", _wms_time_row(time, slider), layer_id)
     return _map_service_layer(layer, tiles, dependency, group_path, visible)
+
+
+def _no_capabilities_row(asked_in: str | None) -> str:
+    """What a WMS whose capabilities QGIS kept no copy of exports as, and what
+    to do about it; `asked_in` is the CRS it is asked in when that is not Web
+    Mercator.
+
+    A copy goes missing when QGIS was offline or its cache was cleared, and
+    comes back when QGIS loads the service again. A service that tells QGIS
+    not to store it (NASA GIBS sends `Cache-Control: no-store`) never leaves
+    one, so for those only the CRS has a way round: a layer added in EPSG:3857
+    is asked in it with no capabilities needed.
+    """
+    projection = (
+        f", and each tile is asked in {asked_in}, as QGIS asks, even where the "
+        "service also offers Web Mercator"
+        if asked_in is not None
+        else ""
+    )
+    remedy = (
+        "; to have it asked in Web Mercator, add the layer again with EPSG:3857 "
+        "chosen as its coordinate system in the Data Source Manager, if the "
+        "service lists it"
+        if asked_in is not None
+        else ""
+    )
+    return (
+        "QGIS has no stored copy of this WMS's capabilities, and exporting never "
+        "contacts the service, so the web map cannot tell which legend picture "
+        f"QGIS shows for it: the legend lists the layer by its name{projection}. "
+        "Opening the project once while online usually brings the copy back; "
+        "then export again. A service that tells QGIS not to keep one (NASA "
+        "GIBS does) never leaves a copy, so its legend stays a name" + remedy + "."
+    )
 
 
 def _wms_feature_info(
@@ -1881,8 +1921,6 @@ def _wms_feature_info(
     capabilities QGIS stored: whether the layer answers, how, and in which
     CRS a click can be placed. Each outcome a reader would miss has its row.
     """
-    from urllib.parse import urlsplit
-
     from qgis.core import QgsMapLayer
 
     from . import map_services
@@ -1951,7 +1989,7 @@ def _wms_feature_info(
         request.extra,
         request.time,
     )
-    host = urlsplit(template).netloc.rpartition("@")[2]
+    host = map_services.shown_host(template)
     if not template.lower().startswith(("http://", "https://")) or _carries_key(
         template
     ):

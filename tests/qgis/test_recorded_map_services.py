@@ -23,6 +23,7 @@ from urllib.parse import quote
 
 import pytest
 
+from nika_onlymap_exporter.core.export_ir import FidelityStatus
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.layer_reader import MapTime, read_layer
 
@@ -317,6 +318,8 @@ def test_a_recorded_service_exports_as_it_did_live(offline, case) -> None:
     assert exported.tiles is not None
     assert exported.tiles.url == tiles
     assert [image.url for image in exported.tiles.legend] == legend
+    # ArcGIS Server's addresses name port 443; a row names just the host.
+    assert ":443" not in " ".join(item.detail for item in report.items)
     if time is None:
         assert exported.tiles.times is None
     else:
@@ -325,3 +328,40 @@ def test_a_recorded_service_exports_as_it_did_live(offline, case) -> None:
         assert exported.tiles.times is not None
         times = exported.tiles.times.split(",")
         assert (times[0], len(times)) == (first, 2000)
+
+
+@pytest.mark.parametrize("crs", ["EPSG:4326", "EPSG:3857"])
+def test_a_service_that_keeps_no_capabilities_says_what_readers_get(
+    offline, crs
+) -> None:
+    """NASA GIBS sends its capabilities `no-store`: QGIS loads the layer from
+    them and keeps no copy, as taking the recording out after the load
+    leaves it. The legend is a name, and a layer not added in EPSG:3857 is
+    asked as QGIS asks; the row says so, and what to do."""
+    from qgis.PyQt.QtCore import QUrl
+
+    _record(
+        offline, _caps(GIBS), (FIXTURES / "map_services/nasa-gibs-wms.xml").read_bytes()
+    )
+    source = _wms(
+        GIBS, ["MODIS_Terra_CorrectedReflectance_TrueColor"], crs, "image/jpeg"
+    )
+    layer = qgis_core.QgsRasterLayer(source, "GIBS", "wms")
+    assert layer.isValid(), layer.error().summary()
+    offline.cache().remove(QUrl(_caps(GIBS)))
+
+    report = FidelityReportBuilder()
+    exported = read_layer(layer, report)
+
+    assert exported is not None
+    assert exported.tiles is not None
+    assert exported.tiles.legend == ()
+    assert f"&CRS={crs}&" in exported.tiles.url
+    rows = [item for item in report.items if item.subject == "Capabilities of 'GIBS'"]
+    assert [row.status for row in rows] == [FidelityStatus.APPROXIMATED]
+    detail = rows[0].detail
+    assert "the legend lists the layer by its name" in detail
+    assert "(NASA GIBS does) never leaves a copy" in detail
+    projected = crs != "EPSG:3857"
+    assert ("each tile is asked in EPSG:4326" in detail) is projected
+    assert ("add the layer again with EPSG:3857 chosen" in detail) is projected
