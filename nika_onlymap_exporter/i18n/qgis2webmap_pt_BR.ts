@@ -5666,7 +5666,7 @@ Eles também estão online em &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2821" />
       <source>Back to Auto</source>
-      <translation type="unfinished" />
+      <translation>Voltar para Auto</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3089" />
@@ -6274,7 +6274,7 @@ Preencha Salvar em na aba Mapa e tente de novo.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2823" />
       <source>{control} size back to Auto</source>
-      <translation type="unfinished" />
+      <translation>{control}: voltar o tamanho para Auto</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3938" />

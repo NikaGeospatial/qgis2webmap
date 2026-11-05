@@ -5666,7 +5666,7 @@ Ils sont aussi en ligne sur &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2821" />
       <source>Back to Auto</source>
-      <translation type="unfinished" />
+      <translation>Revenir à Auto</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3089" />
@@ -6274,7 +6274,7 @@ Remplissez Enregistrer dans de l'onglet Carte, puis réessayez.</translation>
     <message>
       <location filename="../ui/main_dialog.py" line="2823" />
       <source>{control} size back to Auto</source>
-      <translation type="unfinished" />
+      <translation>{control} : revenir à la taille Auto</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3938" />

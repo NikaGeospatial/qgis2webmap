@@ -5666,7 +5666,7 @@ They are also online at &lt;{url}&gt;.
     <message>
       <location filename="../ui/main_dialog.py" line="2821" />
       <source>Back to Auto</source>
-      <translation type="unfinished" />
+      <translation>العودة إلى تلقائي</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3089" />
@@ -6274,7 +6274,7 @@ Fill in Save to on the Map tab, then try again.</source>
     <message>
       <location filename="../ui/main_dialog.py" line="2823" />
       <source>{control} size back to Auto</source>
-      <translation type="unfinished" />
+      <translation>حجم {control}: العودة إلى تلقائي</translation>
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3938" />
