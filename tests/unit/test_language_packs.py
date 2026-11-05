@@ -1,9 +1,11 @@
 """The language packs a release ships are the ones `packs.json` pins.
 
-The zip carries no `.qm`: the plugin downloads a pack from the tagged repository
-and installs it only when its SHA-256 matches `i18n/packs.json`. A pack that was
-rebuilt without refreshing the pin, or a `.ts` with no pack, would be refused (or
-absent) on every user's machine after release, and nothing else would notice.
+The plugin zip carries no `.qm`: the release carries every pack in one more
+asset, `qgis2webmap-language-packs-<version>.zip`, which the plugin downloads
+and installs only when each pack's SHA-256 matches `i18n/packs.json`. A pack
+that was rebuilt without refreshing the pin, or a `.ts` with no pack, would be
+refused (or absent) on every user's machine after release, and nothing else
+would notice.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -12,8 +14,14 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
+import os
+import shutil
+import zipfile
 from pathlib import Path
+
+import pytest
 
 I18N_DIR = Path(__file__).resolve().parents[2] / "nika_onlymap_exporter" / "i18n"
 PREFIX = "qgis2webmap_"
@@ -53,3 +61,50 @@ def test_the_pinned_packs_are_exactly_the_translation_sources() -> None:
 def test_every_compiled_pack_is_pinned() -> None:
     unpinned = _languages(".qm") - set(_pinned())
     assert unpinned == set(), f"a .qm that packs.json does not pin: {sorted(unpinned)}"
+
+
+def _package_plugin():
+    spec = importlib.util.spec_from_file_location(
+        "_package_plugin_for_packs",
+        I18N_DIR.parents[1] / "scripts" / "package_plugin.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_release_asset_holds_exactly_the_pinned_packs(
+    tmp_path, monkeypatch
+) -> None:
+    """Built twice, the same bytes; inside, each pinned pack and nothing else."""
+    packager = _package_plugin()
+    i18n = tmp_path / "i18n"
+    shutil.copytree(I18N_DIR, i18n, ignore=shutil.ignore_patterns("*.ts"))
+    monkeypatch.setattr(packager, "I18N_DIR", i18n)
+    first = packager.build_language_packs(tmp_path / "a")
+    for pack in i18n.iterdir():  # a fresh checkout has other file times
+        os.utime(pack, (1_900_000_000, 1_900_000_000))
+    again = packager.build_language_packs(tmp_path / "b")
+    assert first.read_bytes() == again.read_bytes()
+    with zipfile.ZipFile(first) as archive:
+        members = {i.filename: archive.read(i) for i in archive.infolist()}
+        stamps = {i.date_time for i in archive.infolist()}
+    assert list(members) == sorted(f"{PREFIX}{code}.qm" for code in _pinned())
+    assert len(members) == 6
+    assert {
+        name[len(PREFIX) : -len(".qm")]: hashlib.sha256(data).hexdigest()
+        for name, data in members.items()
+    } == _pinned()
+    assert len(stamps) == 1
+
+
+def test_the_packager_refuses_a_pack_that_is_not_pinned(tmp_path, monkeypatch) -> None:
+    packager = _package_plugin()
+    i18n = tmp_path / "i18n"
+    shutil.copytree(I18N_DIR, i18n, ignore=shutil.ignore_patterns("*.ts"))
+    (i18n / f"{PREFIX}fr.qm").write_bytes(b"rebuilt, pin not refreshed")
+    monkeypatch.setattr(packager, "I18N_DIR", i18n)
+    with pytest.raises(SystemExit, match="update_translations"):
+        packager.build_language_packs(tmp_path / "dist")
+

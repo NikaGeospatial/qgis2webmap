@@ -41,7 +41,8 @@ jobs:
           fi
 
       - name: Tag must carry the language packs packs.json pins
-        # The zip holds no .qm; the plugin downloads each from this tag.
+        # The plugin zip holds no .qm; the language packs asset is built from
+        # this tag's packs, and the plugin accepts it only if they match.
         run: python scripts/verify_tag_packs.py "$GITHUB_SHA"
 
   checks:
@@ -60,9 +61,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Builds the plugin zip and the language packs asset,
+      # qgis2webmap-language-packs-<version>.zip, which every copy of this
+      # version downloads its languages from. Both are attached below.
       - run: python scripts/package_plugin.py --no-update-check
       - name: Verify zip
-        run: python scripts/verify_package.py dist/*.zip
+        run: |
+          python scripts/verify_package.py dist/qgis2webmap-[0-9]*.zip
+          ls "dist/qgis2webmap-language-packs-${GITHUB_REF_NAME#v}.zip"
 
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:

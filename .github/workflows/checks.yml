@@ -86,20 +86,22 @@ jobs:
       - name: Build plugin zip
         run: python scripts/package_plugin.py --no-update-check
       - name: Verify zip shape against QGIS repository requirements
-        # Globbed on the extension, not the product name, so a rename in the
-        # packager cannot silently stop matching. `dist/` is built fresh in this
-        # job, so there is only ever one zip in it.
+        # `dist/` is built fresh in this job and holds two zips: the plugin,
+        # `qgis2webmap-<version>.zip`, matched by the digit after the dash, and
+        # `qgis2webmap-language-packs-<version>.zip`, the release asset the
+        # plugin downloads its languages from.
         run: |
-          zip=$(ls dist/*.zip)
+          zip=$(ls dist/qgis2webmap-[0-9]*.zip)
           python scripts/verify_package.py "$zip"
+          ls dist/qgis2webmap-language-packs-*.zip
       - name: Building twice gives the same bytes
-        # The zip stamps a fixed date and normalised modes (package_plugin.py),
+        # Both zips stamp a fixed date and normalised modes (package_plugin.py),
         # so one commit is one checksum. A difference means something
         # nondeterministic got into the packager.
         run: |
           python scripts/package_plugin.py --no-update-check --outdir dist-again
           sha256sum dist/*.zip dist-again/*.zip
-          cmp "$(ls dist/*.zip)" "$(ls dist-again/*.zip)"
+          for zip in dist/*.zip; do cmp "$zip" "dist-again/$(basename "$zip")"; done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plugin-zip
@@ -124,7 +126,7 @@ jobs:
         with:
           name: plugin-zip
           path: dist
-      - run: python scripts/scan_package.py dist/*.zip
+      - run: python scripts/scan_package.py dist/qgis2webmap-[0-9]*.zip
 
   qt6-check:
     # The site's Qt6 compatibility check, in the image the site runs it in.
@@ -144,7 +146,7 @@ jobs:
         with:
           name: plugin-zip
           path: dist
-      - run: python3 scripts/check_qt6.py dist/*.zip
+      - run: python3 scripts/check_qt6.py dist/qgis2webmap-[0-9]*.zip
 
   qgis42:
     # The whole primary suite (unit + qgis + fixtures) on QGIS 4.2 in three
@@ -316,7 +318,7 @@ jobs:
       - name: Fetch the pinned OnlyMap runtime
         run: |
           echo "ONLYMAP_RUNTIME_DIR=$(python3 scripts/fetch_runtime.py)" >> "$GITHUB_ENV"
-      - run: python3 scripts/zip_smoke.py dist/*.zip "$GITHUB_WORKSPACE"
+      - run: python3 scripts/zip_smoke.py dist/qgis2webmap-[0-9]*.zip "$GITHUB_WORKSPACE"
 
   compat344:
     # QGIS 3.44 (Qt5) is the secondary target: the focused compatibility list
@@ -366,7 +368,7 @@ jobs:
         if: matrix.shard == 1
         env:
           SMOKE_TEMPLATES: classic,map-only,poster,locator,dashboard,dark
-        run: python3 scripts/zip_smoke.py dist/*.zip "$GITHUB_WORKSPACE"
+        run: python3 scripts/zip_smoke.py dist/qgis2webmap-[0-9]*.zip "$GITHUB_WORKSPACE"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

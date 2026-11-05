@@ -10,7 +10,7 @@
 
 - [ ] `ruff check .` and `ruff format --check .` pass
 - [ ] `python -m pytest tests/unit` passes
-- [ ] `python scripts/package_plugin.py && python scripts/verify_package.py dist/*.zip` passes
+- [ ] `python scripts/package_plugin.py && python scripts/verify_package.py dist/qgis2webmap-[0-9]*.zip` passes
 - [ ] Installs via **Install from ZIP**, loads, and unloads cleanly
 - [ ] No new network request from an exported artifact
 - [ ] Any lossy transform is opt-in and reported in the fidelity report

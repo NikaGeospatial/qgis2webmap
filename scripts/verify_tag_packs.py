@@ -3,10 +3,11 @@
 
     python3 scripts/verify_tag_packs.py v0.3.1
 
-The release zip holds no `.qm`: the plugin downloads each pack from this
-repository at the release tag (`ui/languages.py`, `pack_url`) and installs it
-only if its SHA-256 matches the pin. So the tag, not the zip, must carry the
-packs. This reads them from git objects at REF, not from the working tree, and
+The plugin zip holds no `.qm`: the release's language packs asset is built
+from the packs at the tag (`scripts/package_plugin.py`), and the plugin installs
+it only if every pack's SHA-256 matches its pin (`ui/languages.py`). So the tag
+must carry the packs, and this says so before the release spends time on its
+checks. It reads them from git objects at REF, not from the working tree, and
 fails when one is missing or differs from its pin.
 
 Copyright (C) 2026 NIKA

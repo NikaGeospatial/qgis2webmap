@@ -81,6 +81,9 @@ FIRST_WORKER_MIN_FREE_MB = 900
 #: run whose queue never moves.
 SLOT_WAIT_LIMIT_S = 4 * 3600.0
 SMOKE_SUBSET = "classic,map-only,poster,locator,dashboard,dark"
+# The plugin zip in dist/, not the language packs zip built beside it
+# (qgis2webmap-language-packs-<version>.zip): the digit after the dash.
+PLUGIN_ZIP_GLOB = "qgis2webmap-[0-9]*.zip"
 BUILDERS = (
     ("cartograph", "CARTOGRAPH_FIXTURES_DIR", "expected.json"),
     ("ground_size", "GROUND_SIZE_FIXTURES_DIR", "expected.json"),
@@ -1019,14 +1022,14 @@ class Planner:
             f"{shlex.quote(sys.executable)} scripts/package_plugin.py "
             f"--outdir {shlex.quote(str(outdir))}"
             f" && {shlex.quote(sys.executable)} scripts/verify_package.py "
-            f'"$(ls {shlex.quote(str(outdir))}/*.zip | head -n 1)"'
+            f"{shlex.quote(str(outdir))}/{PLUGIN_ZIP_GLOB}"
         )
         return self.add_light(
             "package", ["sh", "-c", script], "build the plugin ZIP and verify its shape"
         )
 
     def locate_zip(self) -> Path | None:
-        found = sorted((self.run_dir / "dist").glob("*.zip"))
+        found = sorted((self.run_dir / "dist").glob(PLUGIN_ZIP_GLOB))
         if found:
             self.zip_path = found[0]
         return self.zip_path

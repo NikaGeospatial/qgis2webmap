@@ -218,7 +218,7 @@ release tag, where a red job stops the release.
   built zip. `scripts/scan_package.py` runs Bandit, detect-secrets and flake8 with
   the site's rule set; `scripts/check_qt6.py` runs the site's Qt6 checker image
   and fails on its log regex (the checker itself exits 0 whatever it finds). To
-  reproduce locally: build the zip, then `python scripts/scan_package.py dist/*.zip`.
+  reproduce locally: build the zip, then `python scripts/scan_package.py dist/qgis2webmap-[0-9]*.zip`.
 - `qgis42` (three shards): the unit, qgis and fixtures tiers on QGIS 4.2, split
   by `scripts/ci_shard.py` (the split `run_tests.py` uses), as a non-root user.
 - `zip-smoke42`: installs the built zip on QGIS 4.2 and exports every template.
@@ -366,10 +366,18 @@ curl -s http://127.0.0.1:4000/share-qgis-map-without-qgis.html | grep -o 'href="
 
 Tagging `v<version>` first checks that the tagged commit is on `main`, that the
 tag matches `metadata.txt`, that the tag carries the language packs `packs.json`
-pins (the zip holds none; the plugin downloads them from the tag), and that the
-full `checks` workflow passes; then it builds the zip and cuts a GitHub release. Uploading that
+pins, and that the full `checks` workflow passes; then it builds the zip and cuts a GitHub release. Uploading that
 zip to plugins.qgis.org is still a manual step, and the repository holds new
 uploads in a review queue.
+
+The plugin zip holds no language packs. `scripts/package_plugin.py` also builds
+`dist/qgis2webmap-language-packs-<version>.zip`, every pack `packs.json` pins
+and nothing else, and the release carries it beside the plugin zip: pressing
+Download for a language fetches that one asset from
+`https://github.com/NikaGeospatial/qgis2webmap/releases/download/v<version>/`
+and installs every language. **A release without it has no languages.** If the
+workflow fails after tagging, build both zips from the tag and attach both to
+the release by hand.
 
 The Discord announcement is **not** tied to the tag, for that reason: a tag can
 land days before approval, or on a version that is then withdrawn. Instead
@@ -398,8 +406,8 @@ ruff check . && ruff format --check .
 python -m pytest tests/unit
 python -m pytest tests/qgis          # if you have QGIS - see above
 python scripts/package_plugin.py
-python scripts/verify_package.py dist/qgis2webmap-*.zip
-python scripts/scan_package.py dist/qgis2webmap-*.zip   # needs requirements-ci.txt
+python scripts/verify_package.py dist/qgis2webmap-[0-9]*.zip
+python scripts/scan_package.py dist/qgis2webmap-[0-9]*.zip   # needs requirements-ci.txt
 ```
 
 Commit messages: concise, imperative one-liners.

@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Build the QGIS plugin zip.
+"""Build the QGIS plugin zip, and the language packs zip released beside it.
 
 The QGIS plugin repository requires a zip containing exactly one top-level
 directory whose name is the Python package, with `metadata.txt` and `__init__.py`
 directly inside it. Getting that shape wrong is the most common submission
 rejection, so `verify_package.py` asserts it independently of this script.
+
+The second zip, `qgis2webmap-language-packs-<version>.zip`, holds every
+compiled language pack and nothing else. It is attached to the GitHub release
+(the release workflow attaches all of `dist/*.zip`), and the plugin downloads
+it when someone asks for a language (see `ui/languages.py`).
 
 Usage:
     python scripts/package_plugin.py [--outdir dist]
@@ -18,6 +23,8 @@ from __future__ import annotations
 import argparse
 import configparser
 import contextlib
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -36,12 +43,17 @@ PACKAGE_DIR = REPO_ROOT / PACKAGE_NAME
 # slug from it. The filename is free, and "nika_onlymap_exporter-0.1.2.zip" told
 # a user downloading it nothing about what they had just downloaded.
 ZIP_BASENAME = "qgis2webmap"
+# The release asset the plugin downloads its languages from. `ui/languages.py`
+# builds the same name; tests/unit/test_language_packs.py holds the two together.
+LANGUAGE_PACKS_BASENAME = f"{ZIP_BASENAME}-language-packs"
+I18N_DIR = PACKAGE_DIR / "i18n"
 
 # Anything matching these is development detritus, not plugin payload.
 EXCLUDE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 # Translations are not shipped: `.ts` is the translators' source, and the
-# compiled `.qm` packs are downloaded on request (see `ui/languages.py`). Only
-# `i18n/packs.json`, the pinned checksum of each, goes in the zip.
+# compiled `.qm` packs go in the language packs zip, downloaded on request (see
+# `ui/languages.py`). Only `i18n/packs.json`, the pinned checksum of each, goes
+# in the plugin zip.
 EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".orig", ".rej", ".ts", ".qm"}
 EXCLUDE_NAMES = {".DS_Store", ".gitkeep"}
 
@@ -159,6 +171,42 @@ def build(outdir: Path) -> Path:
     return target
 
 
+def build_language_packs(outdir: Path) -> Path:
+    """Zip every pack `i18n/packs.json` pins, at the zip's root.
+
+    Refuses to build when a pack is missing or differs from its pin: the plugin
+    rejects the whole download then, so such a zip would leave every language
+    undownloadable for everyone on this version.
+    """
+    version = read_version()
+    outdir.mkdir(parents=True, exist_ok=True)
+    target = outdir / f"{LANGUAGE_PACKS_BASENAME}-{version}.zip"
+
+    pins = json.loads((I18N_DIR / "packs.json").read_text(encoding="utf-8"))["packs"]
+    stamp = source_timestamp()
+    packs = []
+    for code in sorted(pins):
+        source = I18N_DIR / f"qgis2webmap_{code}.qm"
+        if not source.is_file():
+            raise SystemExit(f"error: missing language pack {source.name}")
+        if hashlib.sha256(source.read_bytes()).hexdigest() != pins[code]["sha256"]:
+            raise SystemExit(
+                f"error: {source.name} is not the pack packs.json pins; "
+                "run scripts/update_translations.py"
+            )
+        packs.append(source)
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as zf:
+        for source in packs:
+            add_entry(zf, source, source.name, stamp)
+
+    shown = target.resolve()
+    if shown.is_relative_to(REPO_ROOT):
+        shown = shown.relative_to(REPO_ROOT)
+    size_kb = target.stat().st_size / 1024
+    print(f"built {shown}  ({len(packs)} language packs, {size_kb:.1f} KB)")
+    return target
+
+
 def announce_runtime_updates() -> None:
     """Say whether a newer OnlyMap runtime exists, without ever failing the build.
 
@@ -192,7 +240,9 @@ def main() -> int:
         help="skip the check for a newer OnlyMap runtime",
     )
     args = ap.parse_args()
-    build(REPO_ROOT / args.outdir if not args.outdir.is_absolute() else args.outdir)
+    outdir = REPO_ROOT / args.outdir if not args.outdir.is_absolute() else args.outdir
+    build(outdir)
+    build_language_packs(outdir)
     if not args.no_update_check:
         announce_runtime_updates()
     return 0

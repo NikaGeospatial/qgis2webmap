@@ -141,7 +141,8 @@ class TestPrivacyClaim:
 class TestPackagedHelp:
     """The Help tab reads these files; a build that drops them shows nothing."""
 
-    ZIP_GLOB = "qgis2webmap-*.zip"
+    # The digit after the dash: not qgis2webmap-language-packs-<version>.zip.
+    ZIP_GLOB = "qgis2webmap-[0-9]*.zip"
 
     def _zip(self) -> Path | None:
         candidates = sorted((REPO_ROOT / "dist").glob(self.ZIP_GLOB))
