@@ -163,18 +163,17 @@ CASES = {
         ],
         None,
     ),
-    # MapServer answering as WMS 1.1.1 (SRS), its capabilities on http://.
+    # MapServer answering as WMS 1.1.1 (SRS). Its capabilities name http://,
+    # which redirects to https:// without CORS: asked where it was added.
     "bgs-mapserver-111": (
         "map_services/bgs-geology-wms-111.xml",
         _caps(BGS),
         _wms(BGS, ["GBR_BGS_625k_BLT"], "EPSG:27700"),
-        BGS.replace("https", "http", 1)
-        + "?language=eng&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap"
+        BGS + "?language=eng&SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap"
         "&LAYERS=GBR_BGS_625k_BLT&STYLES=&FORMAT=image/png&TRANSPARENT=TRUE"
         "&SRS=EPSG:3857&WIDTH={width}&HEIGHT={height}&BBOX={bbox-epsg-3857}",
         [
-            BGS.replace("https", "http", 1)
-            + "?language=eng&version=1.1.1&service=WMS&request=GetLegendGraphic"
+            BGS + "?language=eng&version=1.1.1&service=WMS&request=GetLegendGraphic"
             "&layer=GBR_BGS_625k_BLT&format=image/png&STYLE=default"
             "&SLD_VERSION=1.1.0&TRANSPARENT=true"
         ],
