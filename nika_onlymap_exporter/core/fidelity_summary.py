@@ -114,6 +114,8 @@ TOPIC_BY_HEAD = {
     "Contrast": Topic.SYMBOLOGY,
     "Height": Topic.SYMBOLOGY,
     "Scale visibility": Topic.SYMBOLOGY,
+    # A WMS layer read without the capabilities QGIS would keep for it.
+    "Capabilities": Topic.DATA,
     # A WMS/WMTS layer's own legend picture on a web map - not "Legend",
     # which is a cartograph's legend item.
     "Legend picture": Topic.SYMBOLOGY,

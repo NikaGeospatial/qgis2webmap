@@ -16,6 +16,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -133,7 +134,8 @@ class TestPmtilesArchive:
         assert carried == ["archive-0-lakes-and-roads.pmtiles"]
         assert (out / carried[0]).read_bytes() == archive.read_bytes()
         page = result.entry_path.read_text(encoding="utf-8")
-        assert page.count('type="MVTLayer"') == 2
+        # Layer elements, not the page script that finds them by their type.
+        assert len(re.findall(r'<om-layer\b[^>]*\btype="MVTLayer"', page)) == 2
         assert page.count('data="archive-0-lakes-and-roads.pmtiles"') == 2
         assert "{&quot;mvt&quot;: {&quot;layers&quot;: [&quot;water&quot;]}}" in page
         assert "{&quot;mvt&quot;: {&quot;layers&quot;: [&quot;roads&quot;]}}" in page
