@@ -270,6 +270,18 @@ def _measure_drawn(page, timeout_s: float = 20.0, screen: bool = False):
     return measured
 
 
+def _notice(page) -> str | None:
+    """The page's "Could not load" notice, or None while it shows nothing."""
+    return page.evaluate(
+        """() => {
+          const notice = document.querySelector('om-widget[data-q2w-layer-notice]');
+          const root = notice && notice.root;
+          const panel = root && root.querySelector('.q2w-notice');
+          return panel ? panel.textContent : null;
+        }"""
+    )
+
+
 def _tile_errors(page) -> list[dict]:
     return [
         error
@@ -397,6 +409,9 @@ class TestWmsFailures:
         snapshot = _measure(page)
         assert snapshot["crimson"] == 0
         assert snapshot["blue"] > 0
+        # The plain pictures show, so the layer has not failed to load.
+        assert "data-q2w-layer-notice" in entry.read_text(encoding="utf-8")
+        assert _notice(page) is None
 
     def test_a_warped_layer_without_cors_stays_empty_and_says_why(
         self, page, runtime, services, tmp_path
@@ -411,6 +426,7 @@ class TestWmsFailures:
         seen = _measure(page, screen=True)
         assert seen["crimson"] == 0
         assert seen["blue"] > 0
+        assert _notice(page) == "Could not load: Fake WMS"
 
     def test_a_service_exception_is_quoted(
         self, page, runtime, services, tmp_path
