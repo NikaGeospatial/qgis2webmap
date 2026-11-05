@@ -300,11 +300,36 @@ def _record(manager, url: str, body: bytes) -> None:
     cache.insert(device)
 
 
+# QGIS 3.44 cannot open this layer from these capabilities, the live service's
+# included ("Tile layer or tile matrix set not found", checked 2026-11-05);
+# QGIS 4 can. There is nothing for the export to read there.
+NEEDS_QGIS_4 = {"pdok-28992-kvp"}
+
+
+def _as_this_qgis_asks(tiles: str, legend: list[str]) -> tuple[str, list[str]]:
+    """The addresses as recorded, from QGIS 4.2, which asks for a layer's
+    sublayers the other way round from QGIS 3.44 (`test_map_service_layers`,
+    `TestSublayerOrder`, checks the export follows whichever QGIS it runs in)."""
+    if qgis_core.Qgis.QGIS_VERSION_INT >= 40000 or "?" not in tiles:
+        return tiles, legend
+    base, query = tiles.split("?", 1)
+    parts = []
+    for part in query.split("&"):
+        key, _, value = part.partition("=")
+        if key in ("LAYERS", "STYLES"):
+            value = ",".join(value.split(",")[::-1])
+        parts.append(f"{key}={value}")
+    return f"{base}?{'&'.join(parts)}", legend[::-1]
+
+
 @pytest.mark.parametrize("case", list(CASES))
 def test_a_recorded_service_exports_as_it_did_live(offline, case) -> None:
     from qgis.PyQt.QtCore import QDate, QDateTime, QTime, QTimeZone
 
+    if case in NEEDS_QGIS_4 and qgis_core.Qgis.QGIS_VERSION_INT < 40000:
+        pytest.skip("QGIS 3.44 cannot open this layer from its capabilities")
     fixture, caps_url, source, tiles, legend, time = CASES[case]
+    tiles, legend = _as_this_qgis_asks(tiles, legend)
     _record(offline, caps_url, (FIXTURES / fixture).read_bytes())
     layer = qgis_core.QgsRasterLayer(source, case, "wms")
     assert layer.isValid(), layer.error().summary()
