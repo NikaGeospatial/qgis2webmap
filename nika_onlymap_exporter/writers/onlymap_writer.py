@@ -64,6 +64,7 @@ from ..packaging.runtime_manager import (
     RuntimeProvider,
     default_provider,
 )
+from ..packaging.tile_archives import stage_tile_archives
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
 # The measure tool's page script and styles, on a map that has the tool.
@@ -393,6 +394,21 @@ class OnlyMapWriter:
         written.extend(
             ArtifactFile(path, path.stat().st_size) for path in staging.files
         )
+        # Local PMTiles archives travel as the rasters do, and count against
+        # the same single-file limit.
+        archives = stage_tile_archives(
+            project,
+            destination,
+            mode,
+            scan_report,
+            embedded_bytes=sum(len(data) for _name, data in staging.embedded),
+        )
+        if not archives.can_export:
+            raise ExportBlockedError(archives.blocking_reasons)
+        project = archives.project
+        written.extend(
+            ArtifactFile(path, path.stat().st_size) for path in archives.files
+        )
         # Popup pictures beside the page or inside it, as the tier carries
         # everything else; the reader already chose them and said so.
         embedded_pictures, picture_files = place_popup_pictures(
@@ -420,7 +436,7 @@ class OnlyMapWriter:
                 compress_data,
                 preview_hook,
                 runtime_file,
-                staging.embedded,
+                staging.embedded + archives.embedded,
                 embedded_pictures,
             ),
             encoding="utf-8",

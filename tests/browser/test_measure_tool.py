@@ -421,6 +421,53 @@ class TestTheUnits:
         label = _scale_label(page)
         assert re.fullmatch(rf"[\d.,]+\s*({pattern})", label), label
 
+    @pytest.mark.parametrize("units", ["metric", "imperial", "nautical"])
+    def test_the_scale_bar_is_as_long_as_the_distance_it_reads(
+        self, page, runtime, tmp_path, units
+    ) -> None:
+        """The bar's length on screen is the distance its label reads, on the
+        ground at the map's centre - on OnlyMap 0.13.3 and before, the label
+        read twice the distance the bar covered."""
+        _open(
+            page,
+            OnlyMapWriter(runtime_provider=runtime).write(
+                _project(ExportSettings(measure_units=units)), tmp_path
+            ),
+        )
+        label = _scale_label(page)
+        match = re.fullmatch(r"([\d.,]+)\s*(m|km|ft|mi|nmi)", label)
+        assert match, label
+        metres = (
+            float(match[1].replace(",", ""))
+            * {
+                "m": 1.0,
+                "km": 1000.0,
+                "ft": 0.3048,
+                "mi": 1609.344,
+                "nmi": 1852.0,
+            }[match[2]]
+        )
+        bar_px, (west, east) = page.evaluate(
+            """() => {
+              const el = document.querySelector('om-map');
+              const host = document.querySelector('om-widget[type="scale-bar"]');
+              const bar = (host.shadowRoot || host).querySelector('.bar');
+              const box = el.getBoundingClientRect();
+              const [lon, lat] = el.unproject([box.width / 2, box.height / 2]);
+              return [bar.clientWidth, [[lon - 0.05, lat], [lon + 0.05, lat]]
+                .map((p) => [p, el.project(p)])];
+            }"""
+        )
+        (west_lonlat, west_px), (east_lonlat, east_px) = west, east
+        metres_per_px = (
+            _haversine_km(tuple(west_lonlat), tuple(east_lonlat))
+            * 1000.0
+            / math.hypot(east_px[0] - west_px[0], east_px[1] - west_px[1])
+        )
+        assert bar_px * metres_per_px == pytest.approx(metres, rel=0.05), (
+            f"'{label}' over {bar_px}px at {metres_per_px:.1f} m/px"
+        )
+
     def test_the_panel_has_no_units_of_its_own(self, page, measure_map) -> None:
         _open(page, measure_map)
 

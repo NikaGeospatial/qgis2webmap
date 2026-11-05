@@ -3091,15 +3091,43 @@ def prepare_layer(
             time_slider=time_slider,
         )
 
+    if layer.type() == QgsMapLayerType.VectorTileLayer:
+        # Imported here: `vector_tiles` reads with this module's helpers.
+        from .vector_tiles import read_vector_tile_layer
+
+        return read_vector_tile_layer(
+            layer, report, group_path=group_path, visible=visible
+        )
+
     if layer.type() != QgsMapLayerType.VectorLayer:
         report.unsupported(
             f"Layer '{name}'",
-            "Only vector and raster layers are exported. Mesh, point-cloud and "
-            "annotation layers have no equivalent in the map runtime, so this "
-            "layer is omitted from the map.",
+            "Only vector, raster and vector tile layers are exported. Mesh, "
+            "point-cloud and annotation layers have no equivalent in the map "
+            "runtime, so this layer is omitted from the map.",
             layer_id,
         )
         return None
+
+    from .vector_tiles import pmtiles_archive, read_pmtiles_layer
+
+    if pmtiles_archive(layer) is not None:
+        # A PMTiles archive is read as its tiles, not as the features of the
+        # one zoom GDAL hands QGIS.
+        return read_pmtiles_layer(
+            layer,
+            report,
+            group_path=group_path,
+            visible=visible,
+            with_popup=with_popup,
+            with_labels=with_labels,
+            field_modes=field_modes,
+            popup_on_hover=popup_on_hover,
+            highlight_color=highlight_color,
+            project=project,
+            clip_extent=clip_extent,
+            filter_field=filter_field,
+        )
 
     kind = geometry_kind(layer)
     if kind is GeometryKind.UNKNOWN:

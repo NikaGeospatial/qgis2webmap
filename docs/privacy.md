@@ -84,10 +84,13 @@ host.
 
 ## Live web layers and their legends
 
-A layer QGIS itself reads from the web - an XYZ, WMS or WMTS layer, or a Cloud
-Optimized GeoTIFF at an `https://` address - is exported live: the reader's
-browser asks that layer's own server for what it draws, so that server sees the
-requests and the area being looked at. A WMS or WMTS layer's legend picture is
+A layer QGIS itself reads from the web - an XYZ, WMS or WMTS layer, a vector
+tile layer, or a Cloud Optimized GeoTIFF or PMTiles archive at an `https://`
+address - is exported live: the reader's browser asks that layer's own server
+for what it draws, so that server sees the requests and the area being looked
+at. A vector tile layer drawn in its publisher's style also loads that style
+from the publisher when the map opens. A PMTiles archive on your own computer
+is carried with the map, and reading it makes no request elsewhere. A WMS or WMTS layer's legend picture is
 loaded from the service the same way when the map opens. An address that
 carries an access key is never written into the map: such a layer is refused,
 and such a legend picture left out.

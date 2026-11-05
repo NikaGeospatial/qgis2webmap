@@ -52,9 +52,33 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   layer, or a tile or map service layer - a small "Could not load" notice
   names it, in the bottom-left corner just above the licence notice, and
   goes once the layer loads again.
+- **PMTiles archives export as tiles.** A layer QGIS reads from a `.pmtiles`
+  archive (which QGIS opens through GDAL, one layer per layer of the archive)
+  is drawn on the web map from the archive itself, at every zoom it holds and
+  in the layer's QGIS colours, line widths and point sizes, instead of as the
+  pieces of one zoom's features that GDAL hands QGIS. A local archive is
+  carried with the map: inside a Standalone HTML file (up to 100 MB together
+  with any rasters, which opens by double-click), or beside the page in a
+  Folder or Share ZIP (which has to be served, as with rasters - the Fidelity
+  tab and the zip's README say so); an archive at an `https://` address stays
+  there and is read live. Reported in the Fidelity tab: labels and the filter
+  panel are not exported for such a layer, rule-based styling draws in the
+  first rule's symbol, markers QGIS draws itself become circles, and an
+  archive compressed with zstd, which browsers cannot read, is left out.
+- **Vector tile layers export in their publisher's style.** A vector tile
+  layer added with a style URL (such as a government base map's `style.json`)
+  is drawn on the web map from the same tile service, in that style: its
+  colours, line widths, filters, zoom rules and labels. Only while QGIS still
+  draws it as the style says: a layer you restyled in QGIS is left out with a
+  row saying why, rather than shipped in colours you replaced, as is one whose
+  style QGIS kept no copy of. Vector tile layers were not exported before.
 
 ### Changed
-- The map runtime is OnlyMap 0.13.4.
+- The map runtime is OnlyMap 0.13.4. What readers will notice: the scale bar
+  now reads the true distance - it read twice the distance it covered, so a
+  bar labelled 50 km spanned 25 km - and clicking a cluster bubble of a layer
+  with popups zooms in exactly as far as it takes for the bubble to split
+  (it zoomed in one step).
 - **Tile and WMS services that refuse web pages (CORS) now show.** Their
   Web Mercator tiles are drawn as plain pictures, under every other layer,
   hidden while the map is tilted or rotated, and left out of pictures the

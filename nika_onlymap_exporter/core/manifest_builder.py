@@ -53,6 +53,7 @@ from .export_ir import (
     SourceKind,
     SymbolSpec,
     TileSpec,
+    VectorTileSpec,
     uniform_ground_units,
 )
 from .label_points import (
@@ -1159,6 +1160,124 @@ def _tile_service_attributes(tiles: TileSpec) -> list[tuple[str, str | None]]:
     return attributes
 
 
+# The runtime's vector tile layer, for a PMTiles archive and for a vector tile
+# service drawn in its publisher's style.
+VECTOR_TILE_LAYER_CLASS = "MVTLayer"
+
+
+def build_vector_tile_layer_element(
+    layer: ExportLayer,
+    tiles: VectorTileSpec,
+    indent: str = "    ",
+    highlight_color: Color | None = None,
+) -> str:
+    """One `<om-layer type="MVTLayer">` on a PMTiles archive or a tile service.
+
+    The runtime reads the tiles itself, so the element is all attributes. A
+    service is drawn by its publisher's style (`vector-style`); an archive by
+    the layer's QGIS renderer, with the colours, widths and sizes a vector
+    layer gets, from its own layer of the archive alone (`load-options`
+    selects it: QGIS opens each layer of an archive as a layer of its own).
+    The archive's zoom range is the runtime's to read; a service's is the
+    one QGIS keeps for it.
+    """
+    inner = indent + "  "
+    attributes: list[tuple[str, str | None]] = [
+        ("id", layer.layer_id),
+        ("type", VECTOR_TILE_LAYER_CLASS),
+        ("label", layer.name),
+        ("data", tiles.url),
+    ]
+    if tiles.source_layer:
+        attributes.append(
+            (
+                "load-options",
+                json.dumps({"mvt": {"layers": [tiles.source_layer]}}),
+            )
+        )
+    if not tiles.is_archive and tiles.min_zoom is not None:
+        attributes.append(("min-zoom", str(tiles.min_zoom)))
+    if not tiles.is_archive and tiles.max_zoom is not None:
+        attributes.append(("max-zoom", str(tiles.max_zoom)))
+    if tiles.style_url:
+        attributes.append(("vector-style", tiles.style_url))
+        if tiles.style_source:
+            attributes.append(("vector-style-source", tiles.style_source))
+    else:
+        attributes.extend(_vector_tile_symbology(layer))
+    if layer.opacity < 1.0:
+        attributes.append(("opacity", _number(layer.opacity)))
+    if not layer.visible:
+        attributes.append(("visible", "false"))
+    zoom_range = _zoom_range_attribute(layer)
+    if zoom_range is not None:
+        attributes.append(zoom_range)
+    if layer.popup.enabled and layer.popup.visible_fields:
+        attributes.append(("pickable", "true"))
+        attributes.append(("auto-highlight", "true"))
+        attributes.append(
+            (
+                "highlight-color",
+                DEFAULT_HIGHLIGHT
+                if highlight_color is None
+                else color_hex(highlight_color),
+            )
+        )
+    return "\n".join(
+        [
+            f"{indent}<om-layer",
+            _attrs_to_string(attributes, inner),
+            f"{indent}></om-layer>",
+        ]
+    )
+
+
+def _vector_tile_symbology(layer: ExportLayer) -> list[tuple[str, str | None]]:
+    """The QGIS renderer of a layer drawn from tiles: its colours, line widths
+    and point sizes, as `build_layer_element` writes them for features."""
+    renderer = layer.renderer
+    symbol = renderer.representative_symbol or SymbolSpec()
+    attributes: list[tuple[str, str | None]] = [
+        ("get-fill-color", fill_expression(renderer, layer.geometry_kind)),
+        ("get-line-color", line_color_expression(renderer, layer.geometry_kind)),
+    ]
+    if renderer.kind is RendererKind.SINGLE:
+        swatch = symbol.fill_color or symbol.stroke_color
+        if swatch is not None:
+            attributes.append(("color", color_literal(swatch).strip("'")))
+    if symbol.stroke_width:
+        width_renderer, width_units = _ground_view(
+            renderer, "stroke_width", "stroke_width_ground"
+        )
+        width_symbol = width_renderer.representative_symbol or symbol
+        width = numeric_expression(
+            width_renderer, "stroke_width", fallback=width_symbol.stroke_width
+        )
+        attributes.append(
+            ("get-line-width", width or _number(width_symbol.stroke_width))
+        )
+        attributes.append(("line-width-units", width_units))
+        if layer.geometry_kind is GeometryKind.LINE:
+            attributes.append(("line-width-min-pixels", _number(MIN_LINE_PICK_PIXELS)))
+            if symbol.cap_rounded:
+                attributes.append(("line-cap-rounded", "true"))
+            if symbol.join_rounded:
+                attributes.append(("line-joint-rounded", "true"))
+    if layer.geometry_kind is GeometryKind.POINT and symbol.radius:
+        radius_renderer, radius_units = _ground_view(
+            renderer, "radius", "radius_ground"
+        )
+        radius_symbol = radius_renderer.representative_symbol or symbol
+        radius = numeric_expression(
+            radius_renderer, "radius", fallback=radius_symbol.radius
+        )
+        attributes.append(
+            ("get-point-radius", radius or _number(radius_symbol.radius or 0.0))
+        )
+        attributes.append(("point-radius-units", radius_units))
+    return attributes
+
+
 def build_layer_element(
     layer: ExportLayer,
     indent: str = "    ",
@@ -1184,6 +1303,10 @@ def build_layer_element(
         return build_raster_layer_element(layer, layer.raster, indent)
     if layer.tiles is not None:
         return build_tile_layer_element(layer, layer.tiles, indent)
+    if layer.vector_tiles is not None:
+        return build_vector_tile_layer_element(
+            layer, layer.vector_tiles, indent, highlight_color
+        )
 
     renderer = layer.renderer
     # Not `renderer.symbol`: categorized and graduated renderers have none, and
@@ -1948,9 +2071,10 @@ WIDGET_POSITIONS = {
 # Widths measured at Normal size in chromium: measure tool 214px (compacted by
 # `templates/measure-tool.html` to the runtime's own 200px minimum; its
 # readout wraps rather than widen it), basemap switcher 164px (its panel's own
-# minimum is 140px), scale bar 72-115px (it picks a round distance in the
-# chosen units, so it changes as the map zooms, but stays under 140px), zoom
-# controls 30px (44px on a touch screen).
+# minimum is 140px), scale bar 66-116px (it picks a round distance in the
+# chosen units, so it changes as the map zooms, but stays under 140px; re-
+# measured on OnlyMap 0.13.4, whose fix to the distance it reads left that
+# range as it was), zoom controls 30px (44px on a touch screen).
 # Every Size scales them alike, so the order holds at each one, and a control
 # left off leaves the rest in order.
 BOTTOM_LEFT_ORDER = {

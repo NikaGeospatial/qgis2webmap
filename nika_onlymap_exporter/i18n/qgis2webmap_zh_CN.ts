@@ -136,22 +136,22 @@
       <translation>需要地图 {names} 为交互式。</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1864" />
+      <location filename="../core/cartograph_export.py" line="1889" />
       <source>Map data size</source>
       <translation>地图数据大小</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2211" />
+      <location filename="../core/cartograph_export.py" line="2239" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi the picture this frame is drawn through (its frame line included) would be larger than memory can hold. Make the map smaller or ask for a lower resolution.</source>
       <translation>请求 {wanted} dpi，实际按 {dpi} dpi 绘制（{width} x {height} 像素）：按 {wanted} dpi，此画框的中间图片（含画框线）将超出内存所能容纳的大小。请缩小地图或要求较低的分辨率。</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2219" />
+      <location filename="../core/cartograph_export.py" line="2247" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi this frame's picture would be larger than a browser can draw. Make the map smaller or ask for a lower resolution.</source>
       <translation>请求 {wanted} dpi，实际按 {dpi} dpi 绘制（{width} x {height} 像素）：按 {wanted} dpi，此画框的图片将超出浏览器能绘制的大小。请缩小地图或要求较低的分辨率。</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1865" />
+      <location filename="../core/cartograph_export.py" line="1890" />
       <source>The page carries {size} of vector data, which can leave the map blank for a long time while it opens, especially on a computer without a graphics card. Heaviest: {layers}. Simplify the geometry of those layers, or set the frame to Image in Map frames.</source>
       <translation>页面包含 {size} 矢量数据，打开时地图可能长时间空白，在没有显卡的电脑上尤其如此。最大的是：{layers}。请简化这些图层的几何，或在地图画框中将画框设为图片。</translation>
     </message>

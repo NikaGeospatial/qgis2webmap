@@ -60,6 +60,13 @@ notes below are the things that are commonly assumed wrong.
   features (rule-based styles, labels, Value Map popups, a filter panel, count
   bubbles), and are live only when over 20 MB. The layer's Features choice
   overrides it. SensorThings layers are downloaded once and embedded.
+  A layer of a PMTiles archive is read as tiles in its QGIS colours: a local
+  archive travels inside a single HTML file (up to 100 MB with rasters) or
+  beside the page in a Folder or Share ZIP (served, as for rasters), an
+  `https://` one stays live; no labels or filter panel on such a layer. A
+  vector tile layer added with a style URL is a live layer drawn in its
+  publisher's style, only while it is not restyled in QGIS (a restyled one is
+  left out and reported).
   WCS and ArcGIS map services are not exported. Dense point layers cluster when
   zoomed out, and crowded labels wait for a closer zoom. Data in any CRS is
   reprojected to WGS84. **Scale-dependent visibility is exported** as a web zoom
