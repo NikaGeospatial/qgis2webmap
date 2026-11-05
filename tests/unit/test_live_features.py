@@ -275,6 +275,41 @@ class TestResolve:
         assert item.status.value == "approximated"
         assert "the filter QGIS applies to it" in item.detail
 
+    @pytest.mark.parametrize(
+        ("found", "changes", "row"),
+        [
+            # IGN's Géoplateforme WFS asked as 1.1.0 (2026-11-05).
+            (
+                ("its WFS version (1.1.0), which pages no features",),
+                {},
+                "Embedded, not loaded live from h: the map cannot load it live "
+                "because of its WFS version (1.1.0), which pages no features. "
+                "The map shows the features as they were then.",
+            ),
+            # NIFC's wildfire FeatureServer: date fields and count bubbles.
+            (
+                ("its date fields, which the service sends as numbers",),
+                {"cluster_max_zoom": 9},
+                "Embedded, not loaded live from h: the map cannot load it live "
+                "because of its date fields, which the service sends as numbers; "
+                "and its count bubbles (where points stop merging is worked out) "
+                "is worked out from the features when the map is exported, which "
+                "features loaded live would not carry. The map shows the features "
+                "as they were then.",
+            ),
+        ],
+        ids=["wfs-1.1", "date-fields-and-bubbles"],
+    )
+    def test_the_row_says_why_each_reason_keeps_it_embedded(
+        self, found: tuple[str, ...], changes: dict, row: str
+    ) -> None:
+        """A reason found reading the layer is not "worked out from the
+        features": the row must not say so of a login, filter or version."""
+        live = LiveFeaturesSpec(url="u", host="h", service="WFS", embedded_only=found)
+        _layer_out, items = _resolve(_layer(live=live, **changes))
+        (item,) = items
+        assert item.detail == row
+
     @pytest.mark.parametrize("mode", list(LiveMode))
     def test_the_choice_is_honoured(self, mode: LiveMode) -> None:
         live = LiveFeaturesSpec(url="u", host="h", service="WFS", choice=mode)

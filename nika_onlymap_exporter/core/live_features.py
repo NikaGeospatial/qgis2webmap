@@ -214,7 +214,8 @@ def resolve_live(
         return layer
     name = layer.name
     subject = f"Live features of '{name}'"
-    reasons = [*live.embedded_only, *_computed_at_export(layer)]
+    computed = _computed_at_export(layer)
+    reasons = [*live.embedded_only, *computed]
     size = len(layer.geojson_text.encode("utf-8")) if layer.geojson is not None else 0
     too_big = size > too_big_bytes
     choice = live.choice
@@ -222,11 +223,23 @@ def resolve_live(
     if choice is LiveMode.EMBEDDED:
         return dataclasses.replace(layer, live=None)
     if reasons:
+        # What reading the layer found (a login, a filter, a WFS 1.x) stops
+        # the map loading it live; only a look is worked out from features.
+        causes = []
+        if live.embedded_only:
+            causes.append(
+                "the map cannot load it live because of "
+                + _listed(list(live.embedded_only))
+            )
+        if computed:
+            causes.append(
+                f"{_listed(computed)} {'is' if len(computed) == 1 else 'are'} "
+                "worked out from the features when the map is exported, which "
+                "features loaded live would not carry"
+            )
         detail = (
-            f"Embedded, not loaded live from {live.host}: "
-            f"{_listed(reasons)} {'is' if len(reasons) == 1 else 'are'} worked out "
-            "from the features when the map is exported, which features loaded "
-            "live would not carry. The map shows the features as they were then."
+            f"Embedded, not loaded live from {live.host}: {'; and '.join(causes)}. "
+            "The map shows the features as they were then."
         )
         if too_big:
             detail += (
