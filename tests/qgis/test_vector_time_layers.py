@@ -39,6 +39,11 @@ from qgis.core import (  # noqa: E402
 from qgis.PyQt.QtCore import QDate, QDateTime, Qt, QTime  # noqa: E402
 
 MODES = Qgis.VectorTemporalMode
+
+
+@pytest.fixture(autouse=True)
+def _qgis(qgis_app):
+    """Every test makes layers, which need QGIS and its providers started."""
 DAY_MS = 86_400_000
 UTC = Qt.TimeSpec.UTC
 LOCAL = Qt.TimeSpec.LocalTime
@@ -316,3 +321,25 @@ def test_a_layer_without_time_is_unchanged() -> None:
     assert exported is not None and exported.time is None
     assert not follows_map_time(layer)
     assert not [item for item in report.items if item.subject.startswith("Time of")]
+
+
+def test_dense_points_with_a_slider_stay_points(project) -> None:
+    """A count bubble would go on counting the points the slider hides."""
+    from nika_onlymap_exporter.core.project_reader import read_project
+
+    rows = [(QDate(2020, 3, 2 + i % 8), None, None) for i in range(400)]
+    layer = _set(_layer("date", rows), MODES.FeatureDateTimeInstantFromField)
+    layer.startEditing()
+    for index, feature in enumerate(layer.getFeatures()):
+        # All within a few metres: they would cluster.
+        point = QgsPointXY(index * 1e-5, 51.0)
+        layer.changeGeometry(feature.id(), QgsGeometry.fromPointXY(point))
+    layer.commitChanges()
+    project.addMapLayer(layer)
+    report = FidelityReportBuilder()
+    read = read_project(project, report, map_time=MapTime(True, _frame(_moment(5))))
+    (exported,) = read.exportable_layers
+    assert exported.time is not None
+    assert exported.cluster_max_zoom is None
+    markers = [i.detail for i in report.items if i.subject.startswith("Markers")]
+    assert len(markers) == 1 and "has a time slider" in markers[0]
