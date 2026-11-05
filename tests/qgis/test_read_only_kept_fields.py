@@ -131,9 +131,16 @@ def _read_every_field(layer, monkeypatch, **kwargs):
         scans=None,
         label=None,
         rules=None,
+        time=None,
     ):
         return real(
-            layer, clip_extent, display_names, scans=scans, label=label, rules=rules
+            layer,
+            clip_extent,
+            display_names,
+            scans=scans,
+            label=label,
+            rules=rules,
+            time=time,
         )
 
     with monkeypatch.context() as patch:
@@ -346,9 +353,16 @@ def test_joins_value_relations_and_unsaved_edits_read_alike(
         scans=None,
         label=None,
         rules=None,
+        time=None,
     ):
         return real(
-            layer, clip_extent, display_names, scans=scans, label=label, rules=rules
+            layer,
+            clip_extent,
+            display_names,
+            scans=scans,
+            label=label,
+            rules=rules,
+            time=time,
         )
 
     with monkeypatch.context() as patch:
@@ -462,9 +476,16 @@ def test_unsaved_edits_through_joins_and_expression_fields_read_alike(
         scans=None,
         label=None,
         rules=None,
+        time=None,
     ):
         return real(
-            layer, clip_extent, display_names, scans=scans, label=label, rules=rules
+            layer,
+            clip_extent,
+            display_names,
+            scans=scans,
+            label=label,
+            rules=rules,
+            time=time,
         )
 
     try:
@@ -597,9 +618,16 @@ def test_an_atlas_on_fields_left_out_of_the_export(
         scans=None,
         label=None,
         rules=None,
+        time=None,
     ):
         return real(
-            layer, clip_extent, display_names, scans=scans, label=label, rules=rules
+            layer,
+            clip_extent,
+            display_names,
+            scans=scans,
+            label=label,
+            rules=rules,
+            time=time,
         )
 
     with monkeypatch.context() as patch:
