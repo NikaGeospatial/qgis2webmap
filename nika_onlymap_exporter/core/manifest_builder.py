@@ -1968,10 +1968,29 @@ LEGEND_STYLES = """:host { font-family: system-ui, sans-serif; font-size: 12px; 
 
 
 def _legend_style_element(indent: str, settings: ExportSettings) -> list[str]:
+    sized = [SIZED_PANEL_STYLES] if settings.legend_width is not None else []
     return [
         f"{indent}  <style>",
         *(f"{indent}    {line}" if line else "" for line in LEGEND_STYLES.splitlines()),
-        *(f"{indent}    {line}" for line in _legend_graphic_size(settings)),
+        *(f"{indent}    {line}" for line in [*_legend_graphic_size(settings), *sized]),
+        f"{indent}  </style>",
+    ]
+
+
+# A legend or layer switcher given a width is that width
+# (`writers/onlymap_writer._panel_size_block`), so its contents must not hold
+# it wider: below the panels' own 140px minimum they scrolled sideways inside
+# it. `:host` outranks the runtime's rule, which it adds after this one.
+SIZED_PANEL_STYLES = ":host .omni-panel { min-width: 0; }"
+
+
+def _sized_panel_style(width: int | None, indent: str) -> list[str]:
+    """The `<style>` a runtime panel with a set `width` carries; none on Auto."""
+    if width is None:
+        return []
+    return [
+        f"{indent}  <style>",
+        f"{indent}    {SIZED_PANEL_STYLES}",
         f"{indent}  </style>",
     ]
 
@@ -2318,16 +2337,25 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
                 f'{indent}<om-widget type="legend" {title_attribute}'
                 f'position="{WIDGET_POSITIONS["legend"]}">'
             )
-            order = _legend_order_style(project, indent)
+            styles = [
+                *_legend_order_style(project, indent),
+                *_sized_panel_style(settings.legend_width, indent),
+            ]
             widgets.append(
-                "\n".join([opening, *order, f"{indent}</om-widget>"])
-                if order
+                "\n".join([opening, *styles, f"{indent}</om-widget>"])
+                if styles
                 else f"{opening}</om-widget>"
             )
     if settings.show_layer_switcher and _switchable_layer_count(project) > 1:
-        widgets.append(
+        opening = (
             f'{indent}<om-widget type="layer-switcher" '
-            f'position="{WIDGET_POSITIONS["layer-switcher"]}"></om-widget>'
+            f'position="{WIDGET_POSITIONS["layer-switcher"]}">'
+        )
+        styles = _sized_panel_style(settings.layer_switcher_width, indent)
+        widgets.append(
+            "\n".join([opening, *styles, f"{indent}</om-widget>"])
+            if styles
+            else f"{opening}</om-widget>"
         )
     basemaps = switcher_basemaps(settings)
     if basemaps:

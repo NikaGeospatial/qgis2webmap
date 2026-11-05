@@ -362,14 +362,15 @@ def _read_measure_units(raw: Any) -> str:
     return raw if isinstance(raw, str) and raw in MEASURE_UNITS else "metric"
 
 
-# The Appearance tab's legend and layer switcher sizes, in CSS pixels. Below
-# 140 wide the runtime's own panels stop shrinking (their `min-width`), and
-# below 100 tall a panel shows its heading and little else; past 600 wide or
-# 1000 tall a panel is most of a laptop's map. However big, the exported page
-# caps the panel at the map (`writers/onlymap_writer._panel_size_block`).
-MIN_PANEL_WIDTH = 140
+# The Appearance tab's legend and layer switcher sizes, in CSS pixels. At its
+# smallest, 105 wide and 50 tall, a panel shows its heading and a row and
+# scrolls the rest; its contents give up the runtime's own 140px `min-width`
+# to fit (`manifest_builder.SIZED_PANEL_STYLES`). Past 600 wide or 1000 tall a
+# panel is most of a laptop's map. However big, the exported page caps the
+# panel at the map (`writers/onlymap_writer._panel_size_block`).
+MIN_PANEL_WIDTH = 105
 MAX_PANEL_WIDTH = 600
-MIN_PANEL_HEIGHT = 100
+MIN_PANEL_HEIGHT = 50
 MAX_PANEL_HEIGHT = 1000
 
 

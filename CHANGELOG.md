@@ -51,10 +51,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   network dependencies name every provider the panel can reach. Not available
   with no basemap or with a ground surface.
 - **A width and a height for the legend and the layer switcher**, beside
-  their switches on the Appearance tab: 140 to 600 pixels wide and 100 to
+  their switches on the Appearance tab: 105 to 600 pixels wide and 50 to
   1000 tall, and never bigger than the map, so the page does not scroll; on a
-  narrow screen the width yields. Auto, the default, keeps them exactly as
-  they were. A WMS or WMTS legend picture follows the legend's size.
+  narrow screen the width yields, and a panel narrower than its rows wraps
+  them. Auto, the default, keeps them exactly as they were. From Auto the
+  arrows go either way, from the size Auto gives a typical panel, and **↺**
+  at the end of the row puts both boxes back on Auto. A WMS or WMTS legend
+  picture follows the legend's size.
 - **Exporting without the dialog**, a new guide: batch exports from the
   Processing toolbox, the QGIS Python console and `qgis_process`, and the
   one-time runtime setup they need first.

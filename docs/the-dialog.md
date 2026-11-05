@@ -306,16 +306,22 @@ the project, and the exported map has no units control of its own: it
 measures, and its scale bar reads, in what you chose.
 
 Beside **Legend** and **Layer switcher**, while each is ticked, two boxes set
-that panel's width and height in pixels — width 140 to 600, height 100 to
-1000; a number outside that is brought into it. Left on **Auto**, the panel is
-as it has always been: as wide as its contents and as tall as them, up to half
-the map, scrolling inside past that. A height the contents do not fill leaves
-the panel that tall, and longer contents scroll inside it. Whatever is set,
-the panel stays on the map: on a smaller window it is at most the map's width
-and height, so the page never scrolls. A WMS or WMTS layer's legend picture
-takes the width of a legend whose width is set, and scrolls with a legend
-whose height is set. The zoom controls, scale bar and measure tool have fixed
-sizes; **Size** under [Control colours](#control-colours) scales them all.
+that panel's width and height in pixels — width 105 to 600, height 50 to 1000;
+a number outside that is brought into it. Left on **Auto**, the panel is as it
+has always been: as wide as its contents and as tall as them, up to half the
+map, scrolling inside past that. Auto has no number, so a box's arrows leave it
+from the size Auto gives a typical panel - 164 by 320 pixels for the legend,
+164 by 160 for the layer switcher: the up arrow makes it a little bigger than
+that, the down arrow a little smaller. Emptying a box puts it back on Auto, and
+**↺** at the end of the row puts both back; it is greyed while both say Auto. A
+panel narrower than its contents wraps them. A height the contents do not fill
+leaves the panel that tall, and longer contents scroll inside it. Whatever is
+set, the panel stays on the map: on a smaller window it is at most the map's
+width and height, so the page never scrolls. A WMS or WMTS layer's legend
+picture takes the width of a legend whose width is set, and scrolls with a
+legend whose height is set. The zoom controls, scale bar and measure tool have
+fixed sizes; **Size** under [Control colours](#control-colours) scales them
+all.
 
 The layer switcher is the one exception to that. It only appears when the map
 has more than one thing to switch between, so a map with a single unlabelled

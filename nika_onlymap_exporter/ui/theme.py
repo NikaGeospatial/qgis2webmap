@@ -894,6 +894,9 @@ def stylesheet(p: Palette, object_name: str, family: str | None = None) -> str:
 {d} QToolButton[autoRaise="true"]:hover {{
     background: {p.hover};
 }}
+{d} QToolButton[autoRaise="true"]:disabled {{
+    color: {p.quiet};
+}}
 
 /* The two things a user does to the map: a filled button and an outlined one.
    Gently rounded and no taller than the tab bar, which crops anything taller
