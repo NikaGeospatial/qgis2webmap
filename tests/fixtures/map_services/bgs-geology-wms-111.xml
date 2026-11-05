@@ -1,0 +1,301 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE WMT_MS_Capabilities SYSTEM "http://schemas.opengis.net/wms/1.1.1/WMS_MS_Capabilities.dtd" [
+<!ELEMENT VendorSpecificCapabilities (inspire_vs:ExtendedCapabilities)>
+<!ELEMENT inspire_vs:ExtendedCapabilities ((inspire_common:MetadataUrl , inspire_common:SupportedLanguages , inspire_common:ResponseLanguage) | (inspire_common:ResourceLocator+ , inspire_common:ResourceType , inspire_common:TemporalReference+ , inspire_common:Conformity+ , inspire_common:MetadataPointOfContact+ , inspire_common:MetadataDate , inspire_common:SpatialDataServiceType , inspire_common:MandatoryKeyword+ , inspire_common:Keyword* , inspire_common:SupportedLanguages , inspire_common:ResponseLanguage , inspire_common:MetadataUrl?))>
+<!ATTLIST inspire_vs:ExtendedCapabilities xmlns:inspire_vs CDATA #FIXED "http://inspire.ec.europa.eu/schemas/inspire_vs/1.0">
+<!ELEMENT inspire_common:MetadataUrl (inspire_common:URL , inspire_common:MediaType*)>
+<!ATTLIST inspire_common:MetadataUrl xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ATTLIST inspire_common:MetadataUrl xmlns:xsi CDATA #FIXED "http://www.w3.org/2001/XMLSchema-instance">
+<!ATTLIST inspire_common:MetadataUrl xsi:type CDATA #FIXED "inspire_common:resourceLocatorType">
+<!ELEMENT inspire_common:URL (#PCDATA)>
+<!ATTLIST inspire_common:URL xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:MediaType (#PCDATA)>
+<!ATTLIST inspire_common:MediaType xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:SupportedLanguages (inspire_common:DefaultLanguage , inspire_common:SupportedLanguage*)>
+<!ATTLIST inspire_common:SupportedLanguages xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:DefaultLanguage (inspire_common:Language)>
+<!ATTLIST inspire_common:DefaultLanguage xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:SupportedLanguage (inspire_common:Language)>
+<!ATTLIST inspire_common:SupportedLanguage xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:ResponseLanguage (inspire_common:Language)>
+<!ATTLIST inspire_common:ResponseLanguage xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:Language (#PCDATA)>
+<!ATTLIST inspire_common:Language xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:ResourceLocator (inspire_common:URL , inspire_common:MediaType*)>
+<!ATTLIST inspire_common:ResourceLocator xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:ResourceType (#PCDATA)>
+<!ATTLIST inspire_common:ResourceType xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:TemporalReference (inspire_common:DateOfCreation? , inspire_common:DateOfLastRevision? , inspire_common:DateOfPublication* , inspire_common:TemporalExtent*)>
+<!ATTLIST inspire_common:TemporalReference xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:DateOfCreation (#PCDATA)>
+<!ATTLIST inspire_common:DateOfCreation xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:DateOfLastRevision (#PCDATA)>
+<!ATTLIST inspire_common:DateOfLastRevision xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:DateOfPublication (#PCDATA)>
+<!ATTLIST inspire_common:DateOfPublication xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:TemporalExtent (inspire_common:IndividualDate | inspire_common:IntervalOfDates)>
+<!ATTLIST inspire_common:TemporalExtent xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:IndividualDate (#PCDATA)>
+<!ATTLIST inspire_common:IndividualDate xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:IntervalOfDates (inspire_common:StartingDate , inspire_common:EndDate)>
+<!ATTLIST inspire_common:IntervalOfDates xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:StartingDate (#PCDATA)>
+<!ATTLIST inspire_common:StartingDate xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:EndDate (#PCDATA)>
+<!ATTLIST inspire_common:EndDate xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:Conformity (inspire_common:Specification , inspire_common:Degree)>
+<!ATTLIST inspire_common:Conformity xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:Specification (inspire_common:Title , (inspire_common:DateOfPublication | inspire_common:DateOfCreation | inspire_common:DateOfLastRevision) , inspire_common:URI* , inspire_common:ResourceLocator*)>
+<!ATTLIST inspire_common:Specification xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:Title (#PCDATA)>
+<!ATTLIST inspire_common:Title xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:URI (#PCDATA)>
+<!ATTLIST inspire_common:URI xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:Degree (#PCDATA)>
+<!ATTLIST inspire_common:Degree xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:MetadataPointOfContact (inspire_common:OrganisationName , inspire_common:EmailAddress)>
+<!ATTLIST inspire_common:MetadataPointOfContact xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:OrganisationName (#PCDATA)>
+<!ATTLIST inspire_common:OrganisationName xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:EmailAddress (#PCDATA)>
+<!ATTLIST inspire_common:EmailAddress xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:MetadataDate (#PCDATA)>
+<!ATTLIST inspire_common:MetadataDate xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:SpatialDataServiceType (#PCDATA)>
+<!ATTLIST inspire_common:SpatialDataServiceType xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:MandatoryKeyword (inspire_common:KeywordValue)>
+<!ATTLIST inspire_common:MandatoryKeyword xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:KeywordValue (#PCDATA)>
+<!ATTLIST inspire_common:KeywordValue xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ELEMENT inspire_common:Keyword (inspire_common:OriginatingControlledVocabulary? , inspire_common:KeywordValue)>
+<!ATTLIST inspire_common:Keyword xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+<!ATTLIST inspire_common:Keyword xmlns:xsi CDATA #FIXED "http://www.w3.org/2001/XMLSchemainstance">
+<!ATTLIST inspire_common:Keyword xsi:type (inspire_common:inspireTheme_bul | inspire_common:inspireTheme_cze | inspire_common:inspireTheme_dan | inspire_common:inspireTheme_dut | inspire_common:inspireTheme_eng | inspire_common:inspireTheme_est | inspire_common:inspireTheme_fin | inspire_common:inspireTheme_fre | inspire_common:inspireTheme_ger | inspire_common:inspireTheme_gre | inspire_common:inspireTheme_hun | inspire_common:inspireTheme_gle | inspire_common:inspireTheme_ita | inspire_common:inspireTheme_lav | inspire_common:inspireTheme_lit | inspire_common:inspireTheme_mlt | inspire_common:inspireTheme_pol | inspire_common:inspireTheme_por | inspire_common:inspireTheme_rum | inspire_common:inspireTheme_slo | inspire_common:inspireTheme_slv | inspire_common:inspireTheme_spa | inspire_common:inspireTheme_swe) #IMPLIED>
+<!ELEMENT inspire_common:OriginatingControlledVocabulary (inspire_common:Title , (inspire_common:DateOfPublication | inspire_common:DateOfCreation | inspire_common:DateOfLastRevision) , inspire_common:URI* , inspire_common:ResourceLocator*)>
+<!ATTLIST inspire_common:OriginatingControlledVocabulary xmlns:inspire_common CDATA #FIXED "http://inspire.ec.europa.eu/schemas/common/1.0">
+]>
+<!-- end of DOCTYPE declaration --><WMT_MS_Capabilities version="1.1.1" updateSequence="2019022135700">
+ <Service>
+  <Name>OGC:WMS</Name>
+  <Title>BGS Bedrock and Superficial geology</Title>
+  <Abstract>The 1:625k DiGMap data covering the whole of the United Kingdom is available in this OGC WMS service for all uses - including commercial use subject to the conditions in the Access Constraints section. It is being served as a contribution to the OneGeology initiative (onegeology.org). Separate bedrock geology and superficial deposits layers are available in this service. Layers available for bedrock are lithostratigraphy, age, and lithology. Layers available for superficial deposits layer are lithostratigraphy and lithology.  A layer is also provided for the UK Continental Shelf BGS 1:1M simplified seabed sediments. For information about more of the British Geological Survey's maps that are available digitally please visit https://www.bgs.ac.uk/information-hub/bgs-maps-portal/</Abstract>
+  <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://www.bgs.ac.uk/"/>
+  <ContactInformation>
+   <ContactPersonPrimary>
+    <ContactPerson>Mr Garry Baker</ContactPerson>
+    <ContactOrganization>British Geological Survey (BGS)</ContactOrganization>
+   </ContactPersonPrimary>
+   <ContactPosition>Chief Digital Officer</ContactPosition>
+   <ContactAddress>
+    <AddressType>postal</AddressType>
+    <Address>Nicker Hill</Address>
+    <City>Keyworth</City>
+    <StateOrProvince>Nottinghamshire</StateOrProvince>
+    <PostCode>NG12 5GG</PostCode>
+    <Country>United Kingdom</Country>
+   </ContactAddress>
+   <ContactVoiceTelephone>+44 (0)115 936 3100</ContactVoiceTelephone>
+   <ContactFacsimileTelephone>+44 (0)115 936 3200</ContactFacsimileTelephone>
+   <ContactElectronicMailAddress>enquiries@bgs.ac.uk</ContactElectronicMailAddress>
+  </ContactInformation>
+  <Fees>none</Fees>
+  <AccessConstraints>The 1:625k DiGMap data is made available for all uses - including commercial use, however the British Geological Survey (BGS) at all times retains the copyright in this material and you are not permitted, without an appropriate licence, to set up a service selling on this material. Your own use of any information provided by the British Geological Survey (BGS) is at your own risk. Neither BGS nor the Natural Environment Research Council (NERC) gives any warranty, condition or representation as to the quality, accuracy or completeness of the information or its suitability for any use or purpose. All implied conditions relating to the quality or suitability of the information, and all liabilities arising from the supply of the information (including any liability arising in negligence) are excluded to the fullest extent permitted by law.</AccessConstraints>
+ </Service>
+ <Capability>
+  <Request>
+   <GetCapabilities>
+    <Format>application/vnd.ogc.wms_xml</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Get>
+      <Post>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Post>
+     </HTTP>
+    </DCPType>
+   </GetCapabilities>
+   <GetMap>
+    <Format>image/png</Format>
+    <Format>image/jpeg</Format>
+    <Format>image/tiff</Format>
+    <Format>application/vnd.mapbox-vector-tile</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Get>
+      <Post>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Post>
+     </HTTP>
+    </DCPType>
+   </GetMap>
+   <GetFeatureInfo>
+    <Format>text/html</Format>
+    <Format>application/vnd.ogc.gml</Format>
+    <Format>text/plain</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Get>
+      <Post>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Post>
+     </HTTP>
+    </DCPType>
+   </GetFeatureInfo>
+   <DescribeLayer>
+    <Format>text/xml</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Get>
+      <Post>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Post>
+     </HTTP>
+    </DCPType>
+   </DescribeLayer>
+   <GetLegendGraphic>
+    <Format>image/png</Format>
+    <Format>image/jpeg</Format>
+    <Format>image/png; mode=8bit</Format>
+    <Format>image/vnd.jpeg-png</Format>
+    <Format>image/vnd.jpeg-png8</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Get>
+      <Post>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Post>
+     </HTTP>
+    </DCPType>
+   </GetLegendGraphic>
+   <GetStyles>
+    <Format>text/xml</Format>
+    <DCPType>
+     <HTTP>
+      <Get>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Get>
+      <Post>
+       <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;"/>
+      </Post>
+     </HTTP>
+    </DCPType>
+   </GetStyles>
+  </Request>
+  <Exception>
+   <Format>application/vnd.ogc.se_xml</Format>
+   <Format>application/vnd.ogc.se_inimage</Format>
+   <Format>application/vnd.ogc.se_blank</Format>
+  </Exception>
+  <VendorSpecificCapabilities>
+  </VendorSpecificCapabilities>
+  <UserDefinedSymbolization SupportSLD="1" UserLayer="0" UserStyle="1" RemoteWFS="0"/>
+  <Layer queryable="1">
+   <Name>BGS_EN_Bedrock_and_Superficial_Geology</Name>
+   <Title>BGS bedrock and superficial geology</Title>
+   <Abstract>The 1:625k DiGMap data covering the whole of the United Kingdom is available in this OGC WMS service for all uses - including commercial use subject to the conditions in the Access Constraints section. It is being served as a contribution to the OneGeology initiative (onegeology.org). Separate bedrock geology and superficial deposits layers are available in this service. Layers available for bedrock are lithostratigraphy, age, and lithology. Layers available for superficial deposits layer are lithostratigraphy and lithology.  A layer is also provided for the UK Continental Shelf BGS 1:1M simplified seabed sediments. For information about more of the British Geological Survey's maps that are available digitally please visit https://www.bgs.ac.uk/information-hub/bgs-maps-portal/</Abstract>
+   <SRS>EPSG:4326</SRS>
+   <SRS>EPSG:23030</SRS>
+   <SRS>EPSG:27700</SRS>
+   <SRS>EPSG:29902</SRS>
+   <SRS>EPSG:3034</SRS>
+   <SRS>EPSG:32630</SRS>
+   <SRS>EPSG:3413</SRS>
+   <SRS>EPSG:3857</SRS>
+   <SRS>EPSG:4258</SRS>
+   <SRS>CRS:84</SRS>
+   <LatLonBoundingBox minx="-8.647600" miny="49.863900" maxx="1.769430" maxy="60.862200"/>
+   <BoundingBox SRS="EPSG:4326" minx="-8.647600" miny="49.863900" maxx="1.769430" maxy="60.862200"/>
+   <BoundingBox SRS="EPSG:23030" minx="94320.5" miny="5.52372e+06" maxx="842812" maxy="6.76087e+06"/>
+   <BoundingBox SRS="EPSG:27700" minx="-77493.4" miny="-4039.85" maxx="670977" maxy="1.23824e+06"/>
+   <BoundingBox SRS="EPSG:29902" minx="153444" miny="-154521" maxx="901747" maxy="1.10937e+06"/>
+   <BoundingBox SRS="EPSG:3034" minx="2.71888e+06" miny="2.60232e+06" maxx="3.56176e+06" maxy="3.88362e+06"/>
+   <BoundingBox SRS="EPSG:32630" minx="94222.9" miny="5.5235e+06" maxx="842708" maxy="6.76065e+06"/>
+   <BoundingBox SRS="EPSG:3413" minx="1.91073e+06" miny="-3.64649e+06" maxx="3.29885e+06" maxy="-2.20789e+06"/>
+   <BoundingBox SRS="EPSG:3857" minx="-962646" miny="6.42274e+06" maxx="196972" maxy="8.59425e+06"/>
+   <BoundingBox SRS="EPSG:4258" minx="-8.647600" miny="49.863900" maxx="1.769430" maxy="60.862200"/>
+   <BoundingBox SRS="CRS:84" minx="-8.647600" miny="49.863900" maxx="1.769430" maxy="60.862200"/>
+   <Attribution>
+    <Title>British Geological Survey (BGS)</Title>
+    <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://www.bgs.ac.uk/"/>
+    <LogoURL width="275" height="60">
+     <Format>image/gif</Format>
+     <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:type="simple" xlink:href="https://ogc.bgs.ac.uk/img/bgs_c_t_275x60.gif"/>
+    </LogoURL>
+   </Attribution>
+   <AuthorityURL name="BritishGeologicalSurvey">
+    <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://data.bgs.ac.uk/ref/BritishGeologicalSurvey"/>
+   </AuthorityURL>
+   <Style>
+    <Name>default</Name>
+    <Title>default</Title>
+    <LegendURL width="563" height="6420">
+     <Format>image/png</Format>
+     <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:type="simple" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;version=1.1.1&amp;service=WMS&amp;request=GetLegendGraphic&amp;layer=BGS_EN_Bedrock_and_Superficial_Geology&amp;format=image/png&amp;STYLE=default"/>
+    </LegendURL>
+   </Style>
+   <Layer queryable="1" opaque="0" cascaded="0">
+    <Name>GBR_BGS_625k_BLT</Name>
+    <Title>GBR BGS 1:625k Bedrock Lithology</Title>
+    <Abstract>GBR BGS 1:625k scale Bedrock Lithology</Abstract>
+    <SRS>EPSG:4326</SRS>
+    <SRS>EPSG:23030</SRS>
+    <SRS>EPSG:27700</SRS>
+    <SRS>EPSG:29902</SRS>
+    <SRS>EPSG:3034</SRS>
+    <SRS>EPSG:32630</SRS>
+    <SRS>EPSG:3413</SRS>
+    <SRS>EPSG:3857</SRS>
+    <SRS>EPSG:4258</SRS>
+    <SRS>CRS:84</SRS>
+    <LatLonBoundingBox minx="-8.648463" miny="49.863792" maxx="1.767673" maxy="60.861176"/>
+    <BoundingBox SRS="EPSG:4326" minx="-8.648463" miny="49.863792" maxx="1.767673" maxy="60.861176"/>
+    <BoundingBox SRS="EPSG:23030" minx="94257.6" miny="5.5237e+06" maxx="842687" maxy="6.76076e+06"/>
+    <BoundingBox SRS="EPSG:27700" minx="-77556.4" miny="-4051.91" maxx="670851" maxy="1.23813e+06"/>
+    <BoundingBox SRS="EPSG:29902" minx="153381" miny="-154533" maxx="901622" maxy="1.10924e+06"/>
+    <BoundingBox SRS="EPSG:3034" minx="2.71882e+06" miny="2.60232e+06" maxx="3.56165e+06" maxy="3.88352e+06"/>
+    <BoundingBox SRS="EPSG:32630" minx="94160" miny="5.52349e+06" maxx="842583" maxy="6.76054e+06"/>
+    <BoundingBox SRS="EPSG:3413" minx="1.91076e+06" miny="-3.64654e+06" maxx="3.29876e+06" maxy="-2.20805e+06"/>
+    <BoundingBox SRS="EPSG:3857" minx="-962742" miny="6.42272e+06" maxx="196776" maxy="8.59402e+06"/>
+    <BoundingBox SRS="EPSG:4258" minx="-8.648463" miny="49.863792" maxx="1.767673" maxy="60.861176"/>
+    <BoundingBox SRS="CRS:84" minx="-8.648463" miny="49.863792" maxx="1.767673" maxy="60.861176"/>
+    <Attribution>
+     <Title>British Geological Survey (BGS)</Title>
+     <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://www.bgs.ac.uk/"/>
+     <LogoURL width="275" height="60">
+      <Format>image/gif</Format>
+      <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:type="simple" xlink:href="https://ogc.bgs.ac.uk/img/bgs_c_t_275x60.gif"/>
+     </LogoURL>
+    </Attribution>
+    <AuthorityURL name="BritishGeologicalSurvey">
+     <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="https://data.bgs.ac.uk/ref/BritishGeologicalSurvey"/>
+    </AuthorityURL>
+    <MetadataURL type="TC211">
+     <Format>text/html</Format>
+     <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:type="simple" xlink:href="https://www.bgs.ac.uk/discoverymetadata/13480426.html"/>
+    </MetadataURL>
+    <DataURL>
+     <Format>text/html</Format>
+     <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:type="simple" xlink:href="https://www.bgs.ac.uk/products/digitalmaps/digmapgb_625.html"/>
+    </DataURL>
+    <Style>
+     <Name>default</Name>
+     <Title>default</Title>
+     <LegendURL width="499" height="1720">
+      <Format>image/png</Format>
+      <OnlineResource xmlns:xlink="http://www.w3.org/1999/xlink" xlink:type="simple" xlink:href="http://ogc.bgs.ac.uk/cgi-bin/BGS_Bedrock_and_Superficial_Geology/wms?language=eng&amp;version=1.1.1&amp;service=WMS&amp;request=GetLegendGraphic&amp;layer=GBR_BGS_625k_BLT&amp;format=image/png&amp;STYLE=default"/>
+     </LegendURL>
+    </Style>
+   </Layer>
+  </Layer>
+ </Capability>
+</WMT_MS_Capabilities>

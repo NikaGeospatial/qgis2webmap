@@ -1,0 +1,423 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0" xmlns:ows="http://www.opengis.net/ows/1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gml="http://www.opengis.net/gml" version="1.0.0" xsi:schemaLocation="http://www.opengis.net/wmts/1.0 http://schemas.opengis.net/wmts/1.0/wmtsGetCapabilities_response.xsd">
+ <ows:ServiceIdentification>
+  <ows:Title>API Géoplateforme - Diffusion d'images tuilées WMTS</ows:Title>
+  <ows:Abstract>Permet un affichage rapide d'images précalculées dans un format, un système de référence géodésique et des niveaux de zoom prédéfinis.</ows:Abstract>
+  <ows:ServiceType>OGC WMTS</ows:ServiceType>
+  <ows:ServiceTypeVersion>1.0.0</ows:ServiceTypeVersion>
+  <ows:Fees>none</ows:Fees>
+  <ows:AccessConstraints>Conditions Générales d'Utilisation disponibles ici : https://cartes.gouv.fr/cgu</ows:AccessConstraints>
+ </ows:ServiceIdentification>
+ <ows:ServiceProvider>
+  <ows:ProviderName>IGN</ows:ProviderName>
+  <ows:ProviderSite xlink:href="https://cartes.gouv.fr/"/>
+  <ows:ServiceContact>
+   <ows:IndividualName/>
+   <ows:PositionName/>
+   <ows:ContactInfo>
+    <ows:Phone>
+     <ows:Voice>01 43 98 80 00</ows:Voice>
+     <ows:Facsimile/>
+    </ows:Phone>
+    <ows:Address>
+     <ows:DeliveryPoint>73 Avenue de Paris</ows:DeliveryPoint>
+     <ows:City>SAINT-MANDÉ Cedex</ows:City>
+     <ows:AdministrativeArea/>
+     <ows:PostalCode>94165</ows:PostalCode>
+     <ows:Country>France</ows:Country>
+     <ows:ElectronicMailAddress>geoplateforme@ign.fr</ows:ElectronicMailAddress>
+    </ows:Address>
+   </ows:ContactInfo>
+  </ows:ServiceContact>
+ </ows:ServiceProvider>
+ <ows:OperationsMetadata>
+  <ows:Operation name="GetCapabilities">
+   <ows:DCP>
+    <ows:HTTP>
+     <ows:Get xlink:href="https://data.geopf.fr/wmts?SERVICE=WMTS&amp;">
+      <ows:Constraint name="GetEncoding">
+       <ows:AllowedValues>
+        <ows:Value>KVP</ows:Value>
+       </ows:AllowedValues>
+      </ows:Constraint>
+     </ows:Get>
+    </ows:HTTP>
+   </ows:DCP>
+  </ows:Operation>
+  <ows:Operation name="GetTile">
+   <ows:DCP>
+    <ows:HTTP>
+     <ows:Get xlink:href="https://data.geopf.fr/wmts?SERVICE=WMTS&amp;">
+      <ows:Constraint name="GetEncoding">
+       <ows:AllowedValues>
+        <ows:Value>KVP</ows:Value>
+       </ows:AllowedValues>
+      </ows:Constraint>
+     </ows:Get>
+    </ows:HTTP>
+   </ows:DCP>
+  </ows:Operation>
+  <ows:Operation name="GetFeatureInfo">
+   <ows:DCP>
+    <ows:HTTP>
+     <ows:Get xlink:href="https://data.geopf.fr/wmts?SERVICE=WMTS&amp;">
+      <ows:Constraint name="GetEncoding">
+       <ows:AllowedValues>
+        <ows:Value>KVP</ows:Value>
+       </ows:AllowedValues>
+      </ows:Constraint>
+     </ows:Get>
+    </ows:HTTP>
+   </ows:DCP>
+  </ows:Operation>
+ </ows:OperationsMetadata>
+ <Contents>
+  <Layer>
+   <ows:Title>Plan IGN</ows:Title>
+   <ows:Abstract>Cartographie multi-échelles sur le territoire national, issue des bases de données vecteur de l’IGN, mis à jour régulièrement et réalisée selon un processus entièrement automatisé. </ows:Abstract>
+   <ows:WGS84BoundingBox>
+    <ows:LowerCorner>-179.9 -85</ows:LowerCorner>
+    <ows:UpperCorner>179.9 85</ows:UpperCorner>
+   </ows:WGS84BoundingBox>
+   <ows:Identifier>GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2</ows:Identifier>
+   <ows:Metadata xlink:href="https://data.geopf.fr/csw?REQUEST=GetRecordById&amp;SERVICE=CSW&amp;VERSION=2.0.2&amp;OUTPUTSCHEMA=http://standards.iso.org/iso/19115/-3/mdb/2.0&amp;elementSetName=full&amp;ID=IGNF_PLAN-IGN"/>
+   <ows:Metadata xlink:href="https://cartes.gouv.fr/rechercher-une-donnee/dataset/IGNF_PLAN-IGN"/>
+   <Style isDefault="true">
+    <ows:Title>Données GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2</ows:Title>
+    <ows:Abstract>Style et légende associés au flux GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2</ows:Abstract>
+    <ows:Identifier>normal</ows:Identifier>
+    <LegendURL format="image/png" xlink:href="https://data.geopf.fr/annexes/ressources/legendes/GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2-legend.png" width="300" height="6000" minScaleDenominator="200" maxScaleDenominator="100000000"/>
+   </Style>
+   <Format>image/png</Format>
+   <TileMatrixSetLink>
+    <TileMatrixSet>PM_0_19</TileMatrixSet>
+    <TileMatrixSetLimits>
+     <TileMatrixLimits>
+      <TileMatrix>0</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>0</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>0</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>1</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>1</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>1</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>2</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>3</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>3</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>3</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>7</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>7</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>4</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>15</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>15</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>5</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>31</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>31</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>6</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>63</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>63</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>7</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>127</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>127</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>8</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>255</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>255</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>9</TileMatrix>
+      <MinTileRow>0</MinTileRow>
+      <MaxTileRow>511</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>511</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>10</TileMatrix>
+      <MinTileRow>1</MinTileRow>
+      <MaxTileRow>1022</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>1023</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>11</TileMatrix>
+      <MinTileRow>3</MinTileRow>
+      <MaxTileRow>2044</MaxTileRow>
+      <MinTileCol>0</MinTileCol>
+      <MaxTileCol>2047</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>12</TileMatrix>
+      <MinTileRow>6</MinTileRow>
+      <MaxTileRow>4089</MaxTileRow>
+      <MinTileCol>1</MinTileCol>
+      <MaxTileCol>4094</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>13</TileMatrix>
+      <MinTileRow>13</MinTileRow>
+      <MaxTileRow>8178</MaxTileRow>
+      <MinTileCol>2</MinTileCol>
+      <MaxTileCol>8189</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>14</TileMatrix>
+      <MinTileRow>26</MinTileRow>
+      <MaxTileRow>16357</MaxTileRow>
+      <MinTileCol>4</MinTileCol>
+      <MaxTileCol>16379</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>15</TileMatrix>
+      <MinTileRow>53</MinTileRow>
+      <MaxTileRow>32714</MaxTileRow>
+      <MinTileCol>9</MinTileCol>
+      <MaxTileCol>32758</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>16</TileMatrix>
+      <MinTileRow>107</MinTileRow>
+      <MaxTileRow>65428</MaxTileRow>
+      <MinTileCol>18</MinTileCol>
+      <MaxTileCol>65517</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>17</TileMatrix>
+      <MinTileRow>214</MinTileRow>
+      <MaxTileRow>130857</MaxTileRow>
+      <MinTileCol>36</MinTileCol>
+      <MaxTileCol>131035</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>18</TileMatrix>
+      <MinTileRow>429</MinTileRow>
+      <MaxTileRow>261714</MaxTileRow>
+      <MinTileCol>72</MinTileCol>
+      <MaxTileCol>262071</MaxTileCol>
+     </TileMatrixLimits>
+     <TileMatrixLimits>
+      <TileMatrix>19</TileMatrix>
+      <MinTileRow>858</MinTileRow>
+      <MaxTileRow>523429</MaxTileRow>
+      <MinTileCol>145</MinTileCol>
+      <MaxTileCol>524142</MaxTileCol>
+     </TileMatrixLimits>
+    </TileMatrixSetLimits>
+   </TileMatrixSetLink>
+  </Layer>
+  <TileMatrixSet>
+   <ows:Identifier>PM_0_19</ows:Identifier>
+   <ows:SupportedCRS>EPSG:3857</ows:SupportedCRS>
+   <TileMatrix>
+    <ows:Identifier>0</ows:Identifier>
+    <ScaleDenominator>559082264.0287178958533332</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>1</MatrixWidth>
+    <MatrixHeight>1</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>1</ows:Identifier>
+    <ScaleDenominator>279541132.0143589479266666</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>2</MatrixWidth>
+    <MatrixHeight>2</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>2</ows:Identifier>
+    <ScaleDenominator>139770566.0071792920643929</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>4</MatrixWidth>
+    <MatrixHeight>4</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>3</ows:Identifier>
+    <ScaleDenominator>69885283.0035896460321965</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>8</MatrixWidth>
+    <MatrixHeight>8</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>4</ows:Identifier>
+    <ScaleDenominator>34942641.5017948619934032</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>16</MatrixWidth>
+    <MatrixHeight>16</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>5</ows:Identifier>
+    <ScaleDenominator>17471320.7508974309967016</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>32</MatrixWidth>
+    <MatrixHeight>32</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>6</ows:Identifier>
+    <ScaleDenominator>8735660.3754487154983508</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>64</MatrixWidth>
+    <MatrixHeight>64</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>7</ows:Identifier>
+    <ScaleDenominator>4367830.1877243577491754</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>128</MatrixWidth>
+    <MatrixHeight>128</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>8</ows:Identifier>
+    <ScaleDenominator>2183915.0938621788745877</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>256</MatrixWidth>
+    <MatrixHeight>256</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>9</ows:Identifier>
+    <ScaleDenominator>1091957.5469310894372938</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>512</MatrixWidth>
+    <MatrixHeight>512</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>10</ows:Identifier>
+    <ScaleDenominator>545978.7734655464442426</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>1024</MatrixWidth>
+    <MatrixHeight>1024</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>11</ows:Identifier>
+    <ScaleDenominator>272989.3867327721563072</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>2048</MatrixWidth>
+    <MatrixHeight>2048</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>12</ows:Identifier>
+    <ScaleDenominator>136494.6933663860781536</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>4096</MatrixWidth>
+    <MatrixHeight>4096</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>13</ows:Identifier>
+    <ScaleDenominator>68247.3466831932167125</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>8192</MatrixWidth>
+    <MatrixHeight>8192</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>14</ows:Identifier>
+    <ScaleDenominator>34123.6733415965385738</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>16384</MatrixWidth>
+    <MatrixHeight>16384</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>15</ows:Identifier>
+    <ScaleDenominator>17061.8366707982883188</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>32768</MatrixWidth>
+    <MatrixHeight>32768</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>16</ows:Identifier>
+    <ScaleDenominator>8530.9183353991441594</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>65536</MatrixWidth>
+    <MatrixHeight>65536</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>17</ows:Identifier>
+    <ScaleDenominator>4265.4591676995720797</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>131072</MatrixWidth>
+    <MatrixHeight>131072</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>18</ows:Identifier>
+    <ScaleDenominator>2132.7295838497824711</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>262144</MatrixWidth>
+    <MatrixHeight>262144</MatrixHeight>
+   </TileMatrix>
+   <TileMatrix>
+    <ows:Identifier>19</ows:Identifier>
+    <ScaleDenominator>1066.3647919248930199</ScaleDenominator>
+    <TopLeftCorner>-20037508.3427891992032528 20037508.3427891992032528</TopLeftCorner>
+    <TileWidth>256</TileWidth>
+    <TileHeight>256</TileHeight>
+    <MatrixWidth>524288</MatrixWidth>
+    <MatrixHeight>524288</MatrixHeight>
+   </TileMatrix>
+  </TileMatrixSet>
+ </Contents>
+</Capabilities>
