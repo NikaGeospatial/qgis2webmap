@@ -2354,9 +2354,8 @@ def _layer_filter_attributes(layer: ExportLayer) -> list[tuple[str, str | None]]
     time = layer.time
     if time is None:
         return attributes
-    if attributes and attributes[0][0] == "filter-field":
-        panel = layer.filter
-        assert panel is not None
+    panel = layer.filter
+    if panel is not None and attributes and attributes[0][0] == "filter-field":
         low, high = panel.value_range or (0.0, 0.0)
         ranges = [
             {"field": panel.field_name, "range": [low, high]},

@@ -101,7 +101,8 @@ def stage_tile_archives(
 
     names: dict[str, str] = {}
     for layer in layers:
-        assert layer.vector_tiles is not None
+        if layer.vector_tiles is None:
+            continue
         path = layer.vector_tiles.path
         if path not in names:
             names[path] = archive_file_name(path, len(names))

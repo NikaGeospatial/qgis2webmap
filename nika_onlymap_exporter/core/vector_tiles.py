@@ -638,7 +638,8 @@ def read_vector_tile_layer(
         )
         return None
 
-    assert style is not None
+    if style is None:  # the state is UNKNOWN then, reported above
+        return None
     url, dependency = _live_dependency(url, name)
     style_source = _style_source(style, url)
     if style_source is None:

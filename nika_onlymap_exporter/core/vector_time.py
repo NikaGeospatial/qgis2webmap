@@ -578,15 +578,15 @@ def read_vector_time(
     context = QgsExpressionContext(
         QgsExpressionContextUtils.globalProjectLayerScopes(layer)
     )
-    columns: set[str] | None = set()
+    columns: set[str] = set()
+    every_column = False
     for text in (start, end, quoted(duration_field) if duration_field else None):
         if text is None:
             continue
         used = QgsExpression(text).referencedColumns()
         if QgsFeatureRequest.ALL_ATTRIBUTES in used:
-            columns = None
+            every_column = True
             break
-        assert columns is not None
         columns |= set(used)
     project = layer.project()
     fps = (
@@ -604,7 +604,7 @@ def read_vector_time(
         frame=frame,
         starts_at_midnight=midnight,
         fps=fps,
-        columns=None if columns is None else frozenset(columns),
+        columns=None if every_column else frozenset(columns),
         fields=layer.fields(),
         context=context,
     )
