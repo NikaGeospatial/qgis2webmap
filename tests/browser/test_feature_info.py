@@ -162,6 +162,20 @@ class TestReadingAnswers:
             "features": [[["a", "{{b}}"], ["n", "3"], ["o", '{"x":1}']]],
         }
 
+    def test_gmls_own_elements_in_a_feature_are_not_fields(self, page) -> None:
+        # The recorded servers put none inside a feature; GML allows them.
+        page.set_content("<!doctype html><title>reader</title>")
+        body = (
+            '<wfs:FeatureCollection xmlns:wfs="http://www.opengis.net/wfs"'
+            ' xmlns:gml="http://www.opengis.net/gml" xmlns:a="urn:a">'
+            "<gml:featureMember><a:roads>"
+            "<gml:name>road-17</gml:name><gml:description>x</gml:description>"
+            "<a:kind>main</a:kind></a:roads></gml:featureMember>"
+            "</wfs:FeatureCollection>"
+        )
+        read = page.evaluate(READ, [_reader_source(), body, "application/vnd.ogc.gml"])
+        assert read == {"kind": "features", "features": [[["kind", "main"]]]}
+
 
 # --------------------------------------------------------------------------
 # Clicking the map
