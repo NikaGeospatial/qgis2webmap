@@ -124,6 +124,47 @@ class TestEnsureRuntime:
         assert downloads == [provider.version]
         assert provider.version != "0.0.1"
 
+    def test_a_cache_missing_only_the_decoder_still_exports_offline(
+        self, qgis_app, tmp_path, monkeypatch
+    ):
+        """A cache from before maps carried the vector tile decoder, on a
+        computer with no internet: no licence asked again (the runtime is
+        there), no error, and a provider the export can use."""
+        import shutil
+
+        from nika_onlymap_exporter.ui import runtime_setup
+
+        source = rm.discover_runtime_dir()
+        if source is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        version = rm.read_lock()["version"]
+        cache = tmp_path / version
+        cache.mkdir()
+        for name in (rm.RUNTIME_JS, rm.RUNTIME_CSS, *rm.STORED_GZIPPED):
+            stored = rm.stored_path(source, name)
+            if stored is not None and name != rm.MVT_WORKER:
+                shutil.copy(stored, cache / stored.name)
+        monkeypatch.setattr(runtime_setup, "discover_runtime_dir", lambda: None)
+        monkeypatch.setenv("ONLYMAP_RUNTIME_CACHE", str(tmp_path))
+
+        def offline(feedback=None):
+            def download(url, on_progress=None):
+                raise rm.RuntimeDownloadError("no network")
+
+            return download
+
+        def must_not(*args, **kwargs):
+            raise AssertionError("the user was interrupted")
+
+        monkeypatch.setattr(runtime_setup, "make_qgis_downloader", offline)
+        monkeypatch.setattr(runtime_setup, "RuntimeLicenceDialog", must_not)
+        monkeypatch.setattr(runtime_setup.QMessageBox, "critical", must_not)
+
+        provider = ensure_runtime()
+
+        assert isinstance(provider, rm.FetchingRuntime)
+        assert provider.is_core_cached() and not provider.is_cached()
+
 
 class TestQgisDownloader:
     def test_a_cancelled_feedback_aborts(self, qgis_app) -> None:

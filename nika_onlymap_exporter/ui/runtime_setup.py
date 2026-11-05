@@ -43,6 +43,7 @@ from ..packaging.runtime_manager import (
     default_provider,
     discover_runtime_dir,
     licence_accepted,
+    pinned_workers,
     record_licence_acceptance,
     tarball_url,
 )
@@ -81,12 +82,28 @@ class RuntimeLicenceDialog(QDialog):
         intro.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(intro)
 
+        # The decoder workers come in the same download, from their own open-
+        # source packages, so the user sees those named too.
+        companions = ", ".join(
+            f"<code>{entry['package']} {entry['version']}</code>"
+            f" ({entry.get('license') or 'open source'})"
+            for entry in pinned_workers(version).values()
+        )
         source = QLabel(
             "<p>"
             + tr("Source: {package}").format(
                 package=f"<code>{NPM_PACKAGE} {version}</code>"
             )
             + "</p>"
+            + (
+                "<p>"
+                + tr("Downloaded with it, under its own licence: {packages}").format(
+                    packages=companions
+                )
+                + "</p>"
+                if companions
+                else ""
+            )
         )
         source.setWordWrap(True)
         source.setTextFormat(Qt.TextFormat.RichText)
@@ -196,6 +213,11 @@ def ensure_runtime(parent=None) -> RuntimeProvider | None:
     provider = FetchingRuntime()
     if provider.is_cached():
         return provider
+    if provider.is_core_cached():
+        # Only a decoder worker is missing, from a cache written before exports
+        # carried it. Open source, so no licence to ask for, and the map is
+        # made either way: without it the export says what the map then needs.
+        return _download_with_progress(provider, parent, required=False)
 
     if not provider.version:
         QMessageBox.critical(
@@ -225,9 +247,12 @@ def ensure_runtime(parent=None) -> RuntimeProvider | None:
 
 
 def _download_with_progress(
-    provider: FetchingRuntime, parent
+    provider: FetchingRuntime, parent, required: bool = True
 ) -> FetchingRuntime | None:
     """Run the download behind a cancellable progress dialog.
+
+    Not `required` when the runtime is already there and only a decoder worker
+    is being completed: a failure then returns the provider, unannounced.
 
     Synchronous on purpose. A background thread would need cancellation,
     partial-state cleanup and a way to stop the user starting a second export
@@ -243,7 +268,9 @@ def _download_with_progress(
     progress = QProgressDialog(
         tr("Downloading the OnlyMap runtime ({size})…").format(
             size=RUNTIME_DOWNLOAD_SIZE
-        ),
+        )
+        if required
+        else tr("Downloading the vector tile decoder…"),
         tr("Cancel"),
         0,
         0,
@@ -261,6 +288,8 @@ def _download_with_progress(
         provider.fetch(downloader=make_qgis_downloader(feedback))
     except RuntimeUnavailableError as exc:
         progress.close()
+        if not required:
+            return provider
         if not feedback.isCanceled():
             QMessageBox.critical(
                 parent,

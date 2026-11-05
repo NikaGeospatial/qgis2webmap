@@ -638,6 +638,122 @@ class TestIncompleteCacheIsRepaired:
         assert provider.is_cached()
 
 
+WORKER_PACKAGE = "@loaders.gl/mvt"
+
+
+def worker_tarball(data: bytes) -> bytes:
+    """An npm tarball shaped like `@loaders.gl/mvt`'s."""
+    return build_tarball(
+        {
+            f"{rm.TARBALL_PREFIX}/dist/{rm.MVT_WORKER}": data,
+            f"{rm.TARBALL_PREFIX}/LICENSE": b"MIT",
+        }
+    )
+
+
+class TestDecoderWorkerIsFetched:
+    """The vector tile decoder worker comes with the runtime, pinned like it.
+
+    It is what lets a map draw vector tiles with no internet, so a cache that
+    has the runtime but not the worker - every cache written before exports
+    carried it - is completed rather than trusted, and a worker that is not
+    the pinned build is never installed.
+    """
+
+    JS, CSS, WORKER = b"// runtime", b"/* css */", b"// mvt worker"
+
+    def lock(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            rm,
+            "read_lock",
+            lambda: {
+                "version": "1.0.0",
+                "files": {
+                    rm.RUNTIME_JS: {"sha256": rm.sha256_of(self.JS)},
+                    rm.RUNTIME_CSS: {"sha256": rm.sha256_of(self.CSS)},
+                },
+                "workers": {
+                    rm.MVT_WORKER: {
+                        "package": WORKER_PACKAGE,
+                        "version": "4.4.3",
+                        "path": f"dist/{rm.MVT_WORKER}",
+                        "sha256": rm.sha256_of(self.WORKER),
+                    }
+                },
+            },
+        )
+
+    def serve(self, monkeypatch, worker: bytes) -> list[tuple[str, str]]:
+        """Downloads answered from doubles; returns what was asked for."""
+        asked: list[tuple[str, str]] = []
+
+        def download(version, *args, package=rm.NPM_PACKAGE, **kwargs):
+            asked.append((package, version))
+            if package == WORKER_PACKAGE:
+                return worker_tarball(worker)
+            return npm_tarball(self.JS, self.CSS)
+
+        monkeypatch.setattr(rm, "download_tarball", download)
+        return asked
+
+    def test_its_registry_address(self) -> None:
+        assert rm.tarball_url("4.4.3", WORKER_PACKAGE) == (
+            "https://registry.npmjs.org/@loaders.gl/mvt/-/mvt-4.4.3.tgz"
+        )
+
+    def test_a_first_fetch_brings_it_and_the_bundle_carries_it(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        self.lock(monkeypatch)
+        asked = self.serve(monkeypatch, self.WORKER)
+        rm.record_licence_acceptance("1.0.0", tmp_path)
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+
+        bundle = provider.load()
+
+        assert bundle.mvt_worker == self.WORKER
+        assert bundle.lock_warnings == ()
+        assert provider.is_cached()
+        assert (WORKER_PACKAGE, "4.4.3") in asked
+
+    def test_a_cache_without_it_is_completed_without_the_runtime_again(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """No licence to ask for (it is the OnlyMap licence that gates, and the
+        runtime is there), and only the worker crosses the network."""
+        self.lock(monkeypatch)
+        asked = self.serve(monkeypatch, self.WORKER)
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+        cache = provider.cached_dir()
+        cache.mkdir(parents=True)
+        (cache / rm.RUNTIME_JS).write_bytes(self.JS)
+        (cache / rm.RUNTIME_CSS).write_bytes(self.CSS)
+        assert not rm.licence_accepted("1.0.0", tmp_path)
+
+        assert provider.is_core_cached() and not provider.is_cached()
+        bundle = provider.load()
+
+        assert bundle.mvt_worker == self.WORKER
+        assert asked == [(WORKER_PACKAGE, "4.4.3")]
+        assert provider.is_cached()
+
+    def test_one_that_is_not_the_pinned_build_is_refused(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Refused and never written; the map is still made, without it (and
+        says so, see `test_onlymap_writer`)."""
+        self.lock(monkeypatch)
+        self.serve(monkeypatch, b"// EVIL")
+        rm.record_licence_acceptance("1.0.0", tmp_path)
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+
+        with pytest.raises(rm.RuntimeDownloadError, match="does not match"):
+            provider.fetch()
+        assert rm.stored_path(provider.cached_dir(), rm.MVT_WORKER) is None
+        assert provider.load().mvt_worker is None
+        assert not provider.is_cached()
+
+
 def _compressible(label: str, size: int = 400_000) -> bytes:
     """Script-like bytes longer than `gzip_probe` reads, varied enough that deflate
     has real choices to make."""

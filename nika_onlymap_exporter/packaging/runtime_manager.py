@@ -18,6 +18,13 @@ Two implementations:
   `runtime/runtime-lock.json`, and caches it per machine. Every later export is
   offline.
 
+Beside the runtime, the cache keeps the decoder worker its vector tile layer
+starts (`MVT_WORKER`): the runtime's loaders.gl would otherwise load it from
+unpkg.com, so a map drawing vector tiles needed the internet even when it
+carried its tiles. It is an open-source file from its own npm package, fetched
+the same way and pinned in the same lock (`pinned_workers`), so every export can
+carry it.
+
 `default_provider()` prefers a local copy and falls back to fetching, so a
 machine that already has the runtime never reaches for the network.
 
@@ -31,6 +38,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -62,12 +70,19 @@ RUNTIME_LICENCE = "LICENSE.md"
 # keep working for it rather than failing to load at all.
 RUNTIME_CARTOGRAPH_JS = "cartograph.standalone.js"
 RUNTIME_CARTOGRAPH_CSS = "cartograph.css"
+# The decoder worker the runtime's `MVTLayer` starts to read vector tiles. Not
+# part of the OnlyMap package: it is loaders.gl's own `dist/mvt-worker.js`, from
+# the npm package and version `runtime-lock.json` pins under "workers", which
+# must be the loaders.gl version the runtime bundles (`bundled_loaders_version`).
+# Optional on a loaded bundle, like the cartograph files: a runtime directory
+# without it still draws every map, and only a vector tile layer misses it.
+MVT_WORKER = "mvt-worker.js"
 # The runtime's attribute contract. Optional: the map works without it, but
 # the test suite's attribute-contract checks and AI-assisted editing both read
 # it, so it is cached beside the runtime when the package ships it.
 RUNTIME_SCHEMA = "onlymapjs.html-data.json"
 
-# **A fetched cache keeps the four pinned files gzipped**, as `<name>.gz`: 9.5 MB
+# **A fetched cache keeps the pinned files gzipped**, as `<name>.gz`: 9.5 MB
 # on disk becomes 2.6 MB. Every reader goes through `stored_path` and
 # `read_runtime_file`, which take either form, so a cache written before this,
 # `ONLYMAP_RUNTIME_DIR` pointing at a package's plain `dist/`, and a fetched
@@ -80,6 +95,7 @@ STORED_GZIPPED = (
     RUNTIME_CSS,
     RUNTIME_CARTOGRAPH_JS,
     RUNTIME_CARTOGRAPH_CSS,
+    MVT_WORKER,
 )
 # Beside the gzipped files: the `gzip_probe` of each script a single-file export
 # embeds gzipped (the stylesheets go in plain), so the export may embed the
@@ -109,13 +125,14 @@ MAX_MEMBER_BYTES = 64 * 1024 * 1024
 # 0.12.0 bump (4.8 -> 5.4 MB) and the 0.12.1 -> 0.13.0 bump (5.4 -> 5.6 MB)
 # and the 0.13.1 -> 0.13.2 bump (5.6 -> 5.7 MB) and the 0.13.3 -> 0.13.4 bump
 # (5.7 -> 5.9 MB), which is why the figure is
-# measured from the tarball at pin time rather than remembered.
+# measured from the tarball at pin time rather than remembered. The vector
+# tile decoder's tarball joined the same download in 0.3.3 (5.9 -> 6.1 MB).
 #
-# It describes the *compressed tarball*, which is what actually crosses the
+# It describes the *compressed tarballs*, which is what actually crosses the
 # network, not the ~9.8 MB the files occupy once unpacked. `tests/unit` asserts the
 # user guide quotes this same string, so a bump cannot update the code and leave
 # the docs behind. Update it in `scripts/lock_runtime.py`'s output when re-pinning.
-RUNTIME_DOWNLOAD_SIZE = "about 5.9 MB"
+RUNTIME_DOWNLOAD_SIZE = "about 6.1 MB"
 
 DOWNLOAD_TIMEOUT_SECONDS = 120
 
@@ -179,6 +196,10 @@ class RuntimeBundle:
     # shipping them empty. The web-map export never reads these two fields.
     cartograph_javascript: bytes | None = None
     cartograph_css: bytes | None = None
+    # The vector tile decoder worker (`MVT_WORKER`), or `None` when the runtime
+    # directory has none - a package's own `dist/`, or a cache from before
+    # exports carried it. Read only by a page with a vector tile layer.
+    mvt_worker: bytes | None = None
 
     @property
     def total_bytes(self) -> int:
@@ -432,28 +453,30 @@ class LocalRuntime:
         javascript = reads[RUNTIME_JS][0]
         css = reads[RUNTIME_CSS][0]
         cartograph_javascript, cartograph_css = _cartograph_pair(reads)
+        mvt_worker = read_runtime_file(directory, MVT_WORKER)
         return RuntimeBundle(
             javascript=javascript,
             css=css,
             version=_read_version(directory),
             sha256=sha256_of(javascript),
             lock_warnings=lock_mismatches(
-                javascript, css, cartograph_javascript, cartograph_css
+                javascript, css, cartograph_javascript, cartograph_css, mvt_worker
             ),
             cartograph_javascript=cartograph_javascript,
             cartograph_css=cartograph_css,
+            mvt_worker=mvt_worker,
         )
 
 
-def tarball_url(version: str) -> str:
-    """The registry URL for one published version.
+def tarball_url(version: str, package: str = NPM_PACKAGE) -> str:
+    """The registry URL for one published version of `package`.
 
     Built by hand rather than by asking the registry for its metadata: the
     layout is stable and documented, and one fewer request is one fewer thing
     to fail behind a corporate proxy.
     """
-    unscoped = NPM_PACKAGE.split("/")[-1]
-    return f"{NPM_REGISTRY}/{NPM_PACKAGE}/-/{unscoped}-{version}.tgz"
+    unscoped = package.split("/")[-1]
+    return f"{NPM_REGISTRY}/{package}/-/{unscoped}-{version}.tgz"
 
 
 def download_tarball(
@@ -461,6 +484,7 @@ def download_tarball(
     on_progress: ProgressCallback | None = None,
     timeout: int = DOWNLOAD_TIMEOUT_SECONDS,
     downloader: Downloader | None = None,
+    package: str = NPM_PACKAGE,
 ) -> bytes:
     """Fetch one published version's tarball over HTTPS.
 
@@ -471,7 +495,7 @@ def download_tarball(
     `downloader` lets the plugin route this through QGIS's network stack, so a
     user behind a proxy gets the proxy they already configured.
     """
-    url = tarball_url(version)
+    url = tarball_url(version, package)
     if not url.startswith("https://"):  # pragma: no cover - defensive
         raise RuntimeDownloadError(f"refusing to fetch the runtime over {url}")
 
@@ -512,8 +536,9 @@ def download_tarball(
                 if on_progress is not None:
                     on_progress(received, total_bytes)
     except urllib.error.URLError as exc:
+        what = "the OnlyMap runtime" if package == NPM_PACKAGE else package
         raise RuntimeDownloadError(
-            f"Could not download the OnlyMap runtime from {url}.\n\n{exc.reason}\n\n"
+            f"Could not download {what} from {url}.\n\n{exc.reason}\n\n"
             "The download is needed once per machine; every export afterwards "
             "works offline. If this machine has no internet access, install the "
             "runtime pack manually and point ONLYMAP_RUNTIME_DIR at it."
@@ -574,6 +599,32 @@ def extract_runtime(tarball: bytes, destination: Path) -> None:
         )
 
 
+def extract_worker(tarball: bytes, member_path: str) -> bytes:
+    """One decoder worker's bytes out of its npm tarball.
+
+    Read by exact name, as `extract_runtime` reads the runtime's files, so no
+    path the archive claims is ever written anywhere.
+    """
+    wanted = f"{TARBALL_PREFIX}/{member_path}"
+    with tempfile.TemporaryDirectory() as scratch:
+        archive_path = Path(scratch) / "worker.tgz"
+        archive_path.write_bytes(tarball)
+        with tarfile.open(archive_path, "r:gz") as archive:
+            try:
+                member = archive.getmember(wanted)
+            except KeyError:
+                member = None
+            if (
+                member is not None
+                and member.isfile()
+                and member.size <= MAX_MEMBER_BYTES
+            ):
+                handle = archive.extractfile(member)
+                if handle is not None:
+                    return handle.read()
+    raise RuntimeDownloadError(f"the downloaded package did not contain {wanted}.")
+
+
 def read_lock() -> dict:
     """The pinned runtime build, or `{}` when the lock file is absent."""
     if not LOCK_FILE.exists():
@@ -584,11 +635,56 @@ def read_lock() -> dict:
         return {}
 
 
+def pinned_workers(version: str) -> dict[str, dict]:
+    """The decoder workers `runtime-lock.json` pins beside runtime `version`.
+
+    Keyed by the file name the cache stores each under; each entry names the
+    npm package, its version and the file's path in it, with its SHA-256.
+    Empty when the lock does not pin `version`, or pins no workers: a lock
+    written before exports carried them asks for nothing more than it did.
+    """
+    lock = read_lock()
+    if lock.get("version") != version:
+        return {}
+    workers = lock.get("workers")
+    if not isinstance(workers, dict):
+        return {}
+    return {
+        name: entry
+        for name, entry in workers.items()
+        if isinstance(entry, dict)
+        and all(
+            isinstance(entry.get(key), str) and entry.get(key)
+            for key in ("package", "version", "path", "sha256")
+        )
+    }
+
+
+# How loaders.gl's worker utilities record the version they were built as. The
+# workers they start come from that same version's packages (see the
+# `unpkg.com/@loaders.gl/<module>@<version>` URL the runtime builds when no
+# worker is given), so it is the version a carried worker must be.
+_LOADERS_VERSION = re.compile(rb'_loadersgl_\.version = "([0-9]+\.[0-9]+\.[0-9]+)"')
+
+
+def bundled_loaders_version(javascript: bytes) -> str | None:
+    """The loaders.gl version a runtime build bundles, or `None` if not found.
+
+    `None` too when the build names two versions: which one a worker must be
+    is then not something this can answer.
+    """
+    found = set(_LOADERS_VERSION.findall(javascript))
+    if len(found) != 1:
+        return None
+    return found.pop().decode("ascii")
+
+
 def lock_mismatches(
     javascript: bytes,
     css: bytes,
     cartograph_javascript: bytes | None = None,
     cartograph_css: bytes | None = None,
+    mvt_worker: bytes | None = None,
 ) -> tuple[str, ...]:
     """Where the loaded runtime differs from `runtime-lock.json`.
 
@@ -605,7 +701,9 @@ def lock_mismatches(
     the cartograph feature existed) still draws every web map, and these
     warnings surface in the web map's own fidelity report - so absence is not
     a mismatch. The cartograph path refuses a bundle without them itself, and
-    `FetchingRuntime.is_cached` re-fetches a cache that lacks them.
+    `FetchingRuntime.is_cached` re-fetches a cache that lacks them. The vector
+    tile worker likewise: a page with a vector tile layer says itself what a
+    bundle without one costs (`onlymap_writer`).
     """
     lock = read_lock()
     files = lock.get("files") or {}
@@ -627,6 +725,13 @@ def lock_mismatches(
                 f"{name} does not match the build pinned in runtime-lock.json "
                 f"(expected {lock.get('version', 'unknown')})."
             )
+    worker = (lock.get("workers") or {}).get(MVT_WORKER) or {}
+    expected = worker.get("sha256") if isinstance(worker, dict) else None
+    if expected and mvt_worker is not None and expected != sha256_of(mvt_worker):
+        mismatches.append(
+            f"{MVT_WORKER} does not match the build pinned in runtime-lock.json "
+            f"(expected {worker.get('package')} {worker.get('version')})."
+        )
     return tuple(mismatches)
 
 
@@ -778,6 +883,21 @@ class FetchingRuntime:
         its pinned SHA-256, so a truncated or edited file is re-fetched rather
         than loaded. Custom runtimes (`ONLYMAP_RUNTIME_DIR`) never reach this
         check; they are read by `LocalRuntime` as they are.
+
+        The decoder workers the lock pins for this version count too, so a
+        cache from before exports carried them is completed (`fetch`).
+        """
+        return self.is_core_cached() and all(
+            _file_intact(self.cached_dir(), name, entry["sha256"])
+            for name, entry in pinned_workers(self._version).items()
+        )
+
+    def is_core_cached(self) -> bool:
+        """Whether the OnlyMap package's own files are on disk and intact.
+
+        `is_cached` without the decoder workers: what decides whether the
+        runtime itself has to be downloaded, and its licence asked for. A
+        missing worker is open-source and asks for neither.
         """
         directory = self.cached_dir()
         lock = read_lock()
@@ -821,7 +941,7 @@ class FetchingRuntime:
                 "No runtime version is pinned. runtime/runtime-lock.json is "
                 "missing or unreadable, so there is nothing to fetch."
             )
-        if not self.is_cached() and not licence_accepted(
+        if not self.is_core_cached() and not licence_accepted(
             self._version, self._cache_dir
         ):
             raise RuntimeNotAcceptedError(
@@ -832,8 +952,15 @@ class FetchingRuntime:
 
     def load(self) -> RuntimeBundle:
         self.preflight()
-        if not self.is_cached():
+        if not self.is_core_cached():
             self.fetch()
+        elif not self.is_cached():
+            # Only a decoder worker is missing. A map is still made without it
+            # when it cannot be fetched (no network, or bytes that are not the
+            # pinned build, which are never installed): the page then loads it
+            # from the web, and the export says so (`onlymap_writer`).
+            with contextlib.suppress(RuntimeDownloadError):
+                self.fetch()
 
         return LocalRuntime(self.cached_dir()).load()
 
@@ -851,6 +978,7 @@ class FetchingRuntime:
         files = lock.get("files") or {}
         if not {RUNTIME_JS, RUNTIME_CSS} <= set(files):
             return False
+        files = {**files, **pinned_workers(self._version)}
         return all(
             isinstance(entry, dict)
             and bool(entry.get("sha256"))
@@ -868,14 +996,34 @@ class FetchingRuntime:
         Both arguments override what the constructor was given, so a caller can
         supply them at the point it has a progress dialog and a cancellation
         token to bind them to, rather than when it built the provider.
-        """
-        tarball = download_tarball(
-            self._version,
-            on_progress or self._on_progress,
-            downloader=downloader or self._downloader,
-        )
 
+        A cache whose runtime is intact and which lacks only a decoder worker
+        gets just the worker; the runtime is not downloaded again.
+        """
+        on_progress = on_progress or self._on_progress
+        downloader = downloader or self._downloader
         destination = self.cached_dir()
+        if not self.is_core_cached():
+            self._fetch_core(destination, on_progress, downloader)
+        self._fetch_workers(destination, on_progress, downloader)
+
+        # Only once this version is wholly in place and verified, and never in a
+        # root someone filled by hand (`ONLYMAP_RUNTIME_CACHE`).
+        if self._install_complete(destination) and not (
+            self._cache_dir is None and os.environ.get("ONLYMAP_RUNTIME_CACHE")
+        ):
+            prune_superseded_runtimes(destination.parent, self._version)
+        return destination
+
+    def _fetch_core(
+        self,
+        destination: Path,
+        on_progress: ProgressCallback | None,
+        downloader: Downloader | None,
+    ) -> None:
+        """Download, verify and install the OnlyMap package's files."""
+        tarball = download_tarball(self._version, on_progress, downloader=downloader)
+
         # Staged beside the target and moved into place, so an interrupted
         # download cannot leave a half-extracted directory that `is_cached`
         # would later believe.
@@ -904,13 +1052,42 @@ class FetchingRuntime:
             _remove_tree(destination)
         staging.rename(destination)
 
-        # Only once this version is wholly in place and verified, and never in a
-        # root someone filled by hand (`ONLYMAP_RUNTIME_CACHE`).
-        if self._install_complete(destination) and not (
-            self._cache_dir is None and os.environ.get("ONLYMAP_RUNTIME_CACHE")
-        ):
-            prune_superseded_runtimes(destination.parent, self._version)
-        return destination
+    def _fetch_workers(
+        self,
+        destination: Path,
+        on_progress: ProgressCallback | None,
+        downloader: Downloader | None,
+    ) -> None:
+        """Download, verify and store each pinned decoder worker not yet there.
+
+        Each from its own npm tarball, checked against its pinned SHA-256
+        before it is written, and written whole or not at all: a worker that
+        is not the pinned build would run in every recipient's browser.
+        """
+        for name, entry in pinned_workers(self._version).items():
+            if _file_intact(destination, name, entry["sha256"]):
+                continue
+            tarball = download_tarball(
+                entry["version"],
+                on_progress,
+                downloader=downloader,
+                package=entry["package"],
+            )
+            data = extract_worker(tarball, entry["path"])
+            if sha256_of(data) != entry["sha256"]:
+                raise RuntimeDownloadError(
+                    f"The downloaded {entry['package']} {entry['version']} does not "
+                    "match the build this plugin was tested against, so its "
+                    f"{name} has not been installed."
+                )
+            stored = gzip_bytes(data)
+            if _gunzip_bounded(stored) != data:  # pragma: no cover - defensive
+                raise RuntimeDownloadError(f"{name} did not survive compression.")
+            partial = destination / (name + GZIP_SUFFIX + ".partial")
+            partial.write_bytes(stored)
+            os.replace(partial, destination / (name + GZIP_SUFFIX))
+            # A plain copy would win over the verified one (`stored_path`).
+            (destination / name).unlink(missing_ok=True)
 
 
 def _remove_tree(path: Path) -> None:
@@ -943,6 +1120,7 @@ _OWNED_FILES = frozenset(
         RUNTIME_SCHEMA,
         RUNTIME_CARTOGRAPH_JS,
         RUNTIME_CARTOGRAPH_CSS,
+        MVT_WORKER,
         COMPRESSION_RECORD,
         *(name + GZIP_SUFFIX for name in STORED_GZIPPED),
     }
