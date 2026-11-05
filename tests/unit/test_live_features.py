@@ -147,21 +147,75 @@ class TestRequests:
         )
 
     @pytest.mark.parametrize(
-        ("fixture", "longitude"),
-        [("ign-wfs-commune.json", (2.0, 3.0)), ("msc-ogcapi-items.json", (-76, -75))],
+        ("fixture", "template", "bbox", "longitude", "paging"),
+        [
+            (
+                "ign-wfs-commune.json",
+                wfs_template(
+                    "https://data.geopf.fr/wfs/ows",
+                    "ADMINEXPRESS-COG-CARTO.LATEST:commune",
+                ),
+                "48.80,2.25,48.90,2.42",
+                (2.0, 3.0),
+                "numberMatched",
+            ),
+            (
+                "msc-ogcapi-items.json",
+                ogcapi_template("https://api.weather.gc.ca", "hydrometric-stations"),
+                "-75.8,45.3,-75.6,45.5",
+                (-76, -75),
+                "numberMatched",
+            ),
+            # MapServer's GeoJSON says nothing of how many there are.
+            (
+                "pdok-wfs-provinces.json",
+                wfs_template(
+                    "https://service.pdok.nl/kadaster/bestuurlijkegebieden/wfs/v1_0",
+                    "bestuurlijkegebieden:Provinciegebied",
+                ),
+                "52.0,4.5,52.5,5.5",
+                (4.0, 7.0),
+                None,
+            ),
+            (
+                "pdok-ogcapi-provinces.json",
+                ogcapi_template(
+                    "https://api.pdok.nl/kadaster/bestuurlijkegebieden/ogc/v1",
+                    "provinciegebied",
+                ),
+                "4.5,52.0,5.5,52.5",
+                (4.0, 7.0),
+                "next",
+            ),
+        ],
     )
     def test_recorded_services_answer_longitude_first(
-        self, fixture: str, longitude: tuple[float, float]
+        self,
+        fixture: str,
+        template: str,
+        bbox: str,
+        longitude: tuple[float, float],
+        paging: str | None,
     ) -> None:
-        """The real WFS and OGC API answers to these requests: GeoJSON,
-        longitude first (what the runtime draws), with paging."""
+        """The real WFS and OGC API answers to the request the plugin builds
+        for them (two features asked): GeoJSON, longitude first (what the
+        runtime draws), and the paging each says there is more by."""
         recorded = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
+        asked = re.sub(r"\{bbox-[^}]+\}", bbox, template)
+        asked = asked.replace("COUNT=1000", "COUNT=2").replace("limit=1000", "limit=2")
+        assert recorded["request"] == asked
         body = recorded["body"]
         point = body["features"][0]["geometry"]["coordinates"]
         while isinstance(point[0], list):
             point = point[0]
         assert longitude[0] <= point[0] <= longitude[1]
-        assert body["numberMatched"] > body["numberReturned"]
+        if paging == "numberMatched":
+            assert body["numberMatched"] > body["numberReturned"]
+        else:
+            assert "numberMatched" not in body
+            assert ("next" in [link["rel"] for link in body.get("links", [])]) is (
+                paging == "next"
+            )
         assert recorded["headers"]["access-control-allow-origin"] == "*"
 
     def test_recorded_arcgis_says_there_is_more_where_the_runtime_looks(self) -> None:
