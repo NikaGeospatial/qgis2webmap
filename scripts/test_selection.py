@@ -506,6 +506,18 @@ def check_groups(repo: Path, groups: dict | None = None) -> list[str]:
         for path in list_test_files(repo, tier):
             if path not in listed:
                 problems.append(f"{path} is in no group (patch could never select it)")
+    # Test folders are not packages, so pytest imports each file by its name
+    # alone: two of one name in a shard stop its collection. The browser tier
+    # runs in a process of its own.
+    seen: dict[str, str] = {}
+    for tier in ("unit", "qgis", "fixtures"):
+        for path in list_test_files(repo, tier):
+            name = path.rsplit("/", 1)[1]
+            if name in seen:
+                problems.append(
+                    f"{path} has the name of {seen[name]}; one shard cannot import both"
+                )
+            seen.setdefault(name, path)
     tracked = sorted(
         p.relative_to(repo).as_posix()
         for folder in (PLUGIN, "scripts", "tests")
