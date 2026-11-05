@@ -67,6 +67,7 @@ from ..packaging.runtime_manager import (
     default_provider,
 )
 from ..packaging.tile_archives import stage_tile_archives
+from ..packaging.vector_tile_worker import build_worker_embed
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
 # The measure tool's page script and styles, on a map that has the tool.
@@ -280,6 +281,7 @@ class OnlyMapWriter:
             "@PICTURE_EMBED@": build_picture_embed(
                 embedded_pictures, picture_fields(project.layers)
             ),
+            "@WORKER_EMBED@": build_worker_embed(manifest, runtime.mvt_worker),
         }
 
         # One pass, not a loop of replaces. Substituting sequentially would let
@@ -461,6 +463,14 @@ class OnlyMapWriter:
         # An unexpected runtime build is worth saying out loud: the artifact is
         # still written, but "it worked on my machine" usually starts here.
         warnings.extend(runtime.lock_warnings)
+        if runtime.mvt_worker is None and any(
+            layer.vector_tiles is not None for layer in project.exportable_layers
+        ):
+            warnings.append(
+                "The OnlyMap runtime on this machine has no vector tile decoder "
+                "beside it, so this map's vector tile layers load theirs from "
+                "unpkg.com, and need an internet connection to draw."
+            )
         if project.settings.has_lossy_transform:
             warnings.append(
                 "A lossy transform was applied, so the exported coordinates are "

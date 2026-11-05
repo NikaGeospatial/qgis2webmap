@@ -19,11 +19,14 @@ import dataclasses
 import json
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 from fake_cog_server import FakeCogServer
 from fake_tile_archive import TILE_MVT, Feature, mvt, pmtiles, tiles_covering
+from test_exported_map import TELEMETRY_ENDPOINT
 
+from nika_onlymap_exporter.core.cartograph_ir import Box, CartographSpec, FrameSpec
 from nika_onlymap_exporter.core.export_ir import (
     AssetDependency,
     AssetDisposition,
@@ -41,6 +44,11 @@ from nika_onlymap_exporter.core.export_ir import (
     SourceKind,
     SymbolSpec,
     VectorTileSpec,
+)
+from nika_onlymap_exporter.core.manifest_builder import build_manifest
+from nika_onlymap_exporter.writers.cartograph_writer import (
+    CartographRuntimeBundle,
+    write_cartograph_html,
 )
 from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
 
@@ -147,16 +155,25 @@ def _water_layer(tiles: VectorTileSpec, remote: bool) -> ExportLayer:
     )
 
 
-def _write(
-    runtime, directory: Path, layer: ExportLayer, mode=OutputMode.STANDALONE_HTML
-):
-    project = ExportProject(
+def _project(layer: ExportLayer) -> ExportProject:
+    return ExportProject(
         title="Tiles",
         layers=(layer,),
         extent=Extent(west=BOX[0], south=BOX[1], east=BOX[2], north=BOX[3]),
         settings=ExportSettings(basemap="none"),
     )
-    return OnlyMapWriter(runtime_provider=runtime).write(project, directory, mode=mode)
+
+
+def _write(
+    runtime,
+    directory: Path,
+    layer: ExportLayer,
+    mode=OutputMode.STANDALONE_HTML,
+    compress: bool = True,
+):
+    return OnlyMapWriter(runtime_provider=runtime).write(
+        _project(layer), directory, mode=mode, compress=compress
+    )
 
 
 SAMPLE = """
@@ -183,6 +200,32 @@ async (points) => {
   });
 }
 """
+
+
+def _offline(page) -> list[str]:
+    """Refuse every request off this machine, as a map opened offline meets
+    them, and list what was asked for.
+
+    On the context rather than the page, so a request a worker makes is
+    refused too. The runtime's usage report is refused without being listed:
+    it is documented, and fails silently offline.
+    """
+    refused: list[str] = []
+
+    def handle(route) -> None:
+        url = route.request.url
+        if url.startswith(("http://", "https://")) and urlsplit(url).hostname not in (
+            "127.0.0.1",
+            "localhost",
+        ):
+            if not url.startswith(TELEMETRY_ENDPOINT):
+                refused.append(url)
+            route.abort()
+        else:
+            route.continue_()
+
+    page.context.route("**/*", handle)
+    return refused
 
 
 def _open(page, address: str) -> None:
@@ -236,6 +279,8 @@ def test_a_remote_archive_draws_its_layer(page, runtime, tile_host, tmp_path, op
         VectorTileSpec(url=address, source_layer="water", max_zoom=10), remote=True
     )
     entry = _write(runtime, tmp_path, layer).entry_path
+    # The archive's server is the only host the map needs.
+    refused = _offline(page)
     if opened == "file":
         _open(page, entry.as_uri())
         _assert_water_drawn(page)
@@ -247,11 +292,15 @@ def test_a_remote_archive_draws_its_layer(page, runtime, tile_host, tmp_path, op
         r for r in tile_host.requests if r[1] == "/lakes.pmtiles" and r[0] == "GET"
     ]
     assert reads and all(r[2] for r in reads), "the archive was read unranged"
+    assert not refused, f"the map asked other hosts for {refused}"
 
 
-def test_a_single_file_carries_its_archive(page, runtime, tmp_path) -> None:
-    """Opened from disk, with nothing served: the page answers the runtime's
-    range requests from the archive it carries."""
+# Uncompressed is how the Preview writes a page; compressed is the export.
+@pytest.mark.parametrize("compress", [True, False], ids=["export", "preview"])
+def test_a_single_file_carries_its_archive(page, runtime, tmp_path, compress) -> None:
+    """Opened from disk, with nothing served and no internet: the page answers
+    the runtime's range requests from the archive it carries, and decodes its
+    tiles with the worker it carries."""
     source = tmp_path / "lakes.pmtiles"
     source.write_bytes(ARCHIVE)
     layer = _water_layer(
@@ -263,13 +312,16 @@ def test_a_single_file_carries_its_archive(page, runtime, tmp_path) -> None:
         ),
         remote=False,
     )
-    entry = _write(runtime, tmp_path / "out", layer).entry_path
+    entry = _write(runtime, tmp_path / "out", layer, compress=compress).entry_path
     assert not list(entry.parent.glob("*.pmtiles"))
+    refused = _offline(page)
     _open(page, entry.as_uri())
     _assert_water_drawn(page)
+    assert not refused, f"the map asked the internet for {refused}"
 
 
 def test_a_folder_serves_its_archive_beside_the_page(page, runtime, tmp_path) -> None:
+    """Served, with no internet beyond the folder's own server."""
     source = tmp_path / "lakes.pmtiles"
     source.write_bytes(ARCHIVE)
     layer = _water_layer(
@@ -288,9 +340,11 @@ def test_a_folder_serves_its_archive_beside_the_page(page, runtime, tmp_path) ->
         for path in folder.rglob("*")
         if path.is_file()
     }
+    refused = _offline(page)
     with FakeCogServer(files) as site:
         _open(page, site.url("index.html"))
         _assert_water_drawn(page)
+    assert not refused, f"the map asked the internet for {refused}"
 
 
 @pytest.mark.parametrize("opened", ["file", "http"])
@@ -325,6 +379,8 @@ def test_a_service_draws_in_its_publishers_style(
         assert _close(road, STYLE_ROAD, within=40), f"the road is {road}"
         assert not _close(empty, STYLE_LAKE) and not _close(empty, STYLE_RIVER)
 
+    # The service is the only host the map needs.
+    refused = _offline(page)
     if opened == "file":
         _open(page, entry.as_uri())
         check()
@@ -332,6 +388,7 @@ def test_a_service_draws_in_its_publishers_style(
         with FakeCogServer({"/index.html": entry.read_bytes()}) as site:
             _open(page, site.url("index.html"))
             check()
+    assert not refused, f"the map asked other hosts for {refused}"
 
 
 def test_a_click_on_an_archive_feature_opens_its_popup(
@@ -365,3 +422,48 @@ def test_a_click_on_an_archive_feature_opens_its_popup(
             arg=kind,
             timeout=10_000,
         )
+
+
+def test_a_cartograph_frame_draws_tiles_with_no_internet(
+    page, runtime, tile_host, tmp_path
+) -> None:
+    """A cartograph's live frame waits in a template until its loader runs;
+    its vector tile layer still gets the decoder the page carries."""
+    loaded = runtime.load()
+    if loaded.cartograph_javascript is None or loaded.cartograph_css is None:
+        pytest.skip("this runtime copy has no cartograph build")
+    layer = ExportLayer(
+        layer_id="base",
+        name="Base",
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.SERVICE,
+        popup=PopupSpec(enabled=False),
+        vector_tiles=VectorTileSpec(
+            url=tile_host.url("/t/{z}/{x}/{y}.pbf"),
+            style_url=tile_host.url("/style.json"),
+            min_zoom=0,
+            max_zoom=10,
+        ),
+    )
+    frame = FrameSpec(
+        id="main", box=Box(10, 10, 190, 120), mode="live", center=(8.36, 47.2), zoom=10
+    )
+    html = write_cartograph_html(
+        CartographSpec(cartograph_id="cg-tiles", size="A4", items=(frame,)),
+        CartographRuntimeBundle(
+            cartograph_js=loaded.cartograph_javascript,
+            cartograph_css=loaded.cartograph_css.decode("utf-8"),
+            core_js=loaded.javascript,
+            core_css=loaded.css.decode("utf-8"),
+            mvt_worker=loaded.mvt_worker,
+        ),
+        {"main": build_manifest(_project(layer))},
+    )
+    sheet = tmp_path / "sheet.html"
+    sheet.write_text(html, encoding="utf-8")
+
+    refused = _offline(page)
+    _open(page, sheet.as_uri())
+    (lake,) = _sample_until(page, [LAKE], lambda s: _close(s[0], STYLE_LAKE))
+    assert _close(lake, STYLE_LAKE), f"the lake is {lake}"
+    assert not refused, f"the page asked other hosts for {refused}"

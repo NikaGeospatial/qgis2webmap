@@ -6,6 +6,9 @@
     "docs/architecture.md). This file pins what the answer must produce, so a",
     "runtime that is not the expected build is caught rather than shipped.",
     "Regenerate with scripts/lock_runtime.py after changing the pinned build.",
+    "Under workers: the vector tile decoder worker every export carries beside",
+    "the runtime, from its own open-source package, which must be the",
+    "loaders.gl version the runtime bundles.",
     "Each sha256 below is the digest of a published, public npm artifact. It is",
     "an integrity check, not a credential, and it is meant to be read: that is",
     "the whole point of publishing it. Secret scanners cannot tell a checksum",
@@ -31,6 +34,16 @@
     "cartograph.css": {
       "sha256": "7b97c30d58091e7c4a72b708f813b63e3263a323e762295fa32235c21096bea4", "_": "checksum of a public artifact # pragma: allowlist secret",
       "bytes": 5006
+    }
+  },
+  "workers": {
+    "mvt-worker.js": {
+      "package": "@loaders.gl/mvt",
+      "version": "4.4.3",
+      "license": "MIT",
+      "path": "dist/mvt-worker.js",
+      "sha256": "dd05d983bb13345c69bd745514f579e5e0d09164119dccc68dbbca0ddf255afc", "_": "checksum of a public artifact # pragma: allowlist secret",
+      "bytes": 97375
     }
   }
 }

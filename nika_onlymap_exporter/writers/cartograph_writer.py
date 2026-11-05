@@ -82,6 +82,7 @@ from ..core.export_ir import PopupPicture
 from ..packaging.asset_embedder import GZIP_SCRIPT_TYPE, PICTURE_RESOLVER, gzip_base64
 from ..packaging.popup_pictures import build_picture_embed
 from ..packaging.raster_embed import build_raster_embed, has_cog_layer
+from ..packaging.vector_tile_worker import build_worker_embed
 
 #: Shown instead of a live cartograph when the browser runs no JavaScript:
 #: its live maps and the inlined runtime need it. (A static-only cartograph
@@ -128,13 +129,15 @@ class CartographRuntimeBundle:
     `core_js`/`core_css` are the 8.6 MB map runtime -- required only when the
     spec has at least one live frame; `write_cartograph_html` raises if a
     live frame is present and either is missing, and never reads them at all
-    for a static-only spec.
+    for a static-only spec. `mvt_worker` is the vector tile decoder worker a
+    live frame with a vector tile layer carries (`packaging/vector_tile_worker.py`).
     """
 
     cartograph_js: bytes
     cartograph_css: str
     core_js: bytes | None = None
     core_css: str | None = None
+    mvt_worker: bytes | None = None
 
 
 def write_cartograph_html(
@@ -196,6 +199,9 @@ def write_cartograph_html(
         )
         if raster_embed:
             body += raster_embed + "\n"
+        worker_embed = build_worker_embed(sheet, runtime.mvt_worker)
+        if worker_embed:
+            body += worker_embed + "\n"
         picture_embed = build_picture_embed(embedded_pictures, picture_fields)
         if picture_embed:
             body += picture_embed + "\n"

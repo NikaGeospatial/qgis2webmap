@@ -1568,6 +1568,7 @@ def prepare_cartograph(
         cartograph_css=runtime.cartograph_css.decode("utf-8"),
         core_js=runtime.javascript if has_live else None,
         core_css=runtime.css.decode("utf-8") if has_live else None,
+        mvt_worker=runtime.mvt_worker if has_live else None,
     )
     return PreparedCartograph(
         spec=spec,

@@ -87,7 +87,7 @@ choose `dist/qgis2webmap-<version>.zip`.
 
 Requires QGIS 3.44 or newer (QGIS 4 supported).
 
-**The first export downloads the map runtime** — about 5.9 MB, once per computer,
+**The first export downloads the map runtime** — about 6.1 MB, once per computer,
 after showing you its licence. Everything works offline after that. The runtime
 is the code that draws the map in a browser and is built into every map you
 export; it is a separate commercial product with its own licence, which is why

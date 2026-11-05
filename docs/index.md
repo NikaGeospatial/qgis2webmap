@@ -220,7 +220,7 @@ plugin recommends the next mode rather than quietly degrading the data.
 
 QGIS 3.44 or newer, on Windows or macOS. QGIS 4 is supported.
 
-The first export downloads the OnlyMap runtime — about 5.9 MB, once per computer,
+The first export downloads the OnlyMap runtime — about 6.1 MB, once per computer,
 after showing you its licence. Everything works offline after that, and exporting
 reaches the network only to read a layer QGIS itself reads from the web. See [installation](installation.md) for the
 offline and proxy paths.

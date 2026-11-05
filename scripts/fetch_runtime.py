@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Fetch the pinned OnlyMap runtime into a directory, for CI.
 
+With it, the vector tile decoder worker the lock pins beside it; a cache that
+has the runtime but not the worker (one written before exports carried it) gets
+just the worker.
+
     python scripts/fetch_runtime.py [cache-dir]
 
 Prints the directory holding the runtime to stdout, so a workflow can do:
@@ -64,7 +68,10 @@ def main(argv: list[str]) -> int:
         print(provider.cached_dir())
         return 0
 
-    print(f"fetching OnlyMap runtime {version}", file=sys.stderr)
+    if provider.is_core_cached():
+        print(f"completing runtime {version}: fetching its workers", file=sys.stderr)
+    else:
+        print(f"fetching OnlyMap runtime {version}", file=sys.stderr)
     try:
         destination = provider.fetch(on_progress=_progress)
     except RuntimeUnavailableError as error:

@@ -136,83 +136,83 @@
       <translation>Exige que la carte {names} soit Interactive.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1889" />
+      <location filename="../core/cartograph_export.py" line="1890" />
       <source>Map data size</source>
       <translation>Taille des données de la carte</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2239" />
+      <location filename="../core/cartograph_export.py" line="2240" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi the picture this frame is drawn through (its frame line included) would be larger than memory can hold. Make the map smaller or ask for a lower resolution.</source>
       <translation>Résolution demandée : {wanted} dpi, dessinée à {dpi} dpi ({width} x {height} pixels) : à {wanted} dpi, l'image intermédiaire de ce cadre (trait du cadre compris) serait plus grande que ce que la mémoire peut contenir. Réduisez la carte ou demandez une résolution plus basse.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="2247" />
+      <location filename="../core/cartograph_export.py" line="2248" />
       <source>Requested {wanted} dpi, drawn at {dpi} dpi ({width} x {height} pixels): at {wanted} dpi this frame's picture would be larger than a browser can draw. Make the map smaller or ask for a lower resolution.</source>
       <translation>Résolution demandée : {wanted} dpi, dessinée à {dpi} dpi ({width} x {height} pixels) : à {wanted} dpi, l'image de ce cadre serait plus grande que ce qu'un navigateur peut dessiner. Réduisez la carte ou demandez une résolution plus basse.</translation>
     </message>
     <message>
-      <location filename="../core/cartograph_export.py" line="1890" />
+      <location filename="../core/cartograph_export.py" line="1891" />
       <source>The page carries {size} of vector data, which can leave the map blank for a long time while it opens, especially on a computer without a graphics card. Heaviest: {layers}. Simplify the geometry of those layers, or set the frame to Image in Map frames.</source>
       <translation>La page contient {size} de données vectorielles, ce qui peut laisser la carte vide longtemps à l'ouverture, surtout sur un ordinateur sans carte graphique. Les plus lourdes : {layers}. Simplifiez la géométrie de ces couches, ou réglez le cadre sur Image dans Cadres de carte.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="565" />
+      <location filename="../core/fidelity_summary.py" line="571" />
       <source>{n} thing changes</source>
       <translation>{n} élément change</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="565" />
+      <location filename="../core/fidelity_summary.py" line="571" />
       <source>{n} things change</source>
       <translation>{n} éléments changent</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="640" />
-      <location filename="../core/fidelity_summary.py" line="637" />
+      <location filename="../core/fidelity_summary.py" line="646" />
+      <location filename="../core/fidelity_summary.py" line="643" />
       <source>See what changes</source>
       <translation>Voir ce qui change</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="374" />
+      <location filename="../core/fidelity_summary.py" line="380" />
       <source>Nothing to report.</source>
       <translation>Rien à signaler.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="445" />
+      <location filename="../core/fidelity_summary.py" line="451" />
       <source>{n} layer and the whole map need attention</source>
       <translation>{n} couche et toute la carte demandent votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="445" />
+      <location filename="../core/fidelity_summary.py" line="451" />
       <source>{n} layers and the whole map need attention</source>
       <translation>{n} couches et toute la carte demandent votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="457" />
       <source>{n} layer needs attention</source>
       <translation>{n} couche demande votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="451" />
+      <location filename="../core/fidelity_summary.py" line="457" />
       <source>{n} layers need attention</source>
       <translation>{n} couches demandent votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="455" />
+      <location filename="../core/fidelity_summary.py" line="461" />
       <source>{n} needs attention</source>
       <translation>{n} demande votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="455" />
+      <location filename="../core/fidelity_summary.py" line="461" />
       <source>{n} need attention</source>
       <translation>{n} demandent votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="457" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>the whole map needs attention</source>
       <translation>toute la carte demande votre attention</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="611" />
+      <location filename="../core/fidelity_summary.py" line="617" />
       <location filename="../ui/cartograph/controller.py" line="1176" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
@@ -220,91 +220,91 @@
       <translation>Pas encore vérifié.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="611" />
+      <location filename="../core/fidelity_summary.py" line="617" />
       <location filename="../ui/fidelity_panel.py" line="268" />
       <location filename="../ui/fidelity_panel.py" line="534" />
       <source>Check now</source>
       <translation>Vérifier maintenant</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="613" />
+      <location filename="../core/fidelity_summary.py" line="619" />
       <location filename="../ui/fidelity_panel.py" line="547" />
       <source>Checking what the export changes...</source>
       <translation>Vérification de ce que l'export modifie...</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="620" />
+      <location filename="../core/fidelity_summary.py" line="626" />
       <source>See why</source>
       <translation>Voir pourquoi</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="624" />
+      <location filename="../core/fidelity_summary.py" line="630" />
       <source>Out of date - something changed since the last check.</source>
       <translation>Obsolète - quelque chose a changé depuis la dernière vérification.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="626" />
+      <location filename="../core/fidelity_summary.py" line="632" />
       <location filename="../ui/fidelity_panel.py" line="606" />
       <source>Check again</source>
       <translation>Vérifier à nouveau</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="633" />
+      <location filename="../core/fidelity_summary.py" line="639" />
       <source>Review problems</source>
       <translation>Examiner les problèmes</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>{n} layer</source>
       <translation>{n} couche</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>{n} layers</source>
       <translation>{n} couches</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="377" />
+      <location filename="../core/fidelity_summary.py" line="383" />
       <source>No layers</source>
       <translation>Aucune couche</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="385" />
+      <location filename="../core/fidelity_summary.py" line="391" />
       <source>everything is kept exactly</source>
       <translation>tout est conservé à l'identique</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="414" />
+      <location filename="../core/fidelity_summary.py" line="420" />
       <source>{n} thing cannot be exported</source>
       <translation>{n} élément ne peut pas être exporté</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="414" />
+      <location filename="../core/fidelity_summary.py" line="420" />
       <source>{n} things cannot be exported</source>
       <translation>{n} éléments ne peuvent pas être exportés</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="436" />
+      <location filename="../core/fidelity_summary.py" line="442" />
       <source>{parts} on export.</source>
       <translation>{parts} à l'export.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="618" />
+      <location filename="../core/fidelity_summary.py" line="624" />
       <source>The check failed.</source>
       <translation>La vérification a échoué.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="422" />
+      <location filename="../core/fidelity_summary.py" line="428" />
       <source>{n} layer cannot be exported</source>
       <translation>{n} couche ne peut pas être exportée</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="422" />
+      <location filename="../core/fidelity_summary.py" line="428" />
       <source>{n} layers cannot be exported</source>
       <translation>{n} couches ne peuvent pas être exportées</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="616" />
+      <location filename="../core/fidelity_summary.py" line="622" />
       <source>The check could not finish: {error}</source>
       <translation>La vérification n'a pas pu aboutir : {error}</translation>
     </message>
@@ -1899,7 +1899,7 @@ Les cartes déjà publiées restent en ligne. Vous devrez vous reconnecter dans 
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/main_dialog.py" line="3861" />
-      <location filename="../ui/runtime_setup.py" line="247" />
+      <location filename="../ui/runtime_setup.py" line="274" />
       <source>Cancel</source>
       <translation>Annuler</translation>
     </message>
@@ -5795,9 +5795,9 @@ Ils sont aussi en ligne sur &lt;{url}&gt;.
     </message>
     <message>
       <location filename="../ui/main_dialog.py" line="3732" />
-      <location filename="../ui/runtime_setup.py" line="252" />
-      <location filename="../ui/runtime_setup.py" line="203" />
-      <location filename="../ui/runtime_setup.py" line="267" />
+      <location filename="../ui/runtime_setup.py" line="279" />
+      <location filename="../ui/runtime_setup.py" line="225" />
+      <location filename="../ui/runtime_setup.py" line="296" />
       <source>OnlyMap runtime</source>
       <translation>Runtime OnlyMap</translation>
     </message>
@@ -6489,54 +6489,64 @@ Choisissez un emplacement existant ou créez-le d'abord.</translation>
       <translation>aucun gestionnaire de fichiers n'a répondu ({error}), et le programme qui ouvre les dossiers par défaut n'est pas un gestionnaire de fichiers</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="57" />
+      <location filename="../ui/runtime_setup.py" line="58" />
       <source>&lt;p&gt;&lt;b&gt;QGIS2WebMap needs the OnlyMap runtime to build a map.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;The runtime is the code that draws the map in a browser. It is embedded in every map you export, which is what lets someone open your map with no internet connection and no software installed.&lt;/p&gt;&lt;p&gt;It is downloaded &lt;b&gt;once on this computer&lt;/b&gt; ({size}). Every export after that works offline.&lt;/p&gt;&lt;p&gt;QGIS2WebMap is free and open source. The OnlyMap runtime is a separate commercial product by NIKA with its own licence, shown below.&lt;/p&gt;</source>
       <translation>&lt;p&gt;&lt;b&gt;QGIS2WebMap a besoin du runtime OnlyMap pour créer une carte.&lt;/b&gt;&lt;/p&gt;&lt;p&gt;Le runtime est le code qui dessine la carte dans un navigateur. Il est intégré à chaque carte exportée, ce qui permet de l'ouvrir sans connexion internet et sans rien installer.&lt;/p&gt;&lt;p&gt;Il est téléchargé &lt;b&gt;une seule fois sur cet ordinateur&lt;/b&gt; ({size}). Chaque export suivant fonctionne hors ligne.&lt;/p&gt;&lt;p&gt;QGIS2WebMap est libre et open source. Le runtime OnlyMap est un produit commercial distinct de NIKA, avec sa propre licence, affichée ci-dessous.&lt;/p&gt;</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="74" />
+      <location filename="../ui/runtime_setup.py" line="75" />
       <source>Install the OnlyMap runtime</source>
       <translation>Installer le runtime OnlyMap</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="100" />
+      <location filename="../ui/runtime_setup.py" line="117" />
       <source>I accept the OnlyMap licence</source>
       <translation>J'accepte la licence OnlyMap</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="108" />
+      <location filename="../ui/runtime_setup.py" line="125" />
       <source>Download and install</source>
       <translation>Télécharger et installer</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="204" />
+      <location filename="../ui/runtime_setup.py" line="226" />
       <source>This installation does not pin a runtime version, so the runtime cannot be downloaded. Please reinstall the plugin.</source>
       <translation>Cette installation ne fixe pas de version du runtime, il ne peut donc pas être téléchargé. Réinstallez l'extension.</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="148" />
+      <location filename="../ui/runtime_setup.py" line="273" />
+      <source>Downloading the vector tile decoder…</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="165" />
       <source>The download was cancelled.</source>
       <translation>Le téléchargement a été annulé.</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="244" />
-      <source>Downloading the OnlyMap runtime ({size})…</source>
-      <translation>Téléchargement du runtime OnlyMap ({size})…</translation>
-    </message>
-    <message>
-      <location filename="../ui/runtime_setup.py" line="154" />
+      <location filename="../ui/runtime_setup.py" line="171" />
       <source>If this computer reaches the internet through a proxy, check Settings -&gt; Options -&gt; Network in QGIS.</source>
       <translation>Si cet ordinateur accède à internet via un proxy, vérifiez Préférences -&gt; Options -&gt; Réseau dans QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="152" />
+      <location filename="../ui/runtime_setup.py" line="269" />
+      <source>Downloading the OnlyMap runtime ({size})…</source>
+      <translation>Téléchargement du runtime OnlyMap ({size})…</translation>
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="169" />
       <source>Could not download the OnlyMap runtime.</source>
       <translation>Impossible de télécharger le runtime OnlyMap.</translation>
     </message>
     <message>
-      <location filename="../ui/runtime_setup.py" line="86" />
+      <location filename="../ui/runtime_setup.py" line="94" />
       <source>Source: {package}</source>
       <translation>Source : {package}</translation>
+    </message>
+    <message>
+      <location filename="../ui/runtime_setup.py" line="100" />
+      <source>Downloaded with it, under its own licence: {packages}</source>
+      <translation type="unfinished" />
     </message>
   </context>
 </TS>
