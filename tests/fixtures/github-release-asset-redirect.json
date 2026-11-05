@@ -1,0 +1,6 @@
+{
+  "_": "What GitHub answered a release asset download, recorded once on 2026-11-05 from https://github.com/NikaGeospatial/qgis2webmap/releases/download/v0.3.1/qgis2webmap-0.3.1.zip (redirects not followed). The signed query string of the location is dropped.",
+  "status": 302,
+  "content_length": 0,
+  "location": "https://release-assets.githubusercontent.com/github-production-release-asset/1316831615/009c5cb1-8a81-4af0-8dd6-6a38ba652878"
+}

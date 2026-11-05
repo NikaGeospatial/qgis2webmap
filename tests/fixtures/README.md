@@ -52,6 +52,13 @@ expressions, filters, zoom functions and labels. `tests/qgis/test_vector_tile_la
 serves it locally, its addresses moved to the test's own server, to check that a
 layer QGIS styled from it reads as unchanged. Style © swisstopo.
 
+`github-release-asset-redirect.json` is what GitHub answered a release asset
+download (`https://github.com/NikaGeospatial/qgis2webmap/releases/download/v0.3.1/qgis2webmap-0.3.1.zip`,
+fetched once on 2026-11-05, redirects not followed): a 302 to its file host,
+the signed query dropped. `tests/unit/test_language_download.py` checks the
+language packs download follows that redirect, and `tests/qgis/test_i18n.py`
+serves the same shape from a local server.
+
 `map_services/` holds government WMS and WMTS capabilities, each fetched once
 on 2026-11-05 and cut down to the layer (and tile matrix set) a case uses -
 other layers, themes, keywords and INSPIRE extensions removed, everything

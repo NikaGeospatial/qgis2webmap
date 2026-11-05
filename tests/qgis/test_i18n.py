@@ -2,9 +2,11 @@
 
 Needs PyQGIS and a Qt application; runs headless with QT_QPA_PLATFORM=offscreen.
 
-Nothing here touches the network. Downloads go through a fake fetcher that
-serves the repository's own compiled packs, which are the same bytes jsDelivr
-serves from a release tag.
+Nothing here touches the network. Downloads are of the language packs zip the
+release packaging step builds from the repository's own compiled packs, served
+by a fake fetcher, or by a local server answering the way GitHub does through
+QGIS's own network stack. What the zip may hold, and the hosts the download may
+be sent to, are checked in tests/unit/test_language_download.py.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -12,10 +14,13 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
+import threading
 import xml.etree.ElementTree as ET
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -52,12 +57,26 @@ def installed_plugin(monkeypatch, tmp_path):
     return languages
 
 
-def serve_repo_packs(calls: list[str]):
-    """A fetcher that answers with the repository's own pack for the URL."""
+@pytest.fixture(scope="module")
+def release_zip(tmp_path_factory) -> bytes:
+    """The language packs asset, as `scripts/package_plugin.py` builds it."""
+    spec = importlib.util.spec_from_file_location(
+        "_package_plugin_for_i18n", REPO_ROOT / "scripts" / "package_plugin.py"
+    )
+    assert spec is not None and spec.loader is not None
+    packager = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(packager)
+    return packager.build_language_packs(tmp_path_factory.mktemp("dist")).read_bytes()
 
-    def fetch(url: str) -> bytes:
+
+def serve_release(body: bytes, calls: list[str]):
+    """A fetcher that answers the release asset's URL with `body`."""
+    from nika_onlymap_exporter.ui import languages
+
+    def fetch(url: str) -> languages.Reply:
         calls.append(url)
-        return (I18N_DIR / url.rsplit("/", 1)[1]).read_bytes()
+        assert url == languages.asset_url()
+        return languages.Reply(200, body)
 
     return fetch
 
@@ -82,13 +101,15 @@ class TestWhichLanguage:
     def test_english_when_qgis_has_no_language_set(self, installed_plugin):
         assert installed_plugin.effective("auto", "") == "en"
 
-    def test_following_qgis_needs_the_pack_installed(self, installed_plugin):
+    def test_following_qgis_needs_the_pack_installed(
+        self, installed_plugin, release_zip
+    ):
         assert installed_plugin.effective("auto", "pt_BR") == "en"
-        installed_plugin.download("pt_BR", serve_repo_packs([]))
+        installed_plugin.download("pt_BR", serve_release(release_zip, []))
         assert installed_plugin.effective("auto", "pt_BR") == "pt_BR"
 
-    def test_english_chosen_beats_qgis(self, installed_plugin):
-        installed_plugin.download("pt_BR", serve_repo_packs([]))
+    def test_english_chosen_beats_qgis(self, installed_plugin, release_zip):
+        installed_plugin.download("pt_BR", serve_release(release_zip, []))
         assert installed_plugin.effective("en", "pt_BR") == "en"
 
     def test_a_chosen_language_whose_pack_is_gone_falls_back_to_english(
@@ -101,8 +122,8 @@ class TestTheOffer:
     def test_offered_when_qgis_speaks_it_and_it_is_missing(self, installed_plugin):
         assert installed_plugin.offer("auto", "pt_BR") == "pt_BR"
 
-    def test_not_offered_once_installed(self, installed_plugin):
-        installed_plugin.download("pt_BR", serve_repo_packs([]))
+    def test_not_offered_once_installed(self, installed_plugin, release_zip):
+        installed_plugin.download("pt_BR", serve_release(release_zip, []))
         assert installed_plugin.offer("auto", "pt_BR") is None
 
     def test_not_offered_to_someone_who_chose_english(self, installed_plugin):
@@ -116,45 +137,133 @@ class TestTheOffer:
         assert installed_plugin.offer("auto", "de_DE") is None
 
 
+class GitHubLike:
+    """A local server answering a release download the way GitHub does.
+
+    The release URL redirects (302, absolute address) to a file host, which
+    serves the asset. `tests/fixtures/github-release-asset-redirect.json` holds
+    what GitHub answered. `redirect_to` may point the redirect at another
+    server; `endless` makes the file host send far more than any release.
+    """
+
+    FILE_PATH = "/github-production-release-asset/1316831615/asset"
+    ENDLESS = 64 * 1024 * 1024
+
+    def __init__(self, body: bytes = b"", redirect_to: str | None = None) -> None:
+        self.body = body
+        self.endless = False
+        self.hits: list[str] = []
+        self.sent = 0
+        server = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                server.hits.append(self.path)
+                if self.path.startswith("/NikaGeospatial/qgis2webmap/releases/"):
+                    target = redirect_to or server.origin
+                    self.send_response(302)
+                    self.send_header("Location", target + server.FILE_PATH + "?sig=x")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                size = server.ENDLESS if server.endless else len(server.body)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(size))
+                self.end_headers()
+                try:
+                    if not server.endless:
+                        self.wfile.write(server.body)
+                        server.sent = size
+                        return
+                    chunk = b"\0" * 65536
+                    while server.sent < size:
+                        self.wfile.write(chunk)
+                        server.sent += len(chunk)
+                except OSError:
+                    pass  # the client hung up, which is the point
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.origin = f"http://127.0.0.1:{self.httpd.server_port}"
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def close(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+@pytest.fixture
+def github_like(installed_plugin, monkeypatch, release_zip):
+    """The real download code, pointed at a local GitHubLike server.
+
+    Only the release address and the trusted origin are moved; the redirect
+    loop, the verification and QGIS's network stack are the real ones.
+    """
+    server = GitHubLike(release_zip)
+    monkeypatch.setattr(
+        installed_plugin,
+        "RELEASES_URL",
+        f"{server.origin}/NikaGeospatial/qgis2webmap/releases/download",
+    )
+    monkeypatch.setattr(
+        installed_plugin, "_trusted", lambda url: url.startswith(server.origin + "/")
+    )
+    yield server
+    server.close()
+
+
 class TestDownloading:
-    def test_the_url_is_the_release_tag_on_jsdelivr(self, qgis_app, monkeypatch):
-        from nika_onlymap_exporter.ui import languages
-
-        monkeypatch.delenv(languages.BASE_URL_ENV, raising=False)
-        assert languages.pack_url("pt_BR", "0.2.0") == (
-            "https://cdn.jsdelivr.net/gh/NikaGeospatial/qgis2webmap@v0.2.0"
-            "/nika_onlymap_exporter/i18n/qgis2webmap_pt_BR.qm"
-        )
-
-    def test_a_good_pack_is_installed(self, installed_plugin):
-        calls: list[str] = []
-        path = installed_plugin.download("es", serve_repo_packs(calls))
-        assert path.is_file() and path.parent == installed_plugin.install_dir()
-        assert len(calls) == 1
+    def test_one_download_through_qgis_installs_every_language(
+        self, qgis_app, installed_plugin, github_like
+    ):
+        path = installed_plugin.download("es", installed_plugin.qgis_fetcher(10_000))
+        assert github_like.hits == [
+            "/NikaGeospatial/qgis2webmap/releases/download/"
+            f"v{installed_plugin.plugin_version()}/{installed_plugin.asset_name()}",
+            GitHubLike.FILE_PATH + "?sig=x",
+        ]
         assert installed_plugin.installed_pack("es") == path
+        for code in installed_plugin.pinned_packs():
+            assert installed_plugin.installed_pack(code) is not None, code
 
-    def test_a_pack_that_differs_from_the_release_is_refused(self, installed_plugin):
-        with pytest.raises(installed_plugin.LanguageDownloadError):
-            installed_plugin.download("es", lambda url: b"not the released pack")
+    def test_qgis_does_not_follow_a_redirect_by_itself(
+        self, qgis_app, installed_plugin, monkeypatch, release_zip
+    ):
+        """The redirect goes through the trust check, so Qt must not take it."""
+        elsewhere = GitHubLike(release_zip)
+        redirecting = GitHubLike(release_zip, redirect_to=elsewhere.origin)
+        monkeypatch.setattr(
+            installed_plugin,
+            "RELEASES_URL",
+            f"{redirecting.origin}/NikaGeospatial/qgis2webmap/releases/download",
+        )
+        monkeypatch.setattr(
+            installed_plugin,
+            "_trusted",
+            lambda url: url.startswith(redirecting.origin + "/"),
+        )
+        try:
+            with pytest.raises(installed_plugin.LanguageDownloadError):
+                installed_plugin.download("es", installed_plugin.qgis_fetcher(10_000))
+            assert len(redirecting.hits) == 1
+            assert elsewhere.hits == []
+        finally:
+            redirecting.close()
+            elsewhere.close()
         assert installed_plugin.installed_pack("es") is None
-        folder = installed_plugin.install_dir()
-        assert not folder.exists() or not any(folder.iterdir())
 
-    def test_a_tampered_file_on_disk_is_not_trusted(self, installed_plugin):
-        path = installed_plugin.download("fr", serve_repo_packs([]))
-        path.write_bytes(path.read_bytes() + b"x")
-        assert installed_plugin.installed_pack("fr") is None
-
-    def test_plain_http_is_refused(self, installed_plugin, monkeypatch):
-        monkeypatch.setenv(installed_plugin.BASE_URL_ENV, "http://example.org/i18n")
-        with pytest.raises(installed_plugin.LanguageDownloadError):
-            installed_plugin.download("es", serve_repo_packs([]))
-
-    def test_an_unknown_language_is_refused_before_any_request(self, installed_plugin):
-        calls: list[str] = []
-        with pytest.raises(installed_plugin.LanguageDownloadError):
-            installed_plugin.download("de", serve_repo_packs(calls))
-        assert calls == []
+    def test_an_endless_download_is_cut_off(
+        self, qgis_app, installed_plugin, github_like, monkeypatch
+    ):
+        monkeypatch.setattr(installed_plugin, "MAX_DOWNLOAD_BYTES", 256 * 1024)
+        github_like.endless = True
+        with pytest.raises(installed_plugin.LanguageDownloadError, match="too large"):
+            installed_plugin.download("es", installed_plugin.qgis_fetcher(10_000))
+        assert github_like.sent < GitHubLike.ENDLESS
+        assert installed_plugin.installed_pack("es") is None
 
 
 class TestTranslating:
@@ -410,14 +519,14 @@ class TestTheDialog:
             dialog.close()
 
     def test_choosing_a_language_downloads_it_and_asks_to_reopen(
-        self, installed_plugin, project, make_memory_layer
+        self, installed_plugin, project, make_memory_layer, release_zip
     ):
         from qgis.PyQt.QtCore import QSettings
 
         from nika_onlymap_exporter.ui.language_picker import LanguagePicker
 
         calls: list[str] = []
-        button = LanguagePicker(None, fetch=serve_repo_packs(calls))
+        button = LanguagePicker(None, fetch=serve_release(release_zip, calls))
         fired: list[bool] = []
         button.changed.connect(lambda: fired.append(True))
         button.choose("es")
@@ -425,6 +534,9 @@ class TestTheDialog:
         assert installed_plugin.installed_pack("es") is not None
         assert QSettings().value(installed_plugin.SETTING_KEY) == "es"
         assert fired == [True]
+        # One download brought every language: none is marked any more.
+        names = [button.itemText(i) for i in range(button.count())]
+        assert not [name for name in names if name.endswith(" - download")]
 
     def test_choosing_english_while_in_english_changes_nothing(
         self, installed_plugin, project, make_memory_layer
@@ -432,7 +544,7 @@ class TestTheDialog:
         from nika_onlymap_exporter.ui.language_picker import LanguagePicker
 
         calls: list[str] = []
-        button = LanguagePicker(None, fetch=serve_repo_packs(calls))
+        button = LanguagePicker(None, fetch=serve_release(b"", calls))
         fired: list[bool] = []
         button.changed.connect(lambda: fired.append(True))
         button.choose("en")

@@ -17,6 +17,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import zipfile
 from pathlib import Path
@@ -108,3 +109,24 @@ def test_the_packager_refuses_a_pack_that_is_not_pinned(tmp_path, monkeypatch) -
     with pytest.raises(SystemExit, match="update_translations"):
         packager.build_language_packs(tmp_path / "dist")
 
+
+def test_the_guides_state_the_asset_s_size(tmp_path) -> None:
+    """The size the guides promise is the size of what is built, give or take."""
+    built_kb = _package_plugin().build_language_packs(tmp_path).stat().st_size / 1024
+    docs = I18N_DIR.parents[1] / "docs"
+    stated = {
+        name: [
+            int(n)
+            for n in re.findall(
+                r"about\s+(\d+)\s+KB", (docs / name).read_text(encoding="utf-8")
+            )
+        ]
+        for name in ("privacy.md", "the-dialog.md", "llms.txt")
+    }
+    assert all(stated.values()), f"a guide no longer states the size: {stated}"
+    wrong = {
+        name: sizes
+        for name, sizes in stated.items()
+        if any(abs(size - built_kb) > 0.1 * built_kb for size in sizes)
+    }
+    assert not wrong, f"the language packs zip is {built_kb:.0f} KB; {wrong}"

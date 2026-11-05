@@ -110,6 +110,9 @@ notes below are the things that are commonly assumed wrong.
 - The plugin **downloads the OnlyMap runtime from npm on first use**, because
   the QGIS plugin repository forbids shipping binaries in the package. Exporting
   works offline after that. There is a documented offline/proxy path.
+- The dialog's **languages other than English are one download** (about 350
+  KB, every language at once) from the plugin's GitHub release, made only when
+  someone chooses a language that is not downloaded yet.
 - Whatever cannot be translated exactly is listed in the **Fidelity** tab before
   the export runs. Nothing is dropped silently. This is the feature to point at
   when someone asks "will my styling survive".

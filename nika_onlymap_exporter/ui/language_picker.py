@@ -4,7 +4,7 @@ Two widgets, both small:
 
 - `LanguagePicker`, the list on the Settings tab: "Follow QGIS", English, and
   every language this version has a pack for. A language not yet downloaded
-  says so, and picking it downloads it.
+  says so, and picking it downloads it, with every other language.
 - `LanguageOffer`, a one-line bar shown only while following QGIS when QGIS
   speaks a language we have but its pack is not here. Nothing is downloaded
   until the user presses its button.
@@ -39,7 +39,7 @@ def _setting() -> str:
 
 
 def _install(parent: QWidget, code: str, fetch: languages.Fetcher | None) -> bool:
-    """Download `code` if it is missing. False, having said why, on failure."""
+    """Download the packs if `code`'s is missing. False, having said why, on failure."""
     if languages.installed_pack(code) is not None:
         return True
     QGuiApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)

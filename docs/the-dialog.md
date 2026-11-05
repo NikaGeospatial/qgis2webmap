@@ -462,8 +462,9 @@ holds things that are true of every project, rather than of one map:
   needs an account; exporting a file never does.
 - **Language** — *Follow QGIS* (the default), English, or one of Português
   (Brasil), 中文（简体）, हिन्दी, Español, العربية and Français. English is built
-  in; the others are a small download the first time you pick one, checked
-  against the copy released with this version. *Follow QGIS* uses the language
+  in; the others come in one small download (about 350 KB) the first time you
+  pick any of them, which brings every language at once, checked against the
+  copy released with this version. *Follow QGIS* uses the language
   QGIS is set to when it is one of these, and otherwise English. When QGIS is
   in one of them and its pack is not downloaded yet, a bar at the top of the
   dialog offers it — nothing is downloaded until you press it. Switching

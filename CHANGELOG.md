@@ -115,6 +115,15 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   style QGIS kept no copy of. Vector tile layers were not exported before.
 
 ### Changed
+- **Languages download from the GitHub release, all at once.** Choosing
+  any language other than English the first time fetches one file of about
+  350 KB from this version's release on GitHub (`github.com`, which hands it
+  to `release-assets.githubusercontent.com`) and installs every language, so
+  a second language needs no second download. They used to come one at a
+  time from jsDelivr, which serves no repository over 50 MB, and this one
+  now is. Each language is still checked against the copy
+  released with this version, and a download that is not exactly that
+  release is refused whole.
 - The one-time runtime download is about 6.1 MB (it was 5.9 MB): it now
   includes the vector tile decoder that maps with PMTiles or vector tile
   layers carry, which the licence dialog names.

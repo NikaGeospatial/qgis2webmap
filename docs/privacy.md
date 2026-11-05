@@ -183,12 +183,16 @@ map, it downloads the OnlyMap runtime from npm, with the open-source script
 that decodes vector tiles, which maps carry — about 6.1 MB, once per
 computer, after showing you the licence and asking. See
 [installation](installation.md). The only other download is one you ask for:
-a language pack, fetched from jsDelivr when you pick a language other than
-English under Settings.
+the language packs, fetched from this version's release on GitHub only when you
+choose a language other than English that is not downloaded yet (under
+Settings, or with the bar that offers QGIS's language). It is about 350 KB and holds every language, so
+it happens once. GitHub hands the download to its file host, so the requests go
+to `github.com` and then `release-assets.githubusercontent.com`; the plugin
+follows that hand-over only to GitHub's own hosts.
 
-Neither request sends anything about you or your data. Each is an anonymous
+Neither download sends anything about you or your data. Each is an anonymous
 download of a public file: no account, no token, no identifier, and nothing
-about your project, your layers or your machine. npm, or jsDelivr, can see
+about your project, your layers or your machine. npm, or GitHub, can see
 that some computer at your IP address downloaded a public file, which is what
 any software download looks like.
 
