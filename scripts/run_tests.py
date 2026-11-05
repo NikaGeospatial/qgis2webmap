@@ -12,7 +12,8 @@ Profiles (details and environment variables: CONTRIBUTING.md, "Running the tests
            3.44 compatibility checks, the unit tier. Unknown paths -> the whole
            primary suite. Prints every selected test and why.
 - release: whole QGIS 4.2 suite (unit + qgis + fixtures, once), the maintained
-           focused QGIS 3.44 suite, the whole browser tier, translations, lint,
+           focused QGIS 3.44 suite, the whole browser tier (Chromium, Firefox,
+           WebKit), translations, lint,
            package + verify, packaged-ZIP smoke on 4.2 and 3.44.
 - full:    the same, but the whole QGIS 3.44 suite replaces the focused one
            (it contains it, so the subset is not run twice).
@@ -122,6 +123,8 @@ class Config:
     max_workers: int
     docker_memory_mb: int
     verbose: bool = False
+    #: Where Firefox finds an EGL library, if not on the system path (NixOS).
+    firefox_library_path: str | None = None
 
     @classmethod
     def from_env(cls, args: argparse.Namespace) -> Config:
@@ -135,6 +138,7 @@ class Config:
             python42=os.environ.get("Q2W_QGIS42_PYTHON", sys.executable),
             env42_sh=os.environ.get("Q2W_QGIS42_ENV_SH"),
             browser_python=os.environ.get("Q2W_BROWSER_PYTHON"),
+            firefox_library_path=os.environ.get("Q2W_FIREFOX_LIBRARY_PATH"),
             docker_image=os.environ.get("Q2W_DOCKER_IMAGE", "q2w-qgis344:local"),
             slot_cmd=shlex.split(os.environ.get("Q2W_SLOT_CMD", "")),
             runtime_dir=os.environ.get("ONLYMAP_RUNTIME_DIR"),
@@ -1106,7 +1110,12 @@ class Planner:
             return "ONLYMAP_RUNTIME_DIR is not set; the browser tier needs the runtime"
         return ""
 
-    def add_browser(self, targets: list[str], need_fixtures: bool = True) -> None:
+    def add_browser(
+        self,
+        targets: list[str],
+        need_fixtures: bool = True,
+        browsers: tuple[str, ...] = ("chromium",),
+    ) -> None:
         problem = self.browser_ready()
         if problem:
             self.skipped.append(("browser", problem))
@@ -1141,7 +1150,15 @@ class Planner:
                 )
             )
             depends = ["browser-fixtures"]
-        wdir = self.worker_dir("browser")
+        for browser in browsers:
+            self._add_browser_stage(browser, targets, depends)
+
+    def _add_browser_stage(
+        self, browser: str, targets: list[str], depends: list[str]
+    ) -> None:
+        # Chromium keeps the stage name its recorded durations are under.
+        name = "browser" if browser == "chromium" else f"browser-{browser}"
+        wdir = self.worker_dir(name)
 
         def env() -> dict[str, str]:
             merged = self.worker_env(dict(os.environ), "browser")
@@ -1162,12 +1179,18 @@ class Planner:
                 merged[key] = path
             for key in ("WAYLAND_DISPLAY", "DISPLAY", "LD_LIBRARY_PATH"):
                 merged.pop(key, None)
+            # Firefox draws through EGL (see CONTRIBUTING.md); where the system
+            # has no EGL library of its own, the run names one.
+            if browser == "firefox" and self.cfg.firefox_library_path:
+                merged["LD_LIBRARY_PATH"] = self.cfg.firefox_library_path
+            # A release round is meant to draw: a missing WebGL2 fails, not skips.
+            merged["Q2W_REQUIRE_WEBGL2"] = "1"
             return merged
 
         browser_py = self.cfg.browser_python or sys.executable
         self.add(
             Stage(
-                name="browser",
+                name=name,
                 kind="heavy",
                 resource="browser",
                 depends=depends,
@@ -1175,16 +1198,16 @@ class Planner:
                     browser_py,
                     *self.pytest_base(wdir),
                     "--browser",
-                    "chromium",
+                    browser,
                     *targets,
                 ],
                 env=env,
                 cwd=self.snap,
-                log=self.log("browser"),
+                log=self.log(name),
                 pytest_report=wdir / "report.json",
                 timeout_s=3600,
                 estimate_s=520.0,
-                description=f"Chromium, {len(targets)} test file(s)",
+                description=f"{browser.capitalize()}, {len(targets)} test file(s)",
                 targets=targets,
             )
         )
@@ -1316,7 +1339,7 @@ def build_plan(
             )
         planner.add_smoke344(SMOKE_SUBSET)
     planner.add_smoke42("")
-    planner.add_browser(["tests/browser"])
+    planner.add_browser(["tests/browser"], browsers=("chromium", "firefox", "webkit"))
     return planner
 
 

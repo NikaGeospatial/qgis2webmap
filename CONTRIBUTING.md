@@ -166,8 +166,10 @@ python3 scripts/run_tests.py stop                  # ends the running run's own 
   plugin loading and UI construction, Qt5 controls/signals/dialogs, Save As and
   destination ownership, layout switching/closing/project clear/worker lifetime,
   representative vector and raster export, atlas, printing, Value Relation
-  ordering), the whole browser tier, translations, ruff, package + verify, and the
-  packaged-ZIP smoke on 4.2 and 3.44. Passing on 4.2 says nothing about 3.44.
+  ordering), the whole browser tier in Chromium, Firefox and WebKit (each must
+  draw: a missing WebGL2 fails; on NixOS set `Q2W_FIREFOX_LIBRARY_PATH` to the
+  `LD_LIBRARY_PATH` below for Firefox), translations, ruff, package + verify, and
+  the packaged-ZIP smoke on 4.2 and 3.44. Passing on 4.2 says nothing about 3.44.
 - **full**: as release, but the whole suite also runs on 3.44 (it contains the
   focused list, which is therefore not run again).
 
