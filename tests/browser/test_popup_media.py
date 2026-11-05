@@ -244,6 +244,11 @@ def open_popup(page, url: str, feature: int) -> None:
     page.wait_for_function(
         "() => customElements.get('om-map') !== undefined", timeout=30_000
     )
+    # The popup is placed by the map's projection, which needs a drawn map.
+    if not page.evaluate(
+        "() => !!document.createElement('canvas').getContext('webgl2')"
+    ):
+        pytest.skip("no WebGL2 context in this browser/environment")
     page.wait_for_function(
         """(index) => {
             const map = document.querySelector('om-map');
