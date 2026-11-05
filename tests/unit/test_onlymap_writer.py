@@ -8,6 +8,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import base64
 import re
 from dataclasses import fields
 from datetime import datetime, timezone
@@ -27,18 +28,23 @@ from nika_onlymap_exporter.core.export_ir import (
     RendererSpec,
     SourceKind,
     SymbolSpec,
+    VectorTileSpec,
 )
 from nika_onlymap_exporter.core.license_policy import CapVerdict
 from nika_onlymap_exporter.packaging import runtime_manager
 from nika_onlymap_exporter.packaging.runtime_manager import (
+    MVT_WORKER,
     LocalRuntime,
     RuntimeBundle,
     RuntimeUnavailableError,
+    bundled_loaders_version,
     discover_runtime_dir,
     lock_mismatches,
     read_lock,
+    read_runtime_file,
     sha256_of,
 )
+from nika_onlymap_exporter.packaging.vector_tile_worker import NOTICE_PATH
 from nika_onlymap_exporter.writers.onlymap_writer import (
     OnlyMapWriter,
     generator_line,
@@ -82,6 +88,9 @@ def make_project(**overrides) -> ExportProject:
 class FakeRuntime:
     """A stand-in so writer tests do not need the real 5 MB bundle."""
 
+    def __init__(self, mvt_worker: bytes | None = None) -> None:
+        self.mvt_worker = mvt_worker
+
     def load(self) -> RuntimeBundle:
         js = b"/* fake runtime */"
         return RuntimeBundle(
@@ -89,6 +98,7 @@ class FakeRuntime:
             css=b"om-map:not(:defined) om-fallback { display: block; }",
             version="0.0.0-test",
             sha256=sha256_of(js),
+            mvt_worker=self.mvt_worker,
         )
 
 
@@ -496,12 +506,87 @@ class TestRuntimeLock:
             "run scripts/lock_runtime.py if the move was deliberate"
         )
 
+    def test_the_worker_pinned_is_the_loaders_gl_the_runtime_bundles(self) -> None:
+        """The runtime builds its worker's URL from its own loaders.gl version,
+        so a worker of any other version is not the one it would have started."""
+        directory = discover_runtime_dir()
+        if directory is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        javascript = read_runtime_file(directory, "onlymap.standalone.js")
+        assert javascript is not None
+        worker = read_lock()["workers"][MVT_WORKER]
+        assert (worker["package"], worker["version"]) == (
+            "@loaders.gl/mvt",
+            bundled_loaders_version(javascript),
+        )
+
     def test_an_unexpected_build_is_reported(self) -> None:
         assert lock_mismatches(b"not the runtime", b"not the css")
 
     def test_a_test_double_trips_nothing(self) -> None:
         """Providers own the check, so a fake bundle carries no warnings."""
         assert FakeRuntime().load().lock_warnings == ()
+
+
+def _vector_tile_layer(layer_id: str) -> ExportLayer:
+    return ExportLayer(
+        layer_id=layer_id,
+        name=layer_id,
+        geometry_kind=GeometryKind.RASTER,
+        source_kind=SourceKind.SERVICE,
+        vector_tiles=VectorTileSpec(
+            url=f"https://tiles.example.org/{layer_id}/{{z}}/{{x}}/{{y}}.pbf",
+            style_url=f"https://tiles.example.org/{layer_id}/style.json",
+        ),
+    )
+
+
+class TestVectorTileWorker:
+    """A page with vector tile layers carries their decoder worker, once."""
+
+    WORKER = b"// the vector tile decoder worker"
+
+    def test_one_copy_and_its_notice_serve_every_vector_tile_layer(
+        self, tmp_path
+    ) -> None:
+        project = make_project(
+            layers=(_vector_tile_layer("roads"), _vector_tile_layer("water"))
+        )
+        result = OnlyMapWriter(runtime_provider=FakeRuntime(self.WORKER)).write(
+            project, tmp_path
+        )
+        page = result.entry_path.read_text(encoding="utf-8")
+
+        pinned = read_lock()["workers"][MVT_WORKER]
+
+        assert page.count(base64.b64encode(self.WORKER).decode()) == 1
+        # Its licences travel with it, naming what it is.
+        assert f"{MVT_WORKER} from {pinned['package']} {pinned['version']}" in page
+        assert "Copyright (c) vis.gl contributors" in page
+        assert "Copyright (c) 2017, Mapbox" in page
+        assert not any("unpkg.com" in warning for warning in result.warnings)
+
+    def test_a_page_without_one_carries_nothing(self, tmp_path) -> None:
+        result = OnlyMapWriter(runtime_provider=FakeRuntime(self.WORKER)).write(
+            make_project(), tmp_path
+        )
+        page = result.entry_path.read_text(encoding="utf-8")
+
+        assert base64.b64encode(self.WORKER).decode() not in page
+        assert NOTICE_PATH.name not in page and "vis.gl" not in page
+
+    def test_a_runtime_without_the_worker_says_what_the_map_then_needs(
+        self, tmp_path
+    ) -> None:
+        project = make_project(layers=(_vector_tile_layer("roads"),))
+        result = OnlyMapWriter(runtime_provider=FakeRuntime(None)).write(
+            project, tmp_path
+        )
+
+        assert any(
+            "unpkg.com" in warning and "internet" in warning
+            for warning in result.warnings
+        )
 
 
 class TestOsmFromAFile:
