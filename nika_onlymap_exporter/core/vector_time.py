@@ -191,8 +191,10 @@ def plan_slider(
         return "its features last different lengths of time"
     (span_length,) = lengths
     # An end on the frame's start is drawn only for features that include
-    # their end.
-    lower = frame.begin - span_length + (-margin if end_inclusive else margin)
+    # their end. Half the margin: at either end of its range the slider sits
+    # on a feature, and a window a margin shorter than the frame still keeps
+    # out the feature a whole frame before it.
+    lower = frame.begin - span_length + (-1 if end_inclusive else 1) * (margin // 2)
     window = upper - lower
     if window < 1:
         return "its features end before they start"

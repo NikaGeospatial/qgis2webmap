@@ -32,6 +32,7 @@ from nika_onlymap_exporter.core.export_ir import (
     GroundSize,
     IconAtlasSpec,
     LabelingSpec,
+    LayerTimeSpec,
     PopupFieldMode,
     PopupFieldSpec,
     PopupSpec,
@@ -2783,3 +2784,72 @@ class TestDeclutter:
             popup=PopupSpec(enabled=True, fields=(PopupFieldSpec(name="name"),)),
         )
         assert "pick=" not in build_popup_elements(layer)
+
+
+class TestVectorTimeSlider:
+    """A vector layer that follows QGIS's time: the runtime's field slider,
+    and the filter the layer opens with (`core.vector_time`)."""
+
+    TIME = LayerTimeSpec(
+        field_name="qgis_time_ms",
+        start=1_583_366_400_000,
+        low=1_583_280_000_000,
+        window=86_400_000,
+        duration=10_000,
+        date_style="date",
+    )
+
+    def test_the_slider_is_headed_by_the_layer_and_labels_in_utc(
+        self, known_attributes
+    ) -> None:
+        layer = make_layer(name="Quakes", time=self.TIME)
+        widgets = build_widget_elements(make_project(layers=(layer,)))
+        (slider,) = re.findall(r'<om-widget type="time-slider"[^>]*>', widgets)
+        attributes = dict(re.findall(r'([\w-]+)="([^"]*)"', slider))
+        assert attributes == {
+            "type": "time-slider",
+            "layer": "layer1",
+            "field": "qgis_time_ms",
+            "title": "Quakes",
+            "window": "86400000",
+            "duration": "10000",
+            "format": "date",
+            "date-style": "date",
+            "time-zone": "UTC",
+            "position": WIDGET_POSITIONS["time-slider"],
+        }
+        assert set(attributes) <= known_attributes["om-widget"]
+        markup = build_layer_element(layer)
+        assert 'filter-field="qgis_time_ms"' in markup
+        assert 'filter-range="[1583280000000, 1583366400000]"' in markup
+
+    def test_accumulated_features_have_no_window(self) -> None:
+        layer = make_layer(time=replace(self.TIME, window=None))
+        widgets = build_widget_elements(make_project(layers=(layer,)))
+        assert "window=" not in widgets and 'field="qgis_time_ms"' in widgets
+
+    def test_beside_a_filter_slider_both_ranges_are_declared(self) -> None:
+        from nika_onlymap_exporter.core.export_ir import FilterKind, LayerFilterSpec
+
+        panel = LayerFilterSpec("mag", "Magnitude", FilterKind.NUMBER, (1.0, 7.5))
+        layer = make_layer(filter=panel, time=self.TIME)
+        markup = build_layer_element(layer)
+        assert "filter-field=" not in markup
+        (ranges,) = re.findall(
+            r"filter-fields='([^']*)'|filter-fields=\"([^\"]*)\"", markup
+        )
+        import html
+
+        declared = json.loads(html.unescape(next(r for r in ranges if r)))
+        assert declared == [
+            {"field": "mag", "range": [1.0, 7.5]},
+            {"field": "qgis_time_ms", "range": [self.TIME.low, self.TIME.start]},
+        ]
+
+    def test_beside_tick_boxes_the_time_keeps_its_own_range(self) -> None:
+        from nika_onlymap_exporter.core.export_ir import FilterKind, LayerFilterSpec
+
+        panel = LayerFilterSpec("kind", "Kind", FilterKind.TEXT, categories=("a",))
+        markup = build_layer_element(make_layer(filter=panel, time=self.TIME))
+        assert 'filter-category="kind"' in markup
+        assert 'filter-field="qgis_time_ms"' in markup

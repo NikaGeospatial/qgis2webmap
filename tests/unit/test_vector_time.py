@@ -122,6 +122,17 @@ def test_the_slider_shows_what_qgis_draws_at_every_frame(
             )
 
 
+def test_at_either_end_of_its_range_the_slider_shows_one_day() -> None:
+    """The thumb's ends sit on a feature's carried time, a whole frame from
+    the next: only the one frame shows, in the runtime's floats."""
+    spans = [(t, t) for t in GRID]
+    plan = plan_slider(spans, FRAME, False, True)
+    assert isinstance(plan, SliderPlan)
+    values = [value for value in plan.values if value is not None]
+    assert _shown(plan, max(values)) == {len(GRID) - 1}
+    assert _shown(plan, min(values)) == {0}
+
+
 def test_a_frame_that_includes_its_end_draws_a_feature_on_it() -> None:
     frame = Frame(B, B + DAY_MS, includes_end=True)
     spans = [(B + DAY_MS, B + DAY_MS), (B + DAY_MS + HOUR, B + DAY_MS + HOUR)]
@@ -249,7 +260,9 @@ class TestApplyTime:
         )
         assert isinstance(spec, LayerTimeSpec)
         assert spec.field_name == "qgis_time_ms_"
-        assert (spec.start, spec.window, spec.date_style) == (B, DAY_MS, "date")
+        assert (spec.start, spec.date_style) == (B, "date")
+        # A day, less the few minutes that keep its edges off the round times.
+        assert spec.window is not None and DAY_MS - 600_000 < spec.window < DAY_MS
         for feature in geojson["features"]:
             assert SPAN_PROPERTY not in feature["properties"]
             assert feature["properties"]["qgis_time_ms"] == "a field of the same name"
