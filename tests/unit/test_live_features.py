@@ -37,6 +37,7 @@ from nika_onlymap_exporter.core.export_ir import (
     SourceKind,
     SymbolSpec,
     TileSpec,
+    VectorTileSpec,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
 from nika_onlymap_exporter.core.license_policy import detect_violations
@@ -328,10 +329,22 @@ class TestMarkup:
             geojson=None,
             tiles=TileSpec("https://tiles.example.org/{z}/{x}/{y}.png"),
         )
+        vector_service = dataclasses.replace(
+            _layer(live=None),
+            geojson=None,
+            vector_tiles=VectorTileSpec("https://tiles.example.org/{z}/{x}/{y}.pbf"),
+        )
+        local_archive = dataclasses.replace(
+            _layer(live=None),
+            geojson=None,
+            vector_tiles=VectorTileSpec("roads.pmtiles", path="/data/roads.pmtiles"),
+        )
         for layer, expected in (
             (_layer(live=None), False),
             (_layer(), True),
             (tiles, True),
+            (vector_service, True),
+            (local_archive, False),
         ):
             project = ExportProject(title="t", layers=(layer,))
             assert loads_layers_from_the_web(project) is expected

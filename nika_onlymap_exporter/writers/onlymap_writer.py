@@ -863,12 +863,14 @@ def _top_left_stack_block(project: ExportProject) -> str:
 
 def loads_layers_from_the_web(project: ExportProject) -> bool:
     """Whether a layer of the map is read from the web as the map is used:
-    live features, a tile or map service, a remote raster - the layers that
-    can fail in the reader's browser."""
+    live features, a tile or map service, a remote raster, a vector tile
+    service or remote PMTiles archive - the layers that can fail in the
+    reader's browser."""
     return any(
         layer.live is not None
         or layer.tiles is not None
         or (layer.raster is not None and layer.raster.remote)
+        or (layer.vector_tiles is not None and not layer.vector_tiles.is_archive)
         for layer in project.exportable_layers
     )
 
