@@ -31,7 +31,7 @@ from nika_onlymap_exporter.core.vector_time import (
     VectorTime,
     apply_time,
     date_style,
-    describe_length,
+    describe_frame,
     drawn,
     float32_margin,
     plan_slider,
@@ -204,10 +204,12 @@ def test_whole_days_from_midnight_label_dates(frame, midnight, style) -> None:
 
 
 def test_frame_lengths_read_in_words() -> None:
-    assert describe_length(DAY_MS) == "1 day"
-    assert describe_length(6 * HOUR) == "6 hours"
-    assert describe_length(14 * DAY_MS) == "2 weeks"
-    assert describe_length(90 * 60_000) == "90 minutes"
+    assert describe_frame(DAY_MS) == "a 1-day frame"
+    assert describe_frame(6 * HOUR) == "a 6-hour frame"
+    assert describe_frame(8 * HOUR) == "an 8-hour frame"
+    assert describe_frame(18 * HOUR) == "an 18-hour frame"
+    assert describe_frame(14 * DAY_MS) == "a 2-week frame"
+    assert describe_frame(90 * 60_000) == "a 90-minute frame"
 
 
 def _request(**changes) -> TimeRequest:
@@ -268,7 +270,7 @@ class TestApplyTime:
             assert feature["properties"]["qgis_time_ms"] == "a field of the same name"
         rows = [item.detail for item in report.items]
         assert any(
-            "opens at 2020-03-05" in row and "1 day frame" in row for row in rows
+            "opens at 2020-03-05" in row and "a 1-day frame" in row for row in rows
         )
         assert any("does not reach the layer's labels" in row for row in rows)
 

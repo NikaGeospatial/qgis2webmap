@@ -414,9 +414,11 @@ class VectorTime:
     end_text: str = ""
 
 
-def describe_length(milliseconds: int) -> str:
-    """A frame's length in words: `1 day`, `6 hours`, `90 minutes`."""
-    for unit, size in (
+def describe_frame(milliseconds: int) -> str:
+    """A frame of this length in words: `a 1-day frame`, `a 6-hour frame`,
+    `an 8-hour frame`, `a 90-minute frame`."""
+    count, unit = milliseconds, "millisecond"
+    for name, size in (
         ("week", 7 * DAY_MS),
         ("day", DAY_MS),
         ("hour", 3_600_000),
@@ -424,9 +426,12 @@ def describe_length(milliseconds: int) -> str:
         ("second", 1_000),
     ):
         if milliseconds >= size and milliseconds % size == 0:
-            count = milliseconds // size
-            return f"{count} {unit}{'' if count == 1 else 's'}"
-    return f"{milliseconds:,} millisecond{'' if milliseconds == 1 else 's'}"
+            count, unit = milliseconds // size, name
+            break
+    digits = str(count)
+    # Said aloud, 8..., 11 and 18 (and 11,000, 18,000...) begin with a vowel.
+    vowel = digits[0] == "8" or (digits[:2] in ("11", "18") and len(digits) % 3 == 2)
+    return f"{'an' if vowel else 'a'} {count:,}-{unit} frame"
 
 
 def read_vector_time(
@@ -660,13 +665,12 @@ def apply_time(
     )
     for feature, value in zip(features, plan.values, strict=True):
         feature["properties"] = {**feature["properties"], field_name: value}
-    frame = describe_length(request.frame.length)
+    frame = describe_frame(request.frame.length)
     shows = (
-        f"every feature that began before the end of a {frame} frame starting "
+        f"every feature that began before the end of {frame} starting "
         "at the slider's time, as Accumulate features does"
         if plan.window is None
-        else f"the features QGIS draws for a {frame} frame starting at the "
-        "slider's time"
+        else f"the features QGIS draws for {frame} starting at the slider's time"
     )
     report.approximated(
         subject,
