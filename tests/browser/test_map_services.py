@@ -646,8 +646,7 @@ def test_xyz_tiles_draw_at_their_own_resolution(page, runtime, tmp_path) -> None
         _open(page, _export(runtime, tmp_path, layer))
         # A whole zoom, where a tile of the right level is drawn one to one.
         page.evaluate(
-            "(c) => document.querySelector('om-map')"
-            ".flyTo(c, 12, { duration: 0 })",
+            "(c) => document.querySelector('om-map').flyTo(c, 12, { duration: 0 })",
             list(center),
         )
         page.evaluate(SETTLE)
@@ -804,6 +803,8 @@ async () => {
       graphic: {
         clientHeight: img.parentElement.clientHeight,
         scrollHeight: img.parentElement.scrollHeight,
+        clientWidth: img.parentElement.clientWidth,
+        scrollWidth: img.parentElement.scrollWidth,
       },
     })),
     panel: box(root.querySelector('.omni-panel')),
@@ -906,6 +907,30 @@ class TestWmsLegend:
         assert image["shown"]["width"] == LEGEND_SIZES["boundary"][0]
         assert image["graphic"]["clientHeight"] <= 240
         assert image["graphic"]["scrollHeight"] >= LEGEND_SIZES["boundary"][1]
+        assert state["panel"]["bottom"] <= state["viewport"][1]
+
+    @pytest.mark.parametrize("width", [None, 200], ids=["auto", "sized"])
+    def test_a_wide_picture_keeps_its_size_and_scrolls_sideways(
+        self, page, runtime, services, tmp_path, width
+    ) -> None:
+        """A legend as wide as BGS's: shown at its own size, so its text stays
+        as legible as in QGIS, in a box that scrolls sideways and down rather
+        than a picture shrunk to the panel's width."""
+        from fake_map_services import LEGEND_SIZES
+
+        layer = _with_legend(
+            _wms_layer(services.url("cors/wms")),
+            services.url("cors/wms")
+            + "?SERVICE=WMS&REQUEST=GetLegendGraphic&LAYER=geology&FORMAT=image/png",
+        )
+        settings = ExportSettings(basemap="none", legend_width=width)
+        state = _legend(page, _export(runtime, tmp_path, layer, settings).as_uri())
+        (image,) = state["images"]
+        size = LEGEND_SIZES["geology"]
+        assert image["natural"] == list(size)
+        assert [image["shown"]["width"], image["shown"]["height"]] == list(size)
+        assert image["graphic"]["clientWidth"] <= 240
+        assert image["graphic"]["scrollWidth"] >= size[0]
         assert state["panel"]["bottom"] <= state["viewport"][1]
 
     def test_a_sized_legend_sizes_its_pictures(

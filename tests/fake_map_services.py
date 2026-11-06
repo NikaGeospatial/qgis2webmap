@@ -74,7 +74,14 @@ FEATURE_INFO_FORMATS = (
 )
 # The (width, height) of each layer's GetLegendGraphic picture, and of the
 # `outlined` style's LegendURL picture.
-LEGEND_SIZES = {"target": (64, 32), "boundary": (48, 600), "utm_only": (40, 20)}
+LEGEND_SIZES = {
+    "target": (64, 32),
+    "boundary": (48, 600),
+    "utm_only": (40, 20),
+    # Undeclared, asked by name: as wide and as tall as the British Geological
+    # Survey's bedrock legend (2026-11-06), wider than a legend panel.
+    "geology": (499, 1720),
+}
 OUTLINED_LEGEND_SIZE = (40, 40)
 LEGEND_RGBA = (20, 120, 60, 255)
 

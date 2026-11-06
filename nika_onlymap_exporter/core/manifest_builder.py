@@ -2337,12 +2337,12 @@ LEGEND_STYLES = """:host { font-family: system-ui, sans-serif; font-size: 12px; 
   object-fit: contain;
   background: none;
 }
-/* A map service's own legend picture (`_legend_image_markup`). A wide one is
-   scaled to the panel; a tall one keeps its size, so its text stays legible,
-   and scrolls. White behind it, as in QGIS: it is drawn for a white page. One
-   that does not load takes no room, since its alt text is empty. */
+/* A map service's own legend picture (`_legend_image_markup`). It keeps its
+   size, so its text stays as legible as in QGIS, and a wide or tall one
+   scrolls in its box. White behind it, as in QGIS: it is drawn for a white
+   page. One that does not load takes no room, since its alt text is empty. */
 .omni-legend-graphic { max-width: 240px; max-height: min(240px, 40vh); overflow: auto; }
-.omni-legend-graphic img { display: block; max-width: 100%; background: #fff; }"""
+.omni-legend-graphic img { display: block; max-width: none; background: #fff; }"""
 
 
 def _legend_style_element(indent: str, settings: ExportSettings) -> list[str]:
@@ -2377,14 +2377,15 @@ def _legend_graphic_size(settings: ExportSettings) -> list[str]:
     """A service's legend pictures sized by a legend whose size is set.
 
     Their own 240px caps keep an Auto legend from growing to a wide picture;
-    a legend given a size has one, so a picture takes the panel's width and
-    the panel, not the picture, scrolls. A narrower legend already scales a
-    picture down (`.omni-legend-graphic img`). Nothing for Auto, so its
-    legend is as it was.
+    a legend given a size has one, so a picture's box takes the panel's width
+    and height. A picture is never scaled down (`.omni-legend-graphic img`):
+    shrunk to a panel's width a service's legend text is unreadable, so a
+    wider one scrolls sideways in its box. Nothing for Auto, so its legend
+    is as it was.
     """
     caps = []
     if settings.legend_width is not None:
-        caps.append("max-width: none;")
+        caps.append("max-width: 100%;")
     if settings.legend_height is not None:
         caps.append("max-height: none;")
     if not caps:
