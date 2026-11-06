@@ -51,9 +51,10 @@ faq:
       telling the recipient how to open it.
   - q: Why does double-clicking the Folder export not work?
     a: >-
-      It cannot. Browsers refuse to load the runtime from a separate file on a
-      file:// page. Folder mode exists for uploading to a web server. Use
-      Standalone HTML for anything that has to open off a disk.
+      Chrome, Edge and Safari refuse to load the runtime from a separate file
+      on a file:// page (Firefox loads it). Folder mode exists for uploading to
+      a web server. Use Standalone HTML for anything that has to open off a
+      disk.
   - q: Why does my cartograph print at the wrong size in Firefox or Safari?
     a: >-
       Firefox and Safari ignore the page size a web page sets and print on the
@@ -240,9 +241,9 @@ browser.
 
 ### Double-clicking the Folder export does not work
 
-Correct, and it cannot. Browsers refuse to load the runtime from a separate file
-on a `file://` page, and the page says so: it has to be served from a web
-server. The Folder mode exists for uploading to a web server; to try one on
+Not in Chrome, Edge or Safari, which refuse to load the runtime from a separate
+file on a `file://` page, and the page says so: it has to be served from a web
+server. Firefox loads it and draws the map. The Folder mode exists for uploading to a web server; to try one on
 your own computer, run `npx http-server` inside the folder and open the address
 it prints.
 

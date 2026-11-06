@@ -200,8 +200,9 @@ def zip_open_instruction(project: ExportProject) -> str:
         "Extract this zip, then serve the folder over HTTP -- upload it to a "
         "web server, or run `npx http-server` inside it and open the address "
         "it prints. The map's raster imagery or tile archive is a separate "
-        "file next to index.html, and browsers will not read it from a folder "
-        "opened by double-click. (Python's `http.server` will not do: it "
+        "file next to index.html, and Chrome, Edge and Safari will not read it "
+        "from a folder opened by double-click (Firefox does). (Python's "
+        "`http.server` will not do: it "
         "ignores the byte-range requests the file is read with, and the layer "
         "comes out blank.)"
     )
@@ -266,9 +267,10 @@ def build_artifact(
                 else (
                     "Upload this folder to a web server and open index.html "
                     "from there. Keep index.html and onlymap.js together. "
-                    "Opening index.html straight off your disk will not work: "
-                    "browsers refuse to load the runtime that way, which is "
-                    "what the single-file export is for."
+                    "Opening index.html straight off your disk does not work "
+                    "in Chrome, Edge or Safari, which refuse to load the "
+                    "runtime that way (Firefox loads it); that is what the "
+                    "single-file export is for."
                 )
             )
             (staging_path / "README.txt").write_text(

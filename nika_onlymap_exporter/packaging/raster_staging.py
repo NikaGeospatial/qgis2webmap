@@ -79,9 +79,10 @@ from .raster_cog import (
 SIBLING_MODES = frozenset({OutputMode.FOLDER, OutputMode.SHARE_ZIP})
 
 SIBLING_FETCH_NOTE = (
-    "The raster travels as a separate file next to index.html. Browsers refuse "
-    "to read a sibling file from a folder opened by double-click, so this map "
-    "has to be served: upload the folder to a web server, or run "
+    "The raster travels as a separate file next to index.html. Chrome, Edge "
+    "and Safari refuse to read a sibling file from a folder opened by "
+    "double-click (Firefox reads it), so this map has to be served: upload "
+    "the folder to a web server, or run "
     "`npx http-server` inside it and open the address it prints. The rest of "
     "the map draws either way; only the raster needs the server."
 )
