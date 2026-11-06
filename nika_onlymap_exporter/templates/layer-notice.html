@@ -23,6 +23,10 @@
         archive in a Folder or Share ZIP) fails on a page opened from disk,
         where browsers refuse to read it: its line says the map has to be
         served, as the README does, rather than only that it failed.
+      - Vector tile layers whose decoder the page loads from the web
+        (`place.decoderHost`) all fail when it cannot be reached, though the
+        runtime may say so of one layer only: every one is named, with the
+        reason.
       - A layer on http:// fails on a page served over https://, where
         Chrome, Edge and Safari block it: its line says so (qgis2web#933).
       - A WMS layer whose service gave a click no answer - it does not let
@@ -84,7 +88,9 @@
           var fromDisk = location.protocol === "file:";
           var names = Object.keys(failed)
             .filter(function (id) {
-              return !(fromDisk && failed[id].beside) && !failed[id].http;
+              return (
+                !(fromDisk && failed[id].beside) && !failed[id].http && !failed[id].decoder
+              );
             })
             .map(function (id) {
               return failed[id].name;
@@ -99,14 +105,29 @@
           var silent = Object.keys(unanswered).map(function (id) {
             return unanswered[id];
           });
-          var insecure = Object.keys(failed)
+          var decoderless = Object.keys(failed)
             .filter(function (id) {
-              return failed[id].http;
+              return failed[id].decoder;
             })
             .map(function (id) {
               return failed[id].name;
             });
-          if (!names.length && !silent.length && !unserved.length && !insecure.length) return;
+          var insecure = Object.keys(failed)
+            .filter(function (id) {
+              return failed[id].http && !failed[id].decoder;
+            })
+            .map(function (id) {
+              return failed[id].name;
+            });
+          if (
+            !names.length &&
+            !silent.length &&
+            !unserved.length &&
+            !insecure.length &&
+            !decoderless.length
+          ) {
+            return;
+          }
           notice = document.createElement("om-widget");
           notice.setAttribute("position", place.position);
           notice.setAttribute("order", String(place.order));
@@ -127,6 +148,15 @@
           panel.className = "q2w-notice";
           panel.setAttribute("role", "status");
           var lines = [];
+          if (decoderless.length) {
+            lines.push(
+              "Could not load: " + decoderless.join(", ") + ". " +
+                (decoderless.length === 1 ? "It needs " : "They need ") +
+                place.decoderHost +
+                (decoderless.length === 1 ? " for its" : " for their") +
+                " decoder, which could not be reached."
+            );
+          }
           if (unserved.length) {
             lines.push(
               "Could not load: " + unserved.join(", ") + ". This map has to be " +
@@ -172,6 +202,22 @@
           var detail = event.detail || {};
           var id = detail.layerId;
           if (!id || detail.severity === "warning") return;
+          // The decoder failed: every vector tile layer is blank, whichever
+          // one the runtime names.
+          var where = String(detail.host || "") + " " + String(detail.url || "");
+          if (place.decoderHost && where.indexOf(place.decoderHost) >= 0) {
+            var tiles = map.querySelectorAll(':scope > om-layer[type="MVTLayer"]');
+            for (var t = 0; t < tiles.length; t += 1) {
+              var tileId = tiles[t].getAttribute("id");
+              failed[tileId] = {
+                name: tiles[t].getAttribute("label") || tileId,
+                seen: false,
+                decoder: true,
+              };
+            }
+            show();
+            return;
+          }
           var layer = layerOf(id);
           if (layer && fallBack(layer)) return;
           // A layer showing its embedded copy has no request left to fail.

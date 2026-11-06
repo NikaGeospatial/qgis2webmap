@@ -978,6 +978,8 @@ def _layer_notice_block(
         "order": BOTTOM_LEFT_ORDER["layer-notice"],
         "scale": round(project.settings.chrome_scale, 3),
         "siblings": sibling_data,
+        # The host a page without its vector tile decoder loads it from.
+        "decoderHost": DECODER_FALLBACK_HOST if decoder_from_web else "",
     }
     template = LAYER_NOTICE_PATH.read_text(encoding="utf-8").rstrip()
     return template.replace("@FALLBACK_TYPE@", FALLBACK_SCRIPT_TYPE).replace(

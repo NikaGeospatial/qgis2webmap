@@ -426,6 +426,52 @@ def test_an_archive_beside_a_page_opened_from_disk_says_to_serve_it(
     )
 
 
+def test_archives_whose_decoder_cannot_be_had_are_all_named(
+    page, runtime, tmp_path
+) -> None:
+    """A runtime with no decoder beside it has the page load one from
+    unpkg.com. Where that cannot be reached every vector tile layer stays
+    blank - though WebKit reports one of them - so the notice names each,
+    and why."""
+    source = tmp_path / "lakes.pmtiles"
+    source.write_bytes(ARCHIVE)
+    spec = VectorTileSpec(
+        url=str(source), path=str(source), source_layer="water", size_bytes=len(ARCHIVE)
+    )
+    water = _water_layer(spec, remote=False)
+    roads = dataclasses.replace(
+        water,
+        layer_id="roads",
+        name="Roads",
+        geometry_kind=GeometryKind.LINE,
+        vector_tiles=dataclasses.replace(spec, source_layer="roads"),
+    )
+    project = dataclasses.replace(_project(water), layers=(water, roads))
+
+    class WithoutDecoder:
+        def load(self):
+            return dataclasses.replace(runtime.load(), mvt_worker=None)
+
+    entry = (
+        OnlyMapWriter(runtime_provider=WithoutDecoder())
+        .write(project, tmp_path / "out")
+        .entry_path
+    )
+    _offline(page)
+    page.set_viewport_size({"width": 900, "height": 700})
+    page.goto(entry.as_uri())
+    page.wait_for_function(
+        "() => customElements.get('om-map') !== undefined", timeout=30_000
+    )
+    deadline = time.monotonic() + 30
+    while _notice(page) is None and time.monotonic() < deadline:
+        page.wait_for_timeout(250)
+    assert _notice(page) == (
+        "Could not load: Water, Roads. They need unpkg.com for their decoder, "
+        "which could not be reached."
+    )
+
+
 @pytest.mark.parametrize("opened", ["file", "http"])
 def test_a_service_draws_in_its_publishers_style(
     page, runtime, tile_host, tmp_path, opened
