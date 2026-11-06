@@ -4027,9 +4027,14 @@ class MainDialog(QDialog):
         try:
             on_success(result)
         except Exception as exc:
+            # A read whose result could not be taken in is a failed check.
+            if self._fidelity_state is ReportState.CHECKING:
+                self._show_fidelity_error(str(exc))
             self._report_failure(tr("Export failed"), exc)
 
     def _on_job_cancelled(self) -> None:
+        if not self._job_quiet:
+            self._export_then = None  # the press it was for ends here
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
@@ -4051,6 +4056,7 @@ class MainDialog(QDialog):
         )
 
     def _on_job_failed(self, message: str, details: str) -> None:
+        self._export_then = None  # the press it was for ends here
         self._job = None
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
@@ -4845,7 +4851,8 @@ class MainDialog(QDialog):
         self._pending_signature = self.state.snapshot()
         self._pending_generation = self._project_generation
         # Reading fills the Fidelity tab and needs no runtime; see on_preview.
-        self._ensure_export(self._export_with, tr("Reading the project..."))
+        if not self._ensure_export(self._export_with, tr("Reading the project...")):
+            self._export_then = None
 
     def _export_with(self, export, _report) -> None:
         """Everything after the read: the checks, the location, the write."""

@@ -1769,6 +1769,32 @@ class TestAutosaveIsGatedOnALiveSession:
             dialog._cartograph._job = None
             dialog.close()
 
+    def test_a_read_that_cannot_be_taken_in_ends_the_check_and_the_press(
+        self, qgis_app, project, make_memory_layer, monkeypatch
+    ) -> None:
+        """A read whose landing raises leaves the Fidelity tab saying why, not
+        checking forever; a read that fails drops the Share action waiting on
+        the press, so a later Export does not run it."""
+        from nika_onlymap_exporter.core.fidelity_summary import ReportState
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        monkeypatch.setattr(module, "show_failure", lambda *args: None)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._begin_fidelity_check()
+
+            def raising(_result):
+                raise ValueError("unreadable")
+
+            dialog._on_job_succeeded(None, raising)
+            assert dialog._fidelity_state is ReportState.FAILED
+
+            dialog._export_then = lambda path: None
+            dialog._on_job_failed("no read", "details")
+            assert dialog._export_then is None
+        finally:
+            dialog.close()
+
 
 class TestShareBuildsWhatItNeeds:
     """No Share action should make the user produce a file first.
