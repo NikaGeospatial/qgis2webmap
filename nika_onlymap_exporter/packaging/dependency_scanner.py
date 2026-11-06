@@ -23,7 +23,7 @@ from ..core.export_ir import (
 )
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.manifest_builder import FILE_OPENED_MODES, settings_network_hosts
-from ..core.map_services import CRS_LOOKUP_HOST, looks_up_crs
+from ..core.map_services import CRS_LOOKUP_HOST, HTTP_ON_HTTPS, looks_up_crs
 from ..core.popup_media import picture_sources
 
 # Past this, a single HTML file stops being a practical thing to email: Gmail
@@ -361,14 +361,13 @@ def report_service_legend(layer: ExportLayer, report: FidelityReportBuilder) -> 
 # a page on an `https://` website may not ask (qgis2web#933: a GitHub Pages
 # map whose http:// tiles came out blank, with nothing saying why).
 HTTP_ON_HTTPS_NOTE = (
-    "{host} is asked on http://, so this layer may not draw in a map put on "
-    "an https:// website (GitHub Pages and most hosts are): Chrome, Edge and "
-    "Safari block it there, and {there}. It draws opened from a file, in the "
-    "Preview and on an http:// website. If {host} also answers on https://, "
-    "add the layer again with that address."
+    "{host} is asked on http://, so this layer " + HTTP_ON_HTTPS + ", and "
+    "{there}. It draws opened from a file, in the Preview and on an http:// "
+    "website. If {host} also answers on https://, add the layer again with "
+    "that address."
 )
 # The words the WMS and WMTS rows already say it in (`layer_reader._HTTP_NOTE`).
-_HTTP_SAID = "does not draw in a map served over https://"
+_HTTP_SAID = HTTP_ON_HTTPS
 
 
 def _report_http(

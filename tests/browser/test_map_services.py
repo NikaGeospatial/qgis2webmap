@@ -601,7 +601,7 @@ def test_an_http_layer_on_an_https_page_says_why_it_is_missing(
     while _notice(page) is None and time.monotonic() < deadline:
         page.wait_for_timeout(250)
     assert _notice(page) == (
-        "Could not load: Old tiles. It is on http://, which browsers block on a "
+        "Could not load: Old tiles. It is on http://, which this browser blocks on a "
         "page served over https://."
     )
 

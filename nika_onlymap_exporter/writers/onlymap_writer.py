@@ -936,13 +936,14 @@ def _feature_info_block(project: ExportProject) -> str:
 
 
 # What a page whose runtime is a file beside it (a Folder) shows opened from
-# disk, where JavaScript runs but browsers refuse to run that file, so the
-# runtime's fallback would blame JavaScript. In the README's words
+# disk, where JavaScript runs but Chrome, Edge and Safari refuse to run that
+# file, so the runtime's fallback would blame JavaScript. In the README's words
 # (`exporters.folder`). A plain script, which runs from disk.
 SERVED_ONLY_NOTE = (
-    "This map has to be served from a web server: browsers will not run its "
-    "files from a folder opened by double-click. Upload the folder to a web "
-    "server, or run npx http-server inside it and open the address it prints."
+    "This map has to be served from a web server: this browser will not run "
+    "its files from a folder opened by double-click (Firefox does). Upload "
+    "the folder to a web server, or run npx http-server inside it and open "
+    "the address it prints."
 )
 _SERVED_ONLY_BLOCK = (
     "    <script>\n"

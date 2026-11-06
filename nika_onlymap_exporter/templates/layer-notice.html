@@ -24,7 +24,7 @@
         where browsers refuse to read it: its line says the map has to be
         served, as the README does, rather than only that it failed.
       - A layer on http:// fails on a page served over https://, where
-        browsers block it: its line says so (qgis2web#933).
+        Chrome, Edge and Safari block it: its line says so (qgis2web#933).
       - A WMS layer whose service gave a click no answer - it does not let
         web pages read it (CORS), or did not answer at all - is named on a
         line of its own, once, until a click on it is answered. The page's
@@ -138,7 +138,7 @@
             lines.push(
               "Could not load: " + insecure.join(", ") + ". " +
                 (insecure.length === 1 ? "It is" : "They are") +
-                " on http://, which browsers block on a page served over https://."
+                " on http://, which this browser blocks on a page served over https://."
             );
           }
           if (names.length) lines.push("Could not load: " + names.join(", "));

@@ -37,6 +37,7 @@ from nika_onlymap_exporter.core.export_ir import (
     SymbolSpec,
 )
 from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+from nika_onlymap_exporter.core.map_services import HTTP_ON_HTTPS
 from nika_onlymap_exporter.core.portable_names import avoid_windows_reserved
 from nika_onlymap_exporter.exporters.folder import FolderExporter
 from nika_onlymap_exporter.exporters.share_zip import ShareZipExporter, archive_root
@@ -363,8 +364,7 @@ class TestDependencyScanner:
             row = FidelityItem(
                 subject="Layer 'Tiles'",
                 status=FidelityStatus.APPROXIMATED,
-                detail="A service on http:// does not draw in a map served over "
-                "https:// unless it also answers on https://.",
+                detail=f"A service on http:// {HTTP_ON_HTTPS}.",
                 layer_id="tiles",
             )
             project = replace(project, fidelity=(row,))

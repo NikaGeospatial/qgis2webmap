@@ -162,8 +162,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   CORS: a WMS asked in another coordinate system, a WMTS on a national grid,
   and any such layer in a cartograph frame drawn in another projection,
   since those pictures are warped into place. A service on `http://` still
-  does not draw in a map served over `https://` unless it also answers on
-  `https://`.
+  may not draw in a map put on an `https://` website, where Chrome, Edge and
+  Safari block it, unless it also answers on `https://`.
 
 ### Fixed
 - The README inside a Share ZIP or Folder no longer promises that the map

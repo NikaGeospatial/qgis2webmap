@@ -75,6 +75,7 @@ from .live_features import (
     ogcapi_template,
     wfs_template,
 )
+from .map_services import HTTP_ON_HTTPS
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
 from .renderer_translator import (
@@ -2355,9 +2356,10 @@ def _wms_time_row(
 # (`cors-fallback`, on by default), with the limits that come with them - but
 # not on a projected map, nor pictures it must warp into place
 # (`domFallbackAllowed`): those stay empty.
+# In the words `dependency_scanner.HTTP_ON_HTTPS_NOTE` says it in of every
+# other layer on http://.
 _HTTP_NOTE = (
-    "A service on http:// does not draw in a map served over https:// unless "
-    "it also answers on https://."
+    f"A service on http:// {HTTP_ON_HTTPS}, unless it also answers on https://."
 )
 _CORS_NOTE = (
     "A service that does not allow web pages to read its images (CORS) still "
