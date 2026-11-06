@@ -1916,8 +1916,9 @@ def _wms_feature_info(
     As QGIS's Identify tool: only a layer identifiable in QGIS (Project
     Properties, Data Sources), about its sublayers the capabilities call
     queryable - a layer with none is not clickable there either - at the
-    GetFeatureInfo address they give (unless the layer is set to ignore it),
-    for as many features as QGIS asks. Everything is read from the
+    GetFeatureInfo address they give (unless the layer is set to ignore it;
+    on https:// when the layer was added there, as its GetMap), for as many
+    features as QGIS asks. Everything is read from the
     capabilities QGIS stored: whether the layer answers, how, and in which
     CRS a click can be placed. Each outcome a reader would miss has its row.
     """
@@ -1972,7 +1973,9 @@ def _wms_feature_info(
     if parsed.get_feature_info_url and "IgnoreGetFeatureInfoUrl" not in (
         key for key, _ in pairs
     ):
-        address = parsed.get_feature_info_url
+        address = map_services.on_https_as_added(
+            parsed.get_feature_info_url, request.url
+        )
     count = map_services.value(pairs, "featureCount").strip()
     template = map_services.wms_feature_info_template(
         map_services.prepare_url(address).rstrip("?&"),

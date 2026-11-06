@@ -300,6 +300,9 @@ def _record(manager, url: str, body: bytes) -> None:
     cache.insert(device)
 
 
+# The cases whose capabilities say a click on the layer is answered.
+CLICKABLE = {"noaa-nowcoast-geoserver", "usgs-arcgis", "bgs-mapserver-111"}
+
 # QGIS 3.44 cannot open this layer from these capabilities, the live service's
 # included ("Tile layer or tile matrix set not found", checked 2026-11-05);
 # QGIS 4 can. There is nothing for the export to read there.
@@ -343,6 +346,11 @@ def test_a_recorded_service_exports_as_it_did_live(offline, case) -> None:
     assert exported.tiles is not None
     assert exported.tiles.url == tiles
     assert [image.url for image in exported.tiles.legend] == legend
+    # A click asks on the scheme the layer was added on, as its tiles do:
+    # BGS's capabilities name http://, which a page cannot follow.
+    if exported.tiles.feature_info is not None:
+        assert exported.tiles.feature_info.startswith("https://"), case
+    assert (exported.tiles.feature_info is not None) is (case in CLICKABLE)
     # ArcGIS Server's addresses name port 443; a row names just the host.
     assert ":443" not in " ".join(item.detail for item in report.items)
     if time is None:
