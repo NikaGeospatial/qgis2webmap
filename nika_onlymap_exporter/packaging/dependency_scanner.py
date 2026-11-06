@@ -23,6 +23,7 @@ from ..core.export_ir import (
 )
 from ..core.fidelity_report import FidelityReportBuilder
 from ..core.manifest_builder import FILE_OPENED_MODES, settings_network_hosts
+from ..core.map_services import CRS_LOOKUP_HOST, looks_up_crs
 from ..core.popup_media import picture_sources
 
 # Past this, a single HTML file stops being a practical thing to email: Gmail
@@ -409,6 +410,14 @@ def scan(
         # has already said so (`layer_reader._wms_feature_info`).
         if layer.tiles is not None and layer.tiles.feature_info is not None:
             remote.append(layer.tiles.feature_info)
+
+        # A service drawn in a coordinate system the runtime does not carry
+        # has its definition looked up; the reader has already said so
+        # (`layer_reader._crs_lookup_note`).
+        if layer.tiles is not None and looks_up_crs(
+            layer.tiles.url, layer.tiles.tile_matrix_set
+        ):
+            remote.append(CRS_LOOKUP_HOST)
 
     # The basemap and terrain are not layers, so no layer dependency names them,
     # yet the map fetches their tiles every time it is opened. The Fidelity

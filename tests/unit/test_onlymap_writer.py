@@ -565,6 +565,7 @@ class TestVectorTileWorker:
         assert "Copyright (c) vis.gl contributors" in page
         assert "Copyright (c) 2017, Mapbox" in page
         assert not any("unpkg.com" in warning for warning in result.warnings)
+        assert "unpkg.com" not in result.network_dependencies
 
     def test_a_page_without_one_carries_nothing(self, tmp_path) -> None:
         result = OnlyMapWriter(runtime_provider=FakeRuntime(self.WORKER)).write(
@@ -578,6 +579,8 @@ class TestVectorTileWorker:
     def test_a_runtime_without_the_worker_says_what_the_map_then_needs(
         self, tmp_path
     ) -> None:
+        """In the warning, and among the hosts the map needs, which a shared
+        zip's README lists."""
         project = make_project(layers=(_vector_tile_layer("roads"),))
         result = OnlyMapWriter(runtime_provider=FakeRuntime(None)).write(
             project, tmp_path
@@ -587,6 +590,7 @@ class TestVectorTileWorker:
             "unpkg.com" in warning and "internet" in warning
             for warning in result.warnings
         )
+        assert "unpkg.com" in result.network_dependencies
 
 
 class TestOsmFromAFile:

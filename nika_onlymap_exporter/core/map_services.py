@@ -1228,6 +1228,11 @@ def epsg_number(code: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+# Where the reader's browser looks up a coordinate system the runtime does
+# not carry.
+CRS_LOOKUP_HOST = "epsg.io"
+
+
 def runtime_knows_crs(code: str) -> bool:
     """Whether the runtime places `code` without asking epsg.io for it."""
     number = epsg_number(code)
@@ -1236,6 +1241,18 @@ def runtime_knows_crs(code: str) -> bool:
     return number in _RUNTIME_CRS_CODES or any(
         low <= number <= high for low, high in _RUNTIME_UTM_RANGES
     )
+
+
+def looks_up_crs(tiles_url: str, tile_matrix_set: str | None = None) -> bool:
+    """Whether the reader's browser asks epsg.io for the coordinate system a
+    WMS or WMTS layer is drawn in: the one its `{bbox-epsg-XXXX}` or its
+    grid names, when the runtime does not carry it (`runtime_knows_crs`)."""
+    codes = [
+        f"EPSG:{number}" for number in re.findall(r"\{bbox-epsg-(\d+)\}", tiles_url)
+    ]
+    if tile_matrix_set:
+        codes.append(str(json.loads(tile_matrix_set).get("supportedCRS", "")))
+    return any(not runtime_knows_crs(code) for code in codes)
 
 
 # --------------------------------------------------------------------------

@@ -35,6 +35,9 @@ from pathlib import Path
 from ..core.manifest_builder import VECTOR_TILE_LAYER_CLASS
 from .runtime_manager import MVT_WORKER, read_lock
 
+# Where a page that does not carry the worker has the runtime start it from.
+DECODER_FALLBACK_HOST = "unpkg.com"
+
 # The data block's type. Unknown to the browser, so it neither runs nor renders
 # it; the script finds it by it and removes it once read.
 WORKER_SCRIPT_TYPE = "application/x-om-worker"

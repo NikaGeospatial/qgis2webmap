@@ -67,7 +67,10 @@ from ..packaging.runtime_manager import (
     default_provider,
 )
 from ..packaging.tile_archives import stage_tile_archives
-from ..packaging.vector_tile_worker import build_worker_embed
+from ..packaging.vector_tile_worker import (
+    DECODER_FALLBACK_HOST,
+    build_worker_embed,
+)
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "map.html"
 # The measure tool's page script and styles, on a map that has the tool.
@@ -463,14 +466,16 @@ class OnlyMapWriter:
         # An unexpected runtime build is worth saying out loud: the artifact is
         # still written, but "it worked on my machine" usually starts here.
         warnings.extend(runtime.lock_warnings)
+        network = scan_result.remote_dependencies
         if runtime.mvt_worker is None and any(
             layer.vector_tiles is not None for layer in project.exportable_layers
         ):
             warnings.append(
                 "The OnlyMap runtime on this machine has no vector tile decoder "
                 "beside it, so this map's vector tile layers load theirs from "
-                "unpkg.com, and need an internet connection to draw."
+                f"{DECODER_FALLBACK_HOST}, and need an internet connection to draw."
             )
+            network = tuple(dict.fromkeys((*network, DECODER_FALLBACK_HOST)))
         if project.settings.has_lossy_transform:
             warnings.append(
                 "A lossy transform was applied, so the exported coordinates are "
@@ -484,7 +489,7 @@ class OnlyMapWriter:
             runtime_version=runtime.version,
             runtime_sha256=runtime.sha256,
             compressed=compress,
-            network_dependencies=scan_result.remote_dependencies,
+            network_dependencies=network,
             fidelity=project.fidelity + scan_report.items,
             warnings=tuple(warnings),
             manifest_snapshot=project.snapshot(),

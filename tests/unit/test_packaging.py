@@ -294,6 +294,35 @@ class TestDependencyScanner:
         assert result.is_offline is (hosts == ())
         assert result.snapshot()["remoteDependencies"] == list(hosts)
 
+    @pytest.mark.parametrize(
+        ("url", "grid", "looked_up"),
+        [
+            pytest.param("BBOX={bbox-epsg-3857}", None, False, id="web-mercator"),
+            pytest.param("BBOX={bbox-epsg-27700}", None, False, id="carried-grid"),
+            pytest.param("BBOX={bbox-epsg-31467}", None, True, id="wms-other-grid"),
+            pytest.param(
+                "{TileMatrix}/{TileRow}/{TileCol}.png",
+                '{"supportedCRS": "urn:ogc:def:crs:EPSG::31467"}',
+                True,
+                id="wmts-other-grid",
+            ),
+        ],
+    )
+    def test_a_coordinate_system_looked_up_is_a_network_dependency(
+        self, url, grid, looked_up
+    ) -> None:
+        """The reader's browser asks epsg.io for one the runtime does not carry."""
+        from nika_onlymap_exporter.core.export_ir import TileSpec
+
+        layer = make_layer(
+            geometry_kind=GeometryKind.RASTER,
+            source_kind=SourceKind.SERVICE,
+            geojson=None,
+            tiles=TileSpec(f"https://maps.example/{url}", tile_matrix_set=grid),
+        )
+        result = scan(make_project([layer]), FidelityReportBuilder())
+        assert ("epsg.io" in result.remote_dependencies) is looked_up
+
     @staticmethod
     def _service_layer(*images, contextual=False) -> ExportLayer:
         from nika_onlymap_exporter.core.export_ir import LegendImage, TileSpec
