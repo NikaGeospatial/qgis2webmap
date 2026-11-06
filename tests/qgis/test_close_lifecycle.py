@@ -385,3 +385,44 @@ class TestTheRuntimeIsAskedForOnlyWhenTheUserActs:
         assert _wait_for(qgis_app, lambda: not dialog.isVisible())
         assert "Newer" in _text(target)
         assert asks and set(asks) == {Ask.NEVER}
+
+
+class TestALayoutNotOnScreen:
+    def test_its_save_counts_its_live_counts_afresh(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        """Nothing follows a layout's Live counts while another is on screen,
+        so its own save counts them, rather than writing whatever its numbers
+        last read (a "…" among them)."""
+        import nika_onlymap_exporter.core.cartograph_export as export_module
+
+        counted: dict[str, list[bool]] = {}
+        installed = export_module.prepare_cartograph
+
+        def recording(layout, *args, refresh_counts=True, **kwargs):
+            counted.setdefault(layout.name(), []).append(refresh_counts)
+            return installed(layout, *args, refresh_counts=refresh_counts, **kwargs)
+
+        monkeypatch.setattr(export_module, "prepare_cartograph", recording)
+        survey_file = tmp_path / "survey.html"
+        dialog, cartograph, survey, label = open_saved_cartograph(
+            qgis_app, project, survey_file, _wait_for
+        )
+        try:
+            add_survey_layout(project, name="Other")
+            other_file = tmp_path / "other.html"
+            cartograph.show_layout_named("Other")
+            cartograph.file_edit.setText(str(other_file))
+            cartograph._on_file_edited(str(other_file))
+            assert _wait_for(
+                qgis_app, lambda: other_file.exists() and cartograph._job is None
+            )
+            counted.clear()
+
+            edit_label(survey, label, "Away")
+
+            assert _wait_for(qgis_app, lambda: "Away" in _text(survey_file))
+            assert counted.get("Survey") and all(counted["Survey"])
+            assert not any(counted.get("Other", []))
+        finally:
+            dialog.close()

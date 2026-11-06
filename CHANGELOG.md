@@ -197,6 +197,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   runtime, download it before reading the project and through QGIS's network
   settings, as the dialog does; behind a proxy set only in QGIS they used to
   fail at the very end.
+- A cartograph's Live count no longer saves as "…": switching to another
+  layout while a count was still calculating left "…" in the layout, its
+  file and QGIS's designer. The count gets its last number back, and a
+  layout not on screen counts its Live counts afresh when it is saved.
 
 ## [0.3.2] - 2026-11-05
 

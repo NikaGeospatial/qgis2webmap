@@ -2377,8 +2377,10 @@ class CartographController:
         # with the event loop running in between.
         pending: list[cartograph_export.PendingStaticFrame] = []
         # A Live count still being calculated is finished first, so the file
-        # carries the numbers of the view it is saved from.
-        self.page_pane.live_counts.settle()
+        # carries the numbers of the view it is saved from. A layout not on
+        # screen has nothing following its counts: they are counted afresh.
+        if other is None:
+            self.page_pane.live_counts.settle()
         self._exporting = True
         try:
             prepared = cartograph_export.prepare_cartograph(
@@ -2391,7 +2393,7 @@ class CartographController:
                 static_dpi=DEFAULT_STATIC_DPI,
                 export_dpi=export_dpi,
                 pending_static=pending,
-                refresh_counts=False,
+                refresh_counts=other is not None,
             )
         except Exception as exc:
             for frame in pending:
