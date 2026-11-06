@@ -23,6 +23,8 @@
         archive in a Folder or Share ZIP) fails on a page opened from disk,
         where browsers refuse to read it: its line says the map has to be
         served, as the README does, rather than only that it failed.
+      - A layer on http:// fails on a page served over https://, where
+        browsers block it: its line says so (qgis2web#933).
       - A WMS layer whose service gave a click no answer - it does not let
         web pages read it (CORS), or did not answer at all - is named on a
         line of its own, once, until a click on it is answered. The page's
@@ -70,13 +72,19 @@
           var address = layer && (layer.getAttribute("data") || layer.getAttribute("src"));
           return place.siblings && !!address && !/^[a-z][a-z0-9+.-]*:/i.test(address);
         };
+        // Whether a layer asks http:// from a page on https://, which no
+        // browser lets it.
+        var blockedHttp = function (layer) {
+          var address = layer && (layer.getAttribute("data") || layer.getAttribute("src"));
+          return location.protocol === "https:" && !!address && /^http:/i.test(address);
+        };
         var show = function () {
           if (notice) notice.remove();
           notice = null;
           var fromDisk = location.protocol === "file:";
           var names = Object.keys(failed)
             .filter(function (id) {
-              return !(fromDisk && failed[id].beside);
+              return !(fromDisk && failed[id].beside) && !failed[id].http;
             })
             .map(function (id) {
               return failed[id].name;
@@ -91,7 +99,14 @@
           var silent = Object.keys(unanswered).map(function (id) {
             return unanswered[id];
           });
-          if (!names.length && !silent.length && !unserved.length) return;
+          var insecure = Object.keys(failed)
+            .filter(function (id) {
+              return failed[id].http;
+            })
+            .map(function (id) {
+              return failed[id].name;
+            });
+          if (!names.length && !silent.length && !unserved.length && !insecure.length) return;
           notice = document.createElement("om-widget");
           notice.setAttribute("position", place.position);
           notice.setAttribute("order", String(place.order));
@@ -117,6 +132,13 @@
               "Could not load: " + unserved.join(", ") + ". This map has to be " +
                 "served from a web server to show " +
                 (unserved.length === 1 ? "it" : "them") + "; README.txt says how."
+            );
+          }
+          if (insecure.length) {
+            lines.push(
+              "Could not load: " + insecure.join(", ") + ". " +
+                (insecure.length === 1 ? "It is" : "They are") +
+                " on http://, which browsers block on a page served over https://."
             );
           }
           if (names.length) lines.push("Could not load: " + names.join(", "));
@@ -159,6 +181,7 @@
             name: (layer && layer.getAttribute("label")) || id,
             seen: false,
             beside: besidePage(layer),
+            http: blockedHttp(layer),
           };
           show();
           if (!watching) {

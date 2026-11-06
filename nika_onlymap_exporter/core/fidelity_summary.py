@@ -139,6 +139,10 @@ TOPIC_BY_HEAD = {
     "Live features": Topic.DATA,
     # Local PMTiles archives carried with the map (`packaging/tile_archives`).
     "Tile archives": Topic.DATA,
+    # A layer read from an http:// address (`dependency_scanner._report_http`).
+    "Address": Topic.DATA,
+    # The vector tile decoder a map loads from the web (`onlymap_writer`).
+    "Vector tile decoder": Topic.DATA,
     "Artifact size": Topic.DATA,
     "Basemap": Topic.MAP,
     "Terrain": Topic.MAP,

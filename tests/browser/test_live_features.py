@@ -396,6 +396,43 @@ def test_what_qgis_does_not_draw_stays_undrawn_live(
     assert counted[0] == expected
 
 
+def test_count_bubbles_merge_live_features(page, runtime, services, tmp_path) -> None:
+    """A clustered point layer, the most common live layer, loads live and
+    merges what arrives into bubbles: the export's twelve stations, zoomed out
+    past where they stop merging, show as fewer blobs than points."""
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+    from nika_onlymap_exporter.core.live_features import resolve_live
+
+    url = wfs_template(services.url("cors/wfs"), TYPENAME)
+    layer = resolve_live(
+        dataclasses.replace(
+            _layer(url, LiveMode.LIVE_FIRST),
+            feature_count=12,
+            cluster_max_zoom=20,
+            live=LiveFeaturesSpec(url=url, host="127.0.0.1", service="WFS"),
+        ),
+        FidelityReportBuilder(),
+        too_big_bytes=10**9,
+    )
+    assert layer.live is not None, "the layer was embedded"
+    before = len(services.requests)
+    _open(page, _export(runtime, tmp_path, layer).as_uri())
+    assert _requests(services, "/cors/wfs", before), "the map asked the WFS nothing"
+    # Zoomed out, the stations stand a few pixels apart.
+    page.evaluate(
+        "async () => { const el = document.querySelector('om-map');"
+        " el.flyTo([-75.725, 45.35], 7, { duration: 0 });"
+        " await el.whenSettled({ timeout: 30000 }); }"
+    )
+    counted = [0]
+
+    def merged(page) -> bool:
+        counted[0] = page.evaluate(COUNT_DRAWN)
+        return 0 < counted[0] < 12
+
+    assert _wait(page, merged), f"{counted[0]} blobs, not bubbles"
+
+
 class TestNotice:
     def test_live_only_failing_names_the_layer_and_withdraws_on_recovery(
         self, page, runtime, services, tmp_path

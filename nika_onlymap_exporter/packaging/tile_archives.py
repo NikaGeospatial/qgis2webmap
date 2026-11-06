@@ -35,9 +35,10 @@ from ..core.fidelity_report import FidelityReportBuilder
 from .dependency_scanner import STANDALONE_RASTER_MAX_BYTES, format_megabytes
 
 ARCHIVE_FETCH_NOTE = (
-    "The tile archive travels as a separate file next to index.html. Browsers "
-    "refuse to read a sibling file from a folder opened by double-click, so "
-    "this map has to be served: upload the folder to a web server, or run "
+    "The tile archive travels as a separate file next to index.html. Chrome, "
+    "Edge and Safari refuse to read a sibling file from a folder opened by "
+    "double-click (Firefox reads it), so this map has to be served: upload "
+    "the folder to a web server, or run "
     "`npx http-server` inside it and open the address it prints. The rest of "
     "the map draws either way; only the archive's layers need the server."
 )

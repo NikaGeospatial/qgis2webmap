@@ -357,6 +357,50 @@ def report_service_legend(layer: ExportLayer, report: FidelityReportBuilder) -> 
     report.approximated(f"Legend picture of '{layer.name}'", detail, layer.layer_id)
 
 
+# What the Fidelity tab says of a layer read from an `http://` address, which
+# a page on an `https://` website may not ask (qgis2web#933: a GitHub Pages
+# map whose http:// tiles came out blank, with nothing saying why).
+HTTP_ON_HTTPS_NOTE = (
+    "{host} is asked on http://, so this layer may not draw in a map put on "
+    "an https:// website (GitHub Pages and most hosts are): Chrome, Edge and "
+    "Safari block it there, and {there}. It draws opened from a file, in the "
+    "Preview and on an http:// website. If {host} also answers on https://, "
+    "add the layer again with that address."
+)
+# The words the WMS and WMTS rows already say it in (`layer_reader._HTTP_NOTE`).
+_HTTP_SAID = "does not draw in a map served over https://"
+
+
+def _report_http(
+    project: ExportProject,
+    layer: ExportLayer,
+    address: str,
+    report: FidelityReportBuilder,
+) -> None:
+    """The row for a layer read from an `http://` address, once a layer, unless
+    its reader's rows say it already."""
+    from urllib.parse import urlsplit
+
+    if not address.lower().startswith("http://"):
+        return
+    subject = f"Address of '{layer.name}'"
+    if any(
+        _HTTP_SAID in item.detail or item.subject == subject
+        for item in (*project.fidelity, *report.items)
+        if item.layer_id == layer.layer_id
+    ):
+        return
+    host = urlsplit(address).hostname or address
+    there = (
+        "the map shows the copy embedded at export there"
+        if layer.live is not None and layer.geojson
+        else "the map names it as not loaded there"
+    )
+    report.approximated(
+        subject, HTTP_ON_HTTPS_NOTE.format(host=host, there=there), layer.layer_id
+    )
+
+
 def scan(
     project: ExportProject,
     report: FidelityReportBuilder,
@@ -385,6 +429,7 @@ def scan(
             if dependency.disposition is AssetDisposition.REMOTE:
                 remote.append(dependency.identifier)
                 report_remote_dependency(layer, dependency, report, mode)
+                _report_http(project, layer, dependency.identifier, report)
 
             if dependency.disposition is AssetDisposition.BLOCKING:
                 reason = dependency.note or f"'{dependency.identifier}' is missing."
@@ -399,6 +444,7 @@ def scan(
         # reader has already said so (`core.live_features`).
         if layer.live is not None:
             remote.append(layer.live.host)
+            _report_http(project, layer, layer.live.url, report)
 
         # A map service's legend pictures are fetched from it on every open,
         # like its tiles - but only when there is a legend to show them in.

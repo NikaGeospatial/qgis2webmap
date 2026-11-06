@@ -35,7 +35,7 @@ from .export_ir import (
     RendererKind,
 )
 from .fidelity_report import FidelityReportBuilder
-from .manifest_builder import CATEGORY_FILTER_MAX, undrawn_left
+from .manifest_builder import CATEGORY_FILTER_MAX, undrawn_filter, undrawn_left
 
 # QGIS provider key -> the service, as the Fidelity tab names it. Only these
 # three: the runtime pages no other feature service (SensorThings stays
@@ -189,8 +189,13 @@ def _computed_at_export(layer: ExportLayer) -> list[str]:
             reasons.append("its labels (where each one goes is worked out)")
     if layer.filter is not None:
         reasons.append("its Filter by panel (its values and ranges are counted)")
-    if layer.cluster_max_zoom is not None:
-        reasons.append("its count bubbles (where points stop merging is worked out)")
+    # Live features merge into the same bubbles, at the zoom worked out from
+    # the features read at export; but the runtime counts in a bubble the
+    # features its filter leaves out (`manifest_builder.undrawn_filter`).
+    if layer.cluster_max_zoom is not None and undrawn_filter(renderer):
+        reasons.append(
+            "its count bubbles (which would count the features its style leaves out)"
+        )
     if layer.popup_pictures or layer.popup_files:
         reasons.append("the pictures its popup carries")
     return reasons

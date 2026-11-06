@@ -65,9 +65,10 @@ PMTiles archive or popup picture the map carries beside them. Splitting them is 
 point: a browser caches `onlymap.js` once and reuses it for every map on your
 site, instead of downloading the same few megabytes inside every page.
 
-**This one does not open by double-clicking it.** Browsers refuse to load the
-runtime that way, so the folder has to be served over `http://` or `https://`;
-opened from a disk, the page says so. A Standalone HTML export is the one that
+**This one does not open by double-clicking it** in Chrome, Edge or Safari,
+which refuse to load the runtime that way (Firefox loads it), so the folder has
+to be served over `http://` or `https://`; opened from a disk in those
+browsers, the page says so. A Standalone HTML export is the one that
 opens straight off a disk.
 
 ## Which to pick

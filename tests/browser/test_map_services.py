@@ -570,6 +570,42 @@ class TestTileAddressesWithoutAnExtension:
         assert measured["found"] == pytest.approx(measured["expected"], abs=2.5)
 
 
+def test_an_http_layer_on_an_https_page_says_why_it_is_missing(
+    page, runtime, tmp_path
+) -> None:
+    """qgis2web#933: put on GitHub Pages, a map's http:// tiles are blocked
+    and the layer came out blank with nothing saying why. The page is served
+    as an https:// site would serve it (answered by the test, so no
+    certificate is needed); the tiles' host never answers either way."""
+    layer = replace(
+        _wms_layer("http://tiles.q2w.test/wms"),
+        name="Old tiles",
+        source_kind=SourceKind.FILE,
+        tiles=TileSpec("http://tiles.q2w.test/{z}/{x}/{y}.png", 0, 19),
+    )
+    entry = _export(runtime, tmp_path, layer)
+    html = entry.read_bytes()
+
+    def serve(route) -> None:
+        url = route.request.url
+        if url.startswith("https://maps.q2w.test/"):
+            route.fulfill(status=200, content_type="text/html", body=html)
+        elif url.startswith(("http://", "https://")):
+            route.abort()
+        else:  # the page's own blob: and data: addresses
+            route.continue_()
+
+    page.context.route("**/*", serve)
+    _open(page, entry, "https://maps.q2w.test/index.html")
+    deadline = time.monotonic() + 20
+    while _notice(page) is None and time.monotonic() < deadline:
+        page.wait_for_timeout(250)
+    assert _notice(page) == (
+        "Could not load: Old tiles. It is on http://, which browsers block on a "
+        "page served over https://."
+    )
+
+
 def _striped_png(stripe: int = 16, size: int = 256) -> bytes:
     """A `size`-pixel tile of red and blue vertical stripes `stripe` pixels wide."""
     import struct

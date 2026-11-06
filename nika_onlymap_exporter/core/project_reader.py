@@ -401,7 +401,8 @@ def prepare_project(
     description rows advise on the web map's Map name field, which a frame
     has no use for, and the Terrain row leaves out the advice to change it on the web
     map's Map tab. The Basemap row is left out: a frame's layers are the
-    layout's choice.
+    layout's choice, and so are the Map extent rows: a frame opens on its
+    layout's extent, whatever the web map would open on.
 
     `selected_layer_ids` limits the export to layers the user ticked; `None`
     means every layer in the tree.
@@ -706,7 +707,12 @@ def finish_project(
 
     # Before the terrain notes: they name labelled layers, and a layer whose
     # labels never have room is unlabelled from `_declutter` on.
-    extent = _resolve_extent(layers, report, settings, canvas_extent)
+    extent = _resolve_extent(
+        layers,
+        report if pending.report_map_title else FidelityReportBuilder(),
+        settings,
+        canvas_extent,
+    )
     layers = _translate_scale_visibility(pending.scale_basis, layers, extent, report)
     layers = _declutter(layers, report)
     # After the declutter, which settles the count bubbles and labels that
@@ -1087,15 +1093,25 @@ def _data_extent(layers: list, report: FidelityReportBuilder) -> Extent | None:
     only its vectors.
     """
     per_layer: list[Extent | None] = []
+    services: list[Extent | None] = []
     for layer in layers:
         if layer.raster is not None:
             # `None` when the source CRS could not be transformed; passed
             # through rather than skipped because `union_extents` already
             # ignores it, and dropping it here would only hide the case.
             per_layer.append(layer.raster.extent)
+        elif layer.vector_tiles is not None:
+            # A tile archive is the layer's data, and frames like it. A
+            # service is mostly a base map that spans the world: it frames
+            # the map only when nothing else does, as it would otherwise open
+            # on the world, where its tiles may not start.
+            if layer.vector_tiles.path or "{z}" not in layer.vector_tiles.url:
+                per_layer.append(layer.vector_tiles.extent)
+            else:
+                services.append(layer.vector_tiles.extent)
         elif layer.geojson:
             per_layer.append(extent_from_geojson(layer.geojson))
-    extent = union_extents(per_layer)
+    extent = union_extents(per_layer) or union_extents(services)
 
     if extent is None:
         report.unsupported(

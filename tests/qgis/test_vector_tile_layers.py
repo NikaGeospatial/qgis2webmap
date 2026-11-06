@@ -276,6 +276,27 @@ def test_what_qgis_does_not_draw_is_reported_as_the_map_draws_it(
         assert text not in rows
 
 
+def test_a_map_of_archives_alone_opens_on_them(qgis_app, project, archive) -> None:
+    """With the default extent (the data's), a map whose layers are all read
+    from an archive opens on the archive, not on the world, where an archive
+    that starts at a deeper zoom draws nothing."""
+    from nika_onlymap_exporter.core.project_reader import read_project
+
+    project.addMapLayer(_archive_layer(str(archive)))
+    report = FidelityReportBuilder()
+    exported = read_project(project, report)
+    extent = exported.extent
+    assert extent is not None
+    assert (extent.west, extent.south, extent.east, extent.north) == pytest.approx(
+        BOX, abs=0.01
+    )
+    assert not [
+        item
+        for item in report.items
+        if item.subject == "Map extent" and item.status is FidelityStatus.UNSUPPORTED
+    ]
+
+
 class TestArchivesInACartograph:
     """A cartograph's live frames share one page, which carries every frame's
     archives: each under a name of its own, and each once."""
@@ -346,8 +367,11 @@ class TestArchivesInACartograph:
                 metadata=METADATA,
             )
         )
-        sheet, _report = self._sheet(project, first, second)
+        sheet, report = self._sheet(project, first, second)
         assert self._drawn(sheet) == [first.read_bytes(), second.read_bytes()]
+        # Each frame opens on its layout's extent: the web map's rows about
+        # where it would open are not the sheet's.
+        assert not [item for item in report.items if item.subject == "Map extent"]
 
     def test_an_archive_two_frames_draw_is_carried_and_counted_once(
         self, qgis_app, project, archive, monkeypatch

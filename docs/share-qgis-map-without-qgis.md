@@ -78,9 +78,9 @@ not, and it carries a short README telling the recipient how to open it. It is
 the same map; only the wrapper changes.
 
 The other one: **do not use Folder mode for this.** Folder mode exists for
-uploading to a web server. Browsers refuse to load the runtime from a separate
-file on a `file://` page, so a folder export that someone unzips and
-double-clicks will not draw. Standalone HTML or Share ZIP for anything that has
+uploading to a web server. Chrome, Edge and Safari refuse to load the runtime
+from a separate file on a `file://` page, so a folder export that someone
+unzips and double-clicks will not draw there (Firefox draws it). Standalone HTML or Share ZIP for anything that has
 to open off a disk.
 
 ## If the map should live at a URL instead

@@ -238,7 +238,12 @@ class OnlyMapWriter:
         clicks = _feature_info_block(project)
         if clicks:
             manifest += "\n" + clicks
-        notice = _layer_notice_block(project, sibling_data)
+        # A page whose vector tile decoder comes from the web can fail to
+        # draw those layers as any web layer can, and says so the same way.
+        decoder_from_web = runtime.mvt_worker is None and any(
+            layer.vector_tiles is not None for layer in project.exportable_layers
+        )
+        notice = _layer_notice_block(project, sibling_data, decoder_from_web)
         if notice:
             manifest += "\n" + notice
         if runtime_file:
@@ -480,6 +485,16 @@ class OnlyMapWriter:
                 "The OnlyMap runtime on this machine has no vector tile decoder "
                 "beside it, so this map's vector tile layers load theirs from "
                 f"{DECODER_FALLBACK_HOST}, and need an internet connection to draw."
+            )
+            scan_report.approximated(
+                "Vector tile decoder",
+                "The OnlyMap runtime on this computer has no vector tile decoder "
+                "beside it, so the map's vector tile layers load theirs from "
+                f"{DECODER_FALLBACK_HOST} each time the map opens: they draw only "
+                f"where {DECODER_FALLBACK_HOST} can be reached, and the map names "
+                "them as not loaded where it cannot. Exporting once from the "
+                "dialog while online downloads the decoder, and later maps carry "
+                "it.",
             )
             network = tuple(dict.fromkeys((*network, DECODER_FALLBACK_HOST)))
         if project.settings.has_lossy_transform:
@@ -939,11 +954,14 @@ _SERVED_ONLY_BLOCK = (
 )
 
 
-def _layer_notice_block(project: ExportProject, sibling_data: bool = False) -> str:
+def _layer_notice_block(
+    project: ExportProject, sibling_data: bool = False, decoder_from_web: bool = False
+) -> str:
     """The page's answer to a layer that fails to load: live features switch
     to their embedded copy, and anything else is named in a small notice
     (`templates/layer-notice.html`). Empty for a map with no layer read from
-    the web or from a file beside the page (`sibling_data`), which has
+    the web, from a file beside the page (`sibling_data`) or through a
+    decoder loaded from the web (`decoder_from_web`), which has
     nothing that can fail that way.
 
     The notice joins the bottom-left corner's stack, just above the licence
@@ -952,7 +970,7 @@ def _layer_notice_block(project: ExportProject, sibling_data: bool = False) -> s
     slots do not make room for each other sideways, and on a narrow map, or
     at a big Size, the notice reached across the licence notice.
     """
-    if not (sibling_data or loads_layers_from_the_web(project)):
+    if not (sibling_data or decoder_from_web or loads_layers_from_the_web(project)):
         return ""
     place = {
         "position": WIDGET_POSITIONS["layer-notice"],
