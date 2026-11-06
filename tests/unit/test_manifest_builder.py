@@ -2172,11 +2172,11 @@ class TestImageLegend:
         markup = build_legend_widget(make_project([make_icon_layer(CATEGORIZED_ICONS)]))
         assert "Civil" in markup and "Metro" in markup
 
-    def test_a_categorized_layer_explains_its_other_row(self) -> None:
-        """Features outside every class are drawn in the fallback colour, so
-        the legend has to account for them."""
+    def test_a_categorized_layer_lists_no_class_qgis_does_not(self) -> None:
+        """No "other" row: an "all other values" class is listed as its own
+        row, and without one QGIS draws nothing outside the classes."""
         markup = build_legend_widget(make_project([make_icon_layer(CATEGORIZED_ICONS)]))
-        assert ">other<" in markup
+        assert ">other<" not in markup
 
     def test_a_graduated_layer_lists_its_ranges(self) -> None:
         markup = build_legend_widget(make_project([make_icon_layer(GRADUATED_ICONS)]))

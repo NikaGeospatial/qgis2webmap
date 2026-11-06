@@ -106,7 +106,15 @@ class TestDeriveRuntimeLegend:
             "$use == 'Housing' ? '#d95f02' : $use == 7 ? '#a6c96a' : "
             "$use == 'O\\'Neil' ? '#000000' : '#888888cc'"
         )
-        assert legend == RuntimeLegend("categories", ("Housing", "7", "O'Neil"))
+        assert legend == RuntimeLegend(
+            "categories", ("Housing", "7", "O'Neil"), other=True
+        )
+
+    def test_an_empty_fallback_has_no_other_row(self) -> None:
+        """What a layer with no "all other values" class ends in, as QGIS
+        lists no such class."""
+        legend = derive_runtime_legend("$use == 'a' ? '#000000' : ''")
+        assert legend == RuntimeLegend("categories", ("a",), other=False)
 
     def test_a_chain_without_a_quoted_fallback_derives_nothing(self) -> None:
         assert derive_runtime_legend("$use == 'a' ? '#000000' : null") is None
@@ -284,7 +292,8 @@ class TestDescribeRuntimeLegendChanges:
 
     def test_classed_point_layers_and_columns_are_named(self) -> None:
         changes = describe_runtime_legend_changes(
-            [ClassedLayer("point", categorized=True, class_count=14)], 2
+            [ClassedLayer("point", categorized=True, class_count=14, catch_all=True)],
+            2,
         )
         text = " ".join(changes)
         assert "square" in text

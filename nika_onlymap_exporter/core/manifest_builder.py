@@ -11,7 +11,8 @@ nothing to generate.
 **Write the canonical expression shapes.** OnlyMap's legend widget parses
 `get-fill-color` and recognises three forms:
 
-* an equality ternary chain -> a category palette with an "other" row;
+* an equality ternary chain -> a category palette, with an "other" row for
+  a fallback colour (none for an empty one);
 * a `threshold` scale -> discrete class ranges (`< b1`, `b1 - b2`, `>= bN`);
 * a `sequential`/`diverging` scale -> a gradient ramp.
 
@@ -664,15 +665,24 @@ def _categorized_expression(
 ) -> str:
     """`$field == 'a' ? '#c1' : $field == 'b' ? '#c2' : '#fallback'`
 
-    The trailing fallback is not optional: it is what the legend renders as the
-    "other" row, and without it features outside every class would be undrawn
-    with no explanation.
+    The trailing fallback is what the runtime's legend lists as its "other"
+    row. With an "all other values" class it is that class's colour; without
+    one it is the empty `''`, which the legend lists no row for, because
+    QGIS has none: no feature reaches it, since the reader drops them and a
+    layer it cannot drop them from leaves them out by its filter
+    (`undrawn_filter`) or ends in an undrawn class of its own
+    (`_tile_renderer`). `fallback` is for a renderer whose unmatched features
+    are drawn.
     """
-    return _categorized_chain(
-        renderer,
-        [color_literal(class_color(c.symbol)) for c in renderer.categories],
-        color_literal(fallback),
-    )
+    outputs = [color_literal(class_color(c.symbol)) for c in renderer.categories]
+    if renderer.unmatched_hidden and not any(c.is_default for c in renderer.categories):
+        return _categorized_chain(renderer, outputs, NO_OTHER)
+    return _categorized_chain(renderer, outputs, color_literal(fallback))
+
+
+# The fallback of a categorized layer whose unmatched features are not drawn:
+# an empty colour, for which the runtime's legend adds no "other" row.
+NO_OTHER = "''"
 
 
 def _graduated_chain(renderer: RendererSpec, outputs: list[str]) -> str:
@@ -1396,7 +1406,8 @@ def _tile_renderer(renderer: RendererSpec) -> RendererSpec:
         for value in renderer.hidden_values
         if value is not None and not renderer.unmatched_hidden
     ]
-    if renderer.unmatched_hidden:
+    if renderer.unmatched_hidden and not undrawn_filter(renderer):
+        # Past the filter's reach, so drawn, and invisible.
         extra.append(
             CategorySpec(value=None, label="", symbol=undrawn, is_default=True)
         )
@@ -2517,15 +2528,8 @@ def _legend_entries(layer: ExportLayer, indent: str) -> list[str]:
             f"{_swatch_markup(symbol, layer, DEFAULT_FILL)}"
             f"<span>{escape_attr(label)}</span></div>"
         )
-    # The "other" row matches the trailing fallback in the colour expression:
-    # features outside every class are drawn, so they have to be explained.
-    if renderer.kind is RendererKind.CATEGORIZED:
-        lines.append(
-            f'{indent}      <div class="omni-legend-entry">'
-            f'<span class="omni-swatch" style="background:'
-            f'{escape_attr(color_literal(DEFAULT_FILL).strip(chr(39)))}"></span>'
-            f"<span>other</span></div>"
-        )
+    # No "other" row: an "all other values" class is a row of its own above,
+    # and without one QGIS draws no feature outside the classes.
     lines.append(f"{indent}    </div>")
     return lines
 

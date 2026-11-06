@@ -559,6 +559,15 @@ UNDRAWN_RIVER = {
 }
 
 
+# The legend's rows for each case: QGIS's classes, nothing it does not have.
+UNDRAWN_LEGEND = {
+    "class-switched-off": ["lake"],
+    "switched-off-beside-all-others": ["lake", "river", "other"],
+    "a-range-between-drawn-ones": ["< 2", "2 \u2013 5", "\u2265 5"],
+    "outside-every-range": [],
+}
+
+
 @pytest.mark.parametrize("case", list(UNDRAWN_RIVER))
 def test_what_qgis_does_not_draw_is_not_drawn(
     page, runtime, tile_host, tmp_path, case
@@ -582,6 +591,13 @@ def test_what_qgis_does_not_draw_is_not_drawn(
         page, [LAKE, RIVER], lambda s: _close(s[0], (255, 0, 0))
     )
     assert _close(lake, (255, 0, 0)), f"the lake is {lake}"
+    entries = page.evaluate(
+        """() => [...document.querySelectorAll('om-widget')].flatMap((w) =>
+             w.shadowRoot ? [...w.shadowRoot.querySelectorAll(
+               '.omni-legend-sub .omni-legend-entry span:last-child')]
+               .map((s) => s.textContent.trim()) : [])"""
+    )
+    assert entries == UNDRAWN_LEGEND[case]
     # With no basemap, nothing drawn is nothing in the map's picture.
     assert river[3] == 0, f"the river is drawn in {river}"
     # Drawn invisible there, so a click still finds it (a row says so).

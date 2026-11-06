@@ -1180,8 +1180,13 @@ def _classed_legend_layers(
         if layer.id() not in listed or not isinstance(layer, QgsVectorLayer):
             continue
         renderer = layer.renderer()
+        catch_all = False
         if isinstance(renderer, QgsCategorizedSymbolRenderer):
             count = len(renderer.categories())
+            catch_all = any(
+                category.renderState() and category.value() in (None, "")
+                for category in renderer.categories()
+            )
         elif isinstance(renderer, QgsGraduatedSymbolRenderer):
             count = len(renderer.ranges())
         elif isinstance(renderer, QgsRuleBasedRenderer):
@@ -1194,6 +1199,7 @@ def _classed_legend_layers(
                 geometry=_legend_shape_for_geometry(layer) or "polygon",
                 categorized=not isinstance(renderer, QgsGraduatedSymbolRenderer),
                 class_count=count,
+                catch_all=catch_all,
             )
         )
     return classed

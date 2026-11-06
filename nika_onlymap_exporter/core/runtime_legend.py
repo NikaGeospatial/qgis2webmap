@@ -22,7 +22,7 @@ draws, in ways an override can correct:
   A transparent `line` swatch is the runtime's nearest to none.
 
 What no override reaches -- squares for every class, the field name above
-the classes, an "other" row under categories, the class text's fixed size,
+the classes, "other" for an "all other values" class, the class text's fixed size,
 CSS column breaks -- is said in Checks by `describe_runtime_legend_changes`.
 
 Pure Python: it mirrors the runtime's `deriveLegendSpec` (OnlyMap 0.13.1,
@@ -69,6 +69,9 @@ class RuntimeLegend:
 
     kind: str
     labels: tuple[str, ...] = ()
+    # Whether a category palette ends in an "other" row: its fallback is a
+    # colour, not the empty `manifest_builder.NO_OTHER`.
+    other: bool = False
 
 
 def _unquote(text: str) -> str | None:
@@ -150,9 +153,10 @@ def derive_runtime_legend(expression: str | None) -> RuntimeLegend | None:
         unquoted = _unquote(value)
         labels.append(value if unquoted is None else unquoted)
         rest = rest[match.end() :]
-    if not labels or _unquote(rest) is None:
+    fallback = _unquote(rest)
+    if not labels or fallback is None:
         return None
-    return RuntimeLegend("categories", tuple(labels))
+    return RuntimeLegend("categories", tuple(labels), other=bool(fallback))
 
 
 def qgis_class_labels(layer: ExportLayer) -> tuple[str | None, ...]:
@@ -293,11 +297,13 @@ RUNTIME_MAX_CATEGORIES = 12
 class ClassedLayer:
     """A legend layer drawn with classes, as `describe_runtime_legend_changes`
     needs it: its geometry (`point`, `line` or `polygon`), whether it is
-    categorized (rather than graduated) and how many classes it has."""
+    categorized (rather than graduated), how many classes it has and whether
+    one is QGIS's "all other values" class."""
 
     geometry: str
     categorized: bool
     class_count: int
+    catch_all: bool = False
 
 
 def describe_runtime_legend_changes(
@@ -314,8 +320,8 @@ def describe_runtime_legend_changes(
             "names the classified field above each layer's classes and sets "
             "class text at its own size"
         )
-    if any(layer.categorized for layer in classed):
-        changes.append("adds an 'other' row under each categorized layer")
+    if any(layer.categorized and layer.catch_all for layer in classed):
+        changes.append("names each 'all other values' class 'other'")
     if any(
         layer.categorized and layer.class_count > RUNTIME_MAX_CATEGORIES
         for layer in classed

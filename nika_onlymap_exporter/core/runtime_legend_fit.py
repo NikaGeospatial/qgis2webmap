@@ -3,9 +3,9 @@
 The runtime sets a derived legend in the box the layout gave it and clips what
 runs past the bottom, mid-row. QGIS trims its own legend to the box
 (`canvas_cartograph._fit_legend`), but the browser's is taller than QGIS's: it
-adds an "other" row under each categorized layer and a line naming the
-classified field above every layer's classes, and sets class text at a size of
-its own. So the legend QGIS drew to fit can overrun in the browser.
+adds a line naming the classified field above every layer's classes, and sets
+class text at a size of its own. So the legend QGIS drew to fit can overrun in
+the browser.
 
 The heights below are measured, not guessed: the runtime's legend was laid
 out in Chromium (OnlyMap 0.13.1) at the default 2.6 mm row text and each
@@ -225,7 +225,8 @@ def _layer_entries(
         if len(labels) > RUNTIME_MAX_CATEGORIES:
             more = len(labels) - RUNTIME_MAX_CATEGORIES
             labels = [*labels[:RUNTIME_MAX_CATEGORIES], f"+{more} more"]
-        labels.append("other")
+        if runtime.other:
+            labels.append("other")
     return labels
 
 
@@ -281,7 +282,7 @@ def _elements(
         for label in entries:
             extra = _lines(label, entry_text_mm, CLASS_TEXT_MM) - 1
             block += CLASS_ENTRY_MM + extra * CLASS_LINE_MM
-        classes = len(entries) - (1 if runtime and runtime.kind == "categories" else 0)
+        classes = len(entries) - (1 if runtime and runtime.other else 0)
         elements.append(_Element(block + CLASSES_AFTER_MM, layer.layer_id, classes))
     return elements
 
