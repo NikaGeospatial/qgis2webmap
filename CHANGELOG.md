@@ -119,8 +119,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   out, and a category switched off beside an "all other values" class, or a
   range switched off between drawn ranges, is drawn invisible (it still
   answers a click, and the legend lists it without a colour). A Share ZIP or
-  Folder opened by double-click, which cannot read the archive beside its
-  page, says on the map that it has to be served.
+  Folder opened by double-click in a browser that will not read the archive
+  beside its page (Chrome, Edge, Safari; Firefox does) says on the map that
+  it has to be served.
 - **Vector tile layers export in their publisher's style.** A vector tile
   layer added with a style URL (such as a government base map's `style.json`)
   is drawn on the web map from the same tile service, in that style: its
@@ -203,10 +204,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - A map whose only layer opens switched off (unticked in QGIS, or a layer
   that follows QGIS's time and is not drawn now) has a layer switcher, so it
   can be switched on; it had none.
-- A Folder opened by double-click says it has to be served from a web
-  server, as its README does, instead of saying it needs JavaScript; a Share
-  ZIP or Folder whose raster beside the page cannot be read that way names
-  the layer and says the same.
+- A Folder opened by double-click in Chrome, Edge or Safari says it has to
+  be served from a web server, as its README does, instead of saying it
+  needs JavaScript; a Share ZIP or Folder whose raster beside the page such a
+  browser will not read names the layer and says the same.
 - The README of a map with rasters or tile archives says what it carries,
   such as "1 raster image", rather than "0 map features".
 
