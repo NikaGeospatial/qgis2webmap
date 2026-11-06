@@ -117,6 +117,8 @@ def test_a_web_mercator_composite_exports_live_without_a_read(
     assert exported.raster.reference == base + "/rgb.tif"
     assert exported.raster.bands == (1, 2, 3)
     assert exported.raster.style_qml is None
+    # QGIS draws an 8-bit composite unstretched, so the map is told so.
+    assert (exported.raster.rescale_min, exported.raster.rescale_max) == (0, 255)
     assert exported.source_kind is SourceKind.SERVICE
     (dependency,) = exported.dependencies
     assert dependency.disposition is AssetDisposition.REMOTE

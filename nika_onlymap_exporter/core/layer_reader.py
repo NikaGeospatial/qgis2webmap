@@ -1294,6 +1294,66 @@ def raster_rescale(layer: QgsRasterLayer) -> tuple[float | None, float | None]:
     return (None, None)
 
 
+# The values each integer data type holds, which is what QGIS spreads over
+# the full colour range of a band it does not stretch.
+_TYPE_RANGES = {
+    "Byte": (0.0, 255.0),
+    "Int8": (-128.0, 127.0),
+    "UInt16": (0.0, 65535.0),
+    "Int16": (-32768.0, 32767.0),
+    "UInt32": (0.0, 4294967295.0),
+    "Int32": (-2147483648.0, 2147483647.0),
+}
+
+
+def composite_rescale(layer: QgsRasterLayer) -> tuple[float | None, float | None]:
+    """The one range a colour composite's three bands are drawn across in
+    QGIS, or `(None, None)` when they are not drawn across one range.
+
+    A band QGIS does not stretch (no contrast enhancement) is drawn across
+    its data type's whole range - 0 to 255 for 8-bit - and a stretched one
+    across its stretch's minimum and maximum. `COGLayer` takes one pair for
+    every band, and left without one stretches each band across its own
+    values, which brightens a composite QGIS draws as the file holds it.
+    """
+    from qgis.core import QgsContrastEnhancement
+
+    renderer = layer.renderer()
+    provider = layer.dataProvider()
+    if renderer is None or provider is None:
+        return (None, None)
+    algorithms = QgsContrastEnhancement.ContrastEnhancementAlgorithm
+    ranges: set[tuple[float, float]] = set()
+    for band_fn, enhancement_fn in (
+        ("redBand", "redContrastEnhancement"),
+        ("greenBand", "greenContrastEnhancement"),
+        ("blueBand", "blueContrastEnhancement"),
+    ):
+        band = getattr(renderer, band_fn, None)
+        enhancement = getattr(renderer, enhancement_fn, None)
+        if not callable(band) or not callable(enhancement):
+            return (None, None)
+        current = enhancement()
+        algorithm = (
+            current.contrastEnhancementAlgorithm() if current is not None else None
+        )
+        if algorithm in (None, algorithms.NoEnhancement):
+            data_type = provider.dataType(int(band()))
+            found = _TYPE_RANGES.get(getattr(data_type, "name", str(data_type)))
+            if found is None:
+                return (None, None)
+            ranges.add(found)
+        elif algorithm is algorithms.StretchToMinimumMaximum:
+            low, high = float(current.minimumValue()), float(current.maximumValue())
+            if not (low == low and high == high and high > low):
+                return (None, None)
+            ranges.add((low, high))
+        else:
+            # Clipping, or a curve of the user's own: no single pair says it.
+            return (None, None)
+    return ranges.pop() if len(ranges) == 1 else (None, None)
+
+
 def raster_nodata(layer: QgsRasterLayer) -> float | None:
     """The value QGIS is masking out on band 1, if there is one.
 
@@ -2457,8 +2517,10 @@ def read_raster(
         return _read_remote_raster(layer, path, report, group_path, visible)
 
     band_count = int(provider.bandCount())
-    rescale_min, rescale_max = raster_rescale(layer)
     bands, style_qml = raster_style(layer)
+    rescale_min, rescale_max = (
+        composite_rescale(layer) if bands is not None else raster_rescale(layer)
+    )
     extent = raster_extent(layer)
     crs = layer.crs()
     # Set when the author assigned a CRS in QGIS that the file does not carry
@@ -2646,11 +2708,11 @@ def _report_composite_colours(
     if not raster.has_rescale:
         report.approximated(
             f"Contrast of '{name}'",
-            "A composite has one contrast stretch per band and the map "
-            "takes a single pair, so the per-band stretch you set in QGIS "
-            "is not carried and the map stretches each band across its own "
-            "range. The image may look lighter or darker than it does in "
-            "QGIS.",
+            "QGIS draws the red, green and blue bands each across a range of "
+            "its own (a stretch per band, or a clip or curve), and the map "
+            "takes one range for all three, so it stretches each band across "
+            "its own values instead. The image may look lighter or darker "
+            "than it does in QGIS.",
             layer_id,
         )
 
@@ -2810,6 +2872,7 @@ def _read_remote_raster(
         )
         return None
 
+    rescale = composite_rescale(layer)
     # A keyed address blocks the export, as a live tile layer's does.
     probe_url = url
     url, dependency = _live_dependency(url, name, "file address")
@@ -2825,6 +2888,8 @@ def _read_remote_raster(
         resolution_x=float(layer.rasterUnitsPerPixelX()),
         resolution_y=float(layer.rasterUnitsPerPixelY()),
         nodata=raster_nodata(layer),
+        rescale_min=rescale[0],
+        rescale_max=rescale[1],
         bands=bands,
     )
     base = ExportLayer(

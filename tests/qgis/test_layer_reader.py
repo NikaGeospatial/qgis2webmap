@@ -471,6 +471,52 @@ class TestRasterColour:
         assert export_layer.raster.bands == (1, 2, 3)
         assert export_layer.raster.style_qml is None
 
+    @pytest.mark.parametrize(
+        ("stretches", "drawn_across"),
+        [
+            pytest.param(None, (0.0, 255.0), id="unstretched-8-bit"),
+            pytest.param([(10, 200)] * 3, (10.0, 200.0), id="one-stretch"),
+            pytest.param([(10, 200), (0, 255), (10, 200)], None, id="per-band"),
+        ],
+    )
+    def test_a_composite_is_drawn_across_the_range_qgis_draws_it(
+        self, qgis_app, make_raster_layer, stretches, drawn_across
+    ) -> None:
+        """The map stretches each band across its own values unless told the
+        range QGIS draws: an 8-bit composite QGIS does not stretch would come
+        out brighter. Bands stretched differently cannot be carried as one
+        range, and only then does a row say the contrast differs."""
+        from qgis.core import QgsContrastEnhancement, QgsMultiBandColorRenderer
+
+        layer = make_raster_layer(bands=3)
+        renderer = QgsMultiBandColorRenderer(layer.dataProvider(), 1, 2, 3)
+        for setter, stretch in zip(
+            (
+                renderer.setRedContrastEnhancement,
+                renderer.setGreenContrastEnhancement,
+                renderer.setBlueContrastEnhancement,
+            ),
+            stretches or (),
+        ):
+            enhancement = QgsContrastEnhancement(layer.dataProvider().dataType(1))
+            enhancement.setContrastEnhancementAlgorithm(
+                QgsContrastEnhancement.ContrastEnhancementAlgorithm.StretchToMinimumMaximum
+            )
+            enhancement.setMinimumValue(stretch[0])
+            enhancement.setMaximumValue(stretch[1])
+            setter(enhancement)
+        layer.setRenderer(renderer)
+        report = FidelityReportBuilder()
+
+        export_layer = read_raster(layer, report)
+
+        assert export_layer is not None and export_layer.raster is not None
+        raster = export_layer.raster
+        found = (raster.rescale_min, raster.rescale_max)
+        assert found == (drawn_across or (None, None))
+        contrast = [i for i in report.items if i.subject.startswith("Contrast of")]
+        assert bool(contrast) is (drawn_across is None)
+
     def test_the_author_is_told_which_route_their_raster_took(
         self, qgis_app, make_raster_layer
     ) -> None:
