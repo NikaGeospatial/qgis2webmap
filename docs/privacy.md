@@ -94,10 +94,12 @@ from the publisher when the map opens. A PMTiles archive on your own computer
 is carried with the map and read from it. The script that decodes vector
 tiles - a PMTiles archive's or a vector tile layer's - is carried inside the
 map too, so drawing them contacts no one beyond the layer's own server, and a
-carried archive draws with no connection at all. (A runtime
-installed by hand without that script - see
-[installation](installation.md#on-a-computer-with-no-internet-access) - makes
-such a map load it from unpkg.com instead, and the export says so.) A WMS or WMTS layer's legend picture is
+carried archive draws with no connection at all. (A runtime without that
+script - installed by hand without it, see
+[installation](installation.md#on-a-computer-with-no-internet-access), or
+downloaded before the script could be - makes such a map load it from
+unpkg.com instead; the export says so, and a Share ZIP's README names
+unpkg.com.) A WMS or WMTS layer's legend picture is
 loaded from the service the same way when the map opens. A click on a WMS
 layer that answers clicks (see [supported features](supported-features.md))
 sends that service the position clicked, as a small map around it, to ask

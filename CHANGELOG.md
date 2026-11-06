@@ -101,12 +101,21 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   archive or vector tile layer contacts anyone but its own server. That
   script (loaders.gl's open-source MVT decoder) is downloaded from npm with
   the OnlyMap runtime, pinned like it; on a computer that already has the
-  runtime, the first export downloads just the script (about 240 KB).
-  Reported in the Fidelity tab: labels and the filter
+  runtime, the first export from the dialog downloads just the script (about
+  240 KB). Until it has - offline, behind a network's sign-in page, or from
+  Processing, which never downloads - such maps load it from unpkg.com, and
+  the export says so; the export itself never waits on the network. In a
+  cartograph, each archive is carried once, however many interactive frames
+  draw it. Categories and ranges switched off in QGIS, and features no
+  category or range claims, are not drawn, though the archive still carries
+  them. Reported in the Fidelity tab: labels and the filter
   panel are not exported for such a layer, rule-based styling draws in the
-  first rule's symbol, markers QGIS draws itself become circles, and an
-  archive compressed with zstd or brotli, which browsers cannot read, is left
-  out.
+  first rule's symbol, markers QGIS draws itself become circles, an archive
+  compressed with zstd or brotli, which browsers cannot read, is left
+  out, a category switched off beside an "all other values" class is drawn
+  invisible (it still answers a click, and the legend lists it without a
+  colour), and a range switched off between drawn ranges is drawn in the
+  colour of the range above it.
 - **Vector tile layers export in their publisher's style.** A vector tile
   layer added with a style URL (such as a government base map's `style.json`)
   is drawn on the web map from the same tile service, in that style: its
@@ -149,7 +158,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - The README inside a Share ZIP or Folder no longer promises that the map
   works offline and sends nothing else when it reads a basemap, relief, live
   features or a web service: it then says the map needs an internet
-  connection and names each server the map asks.
+  connection and names each server the map asks, epsg.io for a coordinate
+  system the map looks up and unpkg.com for a vector tile decoder this
+  computer has not downloaded among them.
 - The Fidelity tab names a WMS or WMTS service's host without the port its
   address spells out when that is the usual one: `basemap.nationalmap.gov`,
   not `basemap.nationalmap.gov:443`, for the USGS National Map.
@@ -165,7 +176,7 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   coordinate system.
 - A WMS layer added on an `https://` address whose capabilities still name
   `http://` (the British Geological Survey's, for one) is now asked on
-  `https://` for its tiles and legend, as it was added. It used to be asked
+  `https://` for its tiles, legend and clicks, as it was added. It used to be asked
   on `http://`, which such a service only redirects to `https://`, and
   Safari then showed it only as plain pictures under the rest of the map.
 
