@@ -633,6 +633,39 @@ class TestReadiness:
         s.app.processEvents()
         assert s.cartograph._frame_mode(item_id) == "live"
 
+    def test_the_switch_is_undone_for_its_own_layout_off_screen_and_after_close(
+        self, series, capsys
+    ) -> None:
+        """The step is on the layout's own undo stack, so its designer can
+        undo it with another layout on screen, or with the dialog closed:
+        the choice still changes, for that layout, with no traceback."""
+        from qgis.core import QgsPrintLayout
+
+        from nika_onlymap_exporter.core.settings import load_state
+
+        s = series(atlas_on=True)
+        self._static(s)
+        name = s.built.layout.name()
+        item_id = s.built.maps[0].uuid()
+        s.tab._switch_maps([item_id])
+        s.app.processEvents()
+        assert s.cartograph._frame_mode(item_id) == "live"
+
+        other = QgsPrintLayout(s.project)
+        other.initializeDefaults()
+        other.setName("Other")
+        s.project.layoutManager().addLayout(other)
+        s.cartograph.show_layout_named("Other")
+        s.undo.undo()
+        s.app.processEvents()
+        assert s.cartograph.state.frame_choices(name)[item_id].mode == "static"
+
+        s.dialog.close()
+        s.app.processEvents()
+        s.undo.redo()
+        assert load_state(s.project).frame_choices(name)[item_id].mode == "live"
+        assert "Traceback" not in capsys.readouterr().err
+
     def test_nothing_changes_a_maps_mode_but_that_action(self, series) -> None:
         s = series()
         item_id = s.built.maps[0].uuid()

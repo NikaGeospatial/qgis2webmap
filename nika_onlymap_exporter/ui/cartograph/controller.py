@@ -231,13 +231,24 @@ def _guarded(function: Callable[..., None], *args: object) -> None:
 
 class _FrameModeCommand(QUndoCommand):
     """Switching maps to Interactive as one step on the layout's undo stack:
-    redo sets each to Interactive, undo gives each back its earlier choice."""
+    redo sets each to Interactive, undo gives each back its earlier choice.
+
+    The stack is the layout's, so the step can be undone in its designer
+    while another layout is on screen, or after the dialog has closed: the
+    choice is then written where it is kept (`DialogState.cartograph_frames`)
+    rather than through the Map frames list, which is showing another layout
+    or none."""
 
     def __init__(
-        self, controller: CartographController, previous: dict[str, str], text: str
+        self,
+        controller: CartographController,
+        layout: QgsPrintLayout,
+        previous: dict[str, str],
+        text: str,
     ) -> None:
         super().__init__(text)
         self._controller = controller
+        self._layout = layout
         self._previous = previous
 
     def redo(self) -> None:
@@ -247,8 +258,24 @@ class _FrameModeCommand(QUndoCommand):
         _guarded(self._apply, self._previous)
 
     def _apply(self, modes: dict[str, str]) -> None:
+        controller = self._controller
+        if sip.isdeleted(self._layout):
+            return
+        if not controller._shut_down and controller._current_layout is self._layout:
+            for item_id, mode in modes.items():
+                controller._set_frame_mode(item_id, mode)
+            return
+        from ...core.settings import load_state
+
+        # The dialog's own state while it is open (its save follows the
+        # layout's undo stack, `_OtherLayoutWatch`); the project's once it
+        # has closed.
+        state = load_state(controller.project) if controller._shut_down else None
+        held = state if state is not None else controller.state
+        choices = held.frame_choices(self._layout.name())
         for item_id, mode in modes.items():
-            self._controller._set_frame_mode(item_id, mode)
+            choices.setdefault(item_id, FrameChoice()).mode = mode
+        save_state(controller.project, held)
 
 
 def _file_name_part(name: str) -> str:
@@ -1784,7 +1811,7 @@ class CartographController:
         if not previous:
             return
         layout.undoStack().stack().push(
-            _FrameModeCommand(self, previous, tr("Switch to Interactive"))
+            _FrameModeCommand(self, layout, previous, tr("Switch to Interactive"))
         )
 
     def _show_atlas_outcome(

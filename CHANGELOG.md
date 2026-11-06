@@ -276,6 +276,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - Opening the dialog again (Ctrl+Alt+W or the menu) while it waits to
   close on a cartograph save now keeps it open; it used to close as soon as
   the save landed.
+- Undo and Redo of an Atlas tab "Switch to Interactive" in the layout's
+  designer now work while another layout is on screen in the dialog, or
+  after it has closed; they used to do nothing, and print a Python error
+  once the dialog was closed.
 
 ## [0.3.2] - 2026-11-05
 
