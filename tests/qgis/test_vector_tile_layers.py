@@ -50,14 +50,14 @@ WATER = [
     Feature(
         "polygon",
         [(8.0, 47.0), (8.4, 47.0), (8.4, 47.3), (8.0, 47.3), (8.0, 47.0)],
-        {"kind": "lake"},
+        {"kind": "lake", "depth": 10},
     )
 ]
 ROADS = [Feature("line", [(7.9, 47.15), (8.7, 47.15)], {"class": "primary"})]
 METADATA = json.dumps(
     {
         "vector_layers": [
-            {"id": "water", "fields": {"kind": "String"}},
+            {"id": "water", "fields": {"kind": "String", "depth": "Number"}},
             {"id": "roads", "fields": {"class": "String"}},
         ]
     }
@@ -204,6 +204,71 @@ class TestPmtilesArchive:
         assert tiles.url == host.url("/lakes.pmtiles")
         assert not tiles.is_archive
         assert tiles.max_zoom == 6
+
+
+def _fill(color: str):
+    return qgis_core.QgsFillSymbol.createSimple({"color": color})
+
+
+# What QGIS leaves undrawn in an archive's layer, and the rows that say what
+# the map does with it: (renderer, a row says, no row says).
+UNDRAWN = {
+    "a-class-switched-off": (
+        lambda: qgis_core.QgsCategorizedSymbolRenderer(
+            "kind",
+            [
+                qgis_core.QgsRendererCategory("lake", _fill("#ff0000"), "Lake"),
+                qgis_core.QgsRendererCategory("pond", _fill("#00ff00"), "Pond", False),
+            ],
+        ),
+        ["are not drawn, though they stay in the tile archive the map carries."],
+        ["omitted from the export", "drawn invisible", "legend"],
+    ),
+    "one-beside-all-other-values": (
+        lambda: qgis_core.QgsCategorizedSymbolRenderer(
+            "kind",
+            [
+                qgis_core.QgsRendererCategory("lake", _fill("#ff0000"), "Lake"),
+                qgis_core.QgsRendererCategory("pond", _fill("#00ff00"), "Pond", False),
+                qgis_core.QgsRendererCategory(None, _fill("#0000ff"), "Other"),
+            ],
+        ),
+        ["and the legend lists them without a colour.", "drawn invisible"],
+        ["omitted from the export"],
+    ),
+    "a-range-between-drawn-ones": (
+        lambda: qgis_core.QgsGraduatedSymbolRenderer(
+            "depth",
+            [
+                qgis_core.QgsRendererRange(0, 5, _fill("#ff0000"), "Shallow"),
+                qgis_core.QgsRendererRange(5, 8, _fill("#00ff00"), "Mid", False),
+                qgis_core.QgsRendererRange(8, 20, _fill("#0000ff"), "Deep"),
+            ],
+        ),
+        ["stay in the tile archive the map carries.", "colour of the range above"],
+        ["omitted from the export", "not drawn"],
+    ),
+}
+
+
+@pytest.mark.parametrize("case", list(UNDRAWN))
+def test_what_qgis_does_not_draw_is_reported_as_the_map_draws_it(
+    qgis_app, archive, case
+) -> None:
+    """An archive's features stay in it: the map leaves undrawn what QGIS does
+    not draw where it can, and the rows say so, and what it cannot."""
+    renderer, said, unsaid = UNDRAWN[case]
+    layer = _archive_layer(str(archive))
+    layer.setRenderer(renderer())
+    exported, report = _read(layer)
+    assert exported is not None
+    rows = " ".join(
+        item.detail for item in report.items if item.subject == "Symbology of 'Lakes'"
+    )
+    for text in said:
+        assert text in rows
+    for text in unsaid:
+        assert text not in rows
 
 
 class TestArchivesInACartograph:

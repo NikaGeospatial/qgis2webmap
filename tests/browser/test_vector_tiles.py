@@ -30,12 +30,14 @@ from nika_onlymap_exporter.core.cartograph_ir import Box, CartographSpec, FrameS
 from nika_onlymap_exporter.core.export_ir import (
     AssetDependency,
     AssetDisposition,
+    CategorySpec,
     Color,
     ExportLayer,
     ExportProject,
     ExportSettings,
     Extent,
     GeometryKind,
+    GraduatedClassSpec,
     OutputMode,
     PopupFieldSpec,
     PopupSpec,
@@ -43,6 +45,7 @@ from nika_onlymap_exporter.core.export_ir import (
     RendererSpec,
     SourceKind,
     SymbolSpec,
+    ValueRange,
     VectorTileSpec,
 )
 from nika_onlymap_exporter.core.manifest_builder import build_manifest
@@ -61,12 +64,12 @@ WATER = [
     Feature(
         "polygon",
         [(8.0, 47.1), (8.4, 47.1), (8.4, 47.3), (8.0, 47.3), (8.0, 47.1)],
-        {"kind": "lake"},
+        {"kind": "lake", "depth": 10},
     ),
     Feature(
         "polygon",
         [(8.45, 47.1), (8.6, 47.1), (8.6, 47.3), (8.45, 47.3), (8.45, 47.1)],
-        {"kind": "river"},
+        {"kind": "river", "depth": 3},
     ),
 ]
 ROADS = [Feature("line", [(7.9, 47.15), (8.7, 47.15)], {"class": "primary"})]
@@ -422,6 +425,86 @@ def test_a_click_on_an_archive_feature_opens_its_popup(
             arg=kind,
             timeout=10_000,
         )
+
+
+def _click(page, place) -> list[str]:
+    """Click `place` and return the values the popups then show."""
+    x, y = page.evaluate(
+        "(p) => { const el = document.querySelector('om-map');"
+        " const box = el.getBoundingClientRect(); const [x, y] = el.project(p);"
+        " return [box.left + x, box.top + y]; }",
+        list(place),
+    )
+    page.mouse.click(x, y)
+    page.wait_for_timeout(1500)
+    return page.evaluate(
+        """() => [...document.querySelectorAll('om-overlay')].flatMap((o) =>
+             o.shadowRoot ? [...o.shadowRoot.querySelectorAll('.om-popup-value')]
+               .map((v) => v.textContent.trim()).filter((v) => v) : [])"""
+    )
+
+
+_LAKE_RED = SymbolSpec(
+    fill_color=Color(255, 0, 0), stroke_color=Color(255, 0, 0), stroke_width=1.0
+)
+_OTHER_BLUE = SymbolSpec(
+    fill_color=Color(0, 0, 255), stroke_color=Color(0, 0, 255), stroke_width=1.0
+)
+# What QGIS leaves undrawn, the river, by each way a renderer leaves it out.
+UNDRAWN_RIVER = {
+    "class-switched-off": RendererSpec(
+        kind=RendererKind.CATEGORIZED,
+        field_name="kind",
+        categories=(CategorySpec("lake", "Lake", _LAKE_RED),),
+        hidden_values=("river",),
+        unmatched_hidden=True,
+    ),
+    "switched-off-beside-all-others": RendererSpec(
+        kind=RendererKind.CATEGORIZED,
+        field_name="kind",
+        categories=(
+            CategorySpec("lake", "Lake", _LAKE_RED),
+            CategorySpec(None, "Other", _OTHER_BLUE, is_default=True),
+        ),
+        hidden_values=("river",),
+    ),
+    "outside-every-range": RendererSpec(
+        kind=RendererKind.GRADUATED,
+        field_name="depth",
+        classes=(GraduatedClassSpec(5, 20, "Deep", _LAKE_RED),),
+        value_ranges=(ValueRange(0, 5, drawn=False), ValueRange(5, 20, drawn=True)),
+    ),
+}
+
+
+@pytest.mark.parametrize("case", list(UNDRAWN_RIVER))
+def test_what_qgis_does_not_draw_is_not_drawn(
+    page, runtime, tile_host, tmp_path, case
+) -> None:
+    """An archive's features all stay in it, so the map itself leaves out the
+    ones QGIS does not draw - never in the grey of "other values" - and, where
+    the runtime's filter can, a click there finds nothing."""
+    layer = dataclasses.replace(
+        _water_layer(
+            VectorTileSpec(
+                url=tile_host.url("/lakes.pmtiles"), source_layer="water", max_zoom=10
+            ),
+            remote=True,
+        ),
+        renderer=UNDRAWN_RIVER[case],
+        popup=PopupSpec(enabled=True, fields=(PopupFieldSpec("kind"),)),
+    )
+    entry = _write(runtime, tmp_path, layer).entry_path
+    _open(page, entry.as_uri())
+    lake, river = _sample_until(
+        page, [LAKE, RIVER], lambda s: _close(s[0], (255, 0, 0))
+    )
+    assert _close(lake, (255, 0, 0)), f"the lake is {lake}"
+    # With no basemap, nothing drawn is nothing in the map's picture.
+    assert river[3] == 0, f"the river is drawn in {river}"
+    if case != "switched-off-beside-all-others":
+        assert _click(page, RIVER) == []
+    assert _click(page, LAKE) == ["lake"]
 
 
 def test_a_cartograph_frame_draws_tiles_with_no_internet(

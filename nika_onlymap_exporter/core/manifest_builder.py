@@ -30,10 +30,11 @@ import json
 import math
 from collections.abc import Sequence
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from .export_ir import (
     MEASURE_UNITS,
+    CategorySpec,
     Color,
     ElevationSpec,
     ExportLayer,
@@ -145,6 +146,12 @@ MIN_LINE_PICK_PIXELS = 2.0
 
 DEFAULT_FILL = Color(r=136, g=136, b=136, a=0.8)
 DEFAULT_STROKE = Color(r=51, g=51, b=51, a=1.0)
+# What a tile layer draws a feature QGIS does not draw in: its features stay in
+# the archive, so they cannot be left out of the data the way read features are.
+UNDRAWN = Color(r=0, g=0, b=0, a=0.0)
+# The most values the runtime's categorical filter keeps (deck.gl's
+# `DataFilterExtension`, one 128-bit mask for a single field).
+CATEGORY_FILTER_MAX = 128
 
 # The default, and what keeps an export self-contained: no basemap means no
 # network request at all, which is the promise the privacy release gate measures.
@@ -1242,14 +1249,104 @@ def build_vector_tile_layer_element(
     )
 
 
+def tile_filter(renderer: RendererSpec) -> list[tuple[str, str]]:
+    """The runtime's filter leaving out a tile layer's features that QGIS does
+    not draw, which no colour can do alone: an undrawn feature would still
+    answer a click and light up under the pointer.
+
+    A categorized layer without an "all other values" class keeps its classes'
+    values, so switched-off classes and values no class claims go; a graduated
+    one keeps the span from its lowest drawn range to its highest, so values
+    outside every range, in switched-off ranges at either end, and NULL (a
+    tile leaves the field out) go. Nothing for the rest (`tile_undrawn_kept`).
+    """
+    field = renderer.field_name
+    if not field or renderer.field_generated:
+        return []
+    if renderer.kind is RendererKind.CATEGORIZED and renderer.unmatched_hidden:
+        values = [v for c in renderer.categories for v in c.explicit_values]
+        if 0 < len(values) <= CATEGORY_FILTER_MAX:
+            return [
+                ("filter-category", field),
+                ("filter-categories", json.dumps(values, ensure_ascii=False)),
+            ]
+    if renderer.kind is RendererKind.GRADUATED and renderer.classes:
+        span = [
+            min(c.lower for c in renderer.classes),
+            max(c.upper for c in renderer.classes),
+        ]
+        return [("filter-field", field), ("filter-range", json.dumps(span))]
+    return []
+
+
+def tile_undrawn_kept(
+    renderer: RendererSpec,
+) -> Literal["clickable", "neighbour colour"] | None:
+    """What a tile layer's map still finds that QGIS does not draw, beyond
+    `tile_filter`'s reach, or `None` when it finds nothing of the sort.
+
+    Switched-off classes of a layer with an "all other values" class, and
+    values no class claims past the filter's limit, are drawn invisible
+    (`_tile_renderer`) and answer a click. A graduated layer's values in a
+    range switched off between drawn ones, or between two ranges, are drawn
+    in the colour of the range above them.
+    """
+    if renderer.field_generated:
+        return None
+    if renderer.kind is RendererKind.CATEGORIZED:
+        hidden = bool(renderer.hidden_values or renderer.unmatched_hidden)
+        return "clickable" if hidden and not tile_filter(renderer) else None
+    if renderer.kind is RendererKind.GRADUATED and renderer.classes:
+        low = min(c.lower for c in renderer.classes)
+        high = max(c.upper for c in renderer.classes)
+        inner_off = any(
+            not r.drawn and r.lower >= low and r.upper <= high
+            for r in renderer.value_ranges
+        )
+        ordered = sorted(renderer.classes, key=lambda c: c.lower)
+        gap = any(
+            later.lower > earlier.upper for earlier, later in zip(ordered, ordered[1:])
+        )
+        return "neighbour colour" if inner_off or gap else None
+    return None
+
+
+def _tile_renderer(renderer: RendererSpec) -> RendererSpec:
+    """`renderer` with the categories QGIS does not draw made undrawn.
+
+    A switched-off class's values get a clause of their own, ahead of an "all
+    other values" class that would otherwise colour them, and with no such
+    class the trailing colour, which every value no class claims gets, is
+    undrawn rather than the grey that read features never reach.
+    """
+    if renderer.kind is not RendererKind.CATEGORIZED or not renderer.categories:
+        return renderer
+    undrawn = SymbolSpec(fill_color=UNDRAWN, stroke_color=UNDRAWN)
+    extra = [
+        CategorySpec(value=value, label="", symbol=undrawn)
+        for value in renderer.hidden_values
+        if value is not None and not renderer.unmatched_hidden
+    ]
+    if renderer.unmatched_hidden:
+        extra.append(
+            CategorySpec(value=None, label="", symbol=undrawn, is_default=True)
+        )
+    if not extra:
+        return renderer
+    return replace(renderer, categories=(*renderer.categories, *extra))
+
+
 def _vector_tile_symbology(layer: ExportLayer) -> list[tuple[str, str | None]]:
     """The QGIS renderer of a layer drawn from tiles: its colours, line widths
-    and point sizes, as `build_layer_element` writes them for features."""
+    and point sizes, as `build_layer_element` writes them for features, and
+    what leaves out the features QGIS does not draw (`tile_filter`)."""
     renderer = layer.renderer
     symbol = renderer.representative_symbol or SymbolSpec()
+    drawn = _tile_renderer(renderer)
     attributes: list[tuple[str, str | None]] = [
-        ("get-fill-color", fill_expression(renderer, layer.geometry_kind)),
-        ("get-line-color", line_color_expression(renderer, layer.geometry_kind)),
+        ("get-fill-color", fill_expression(drawn, layer.geometry_kind)),
+        ("get-line-color", line_color_expression(drawn, layer.geometry_kind)),
+        *tile_filter(renderer),
     ]
     if renderer.kind is RendererKind.SINGLE:
         swatch = symbol.fill_color or symbol.stroke_color
