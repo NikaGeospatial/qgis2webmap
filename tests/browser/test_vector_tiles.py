@@ -350,6 +350,75 @@ def test_a_folder_serves_its_archive_beside_the_page(page, runtime, tmp_path) ->
     assert not refused, f"the map asked the internet for {refused}"
 
 
+def _notice(page) -> str | None:
+    """The page's "Could not load" notice, or None while it shows nothing."""
+    return page.evaluate(
+        """() => {
+          const notice = document.querySelector('om-widget[data-q2w-layer-notice]');
+          const root = notice && notice.root;
+          const panel = root && root.querySelector('.q2w-notice');
+          return panel ? panel.textContent : null;
+        }"""
+    )
+
+
+@pytest.mark.parametrize("runtime_beside", [False, True], ids=["zip", "folder"])
+def test_an_archive_beside_a_page_opened_from_disk_says_to_serve_it(
+    page, runtime, tmp_path, runtime_beside
+) -> None:
+    """A Share ZIP or Folder opened by double-click cannot read the files
+    beside its page: the reader is told the map has to be served, as the
+    README says, rather than shown a silently empty layer, or told a Folder
+    needs JavaScript."""
+    from nika_onlymap_exporter.writers.onlymap_writer import SERVED_ONLY_NOTE
+
+    source = tmp_path / "lakes.pmtiles"
+    source.write_bytes(ARCHIVE)
+    layer = _water_layer(
+        VectorTileSpec(
+            url=str(source),
+            path=str(source),
+            source_layer="water",
+            size_bytes=len(ARCHIVE),
+        ),
+        remote=False,
+    )
+    entry = (
+        OnlyMapWriter(runtime_provider=runtime)
+        .write(
+            _project(layer),
+            tmp_path / "out",
+            mode=OutputMode.FOLDER,
+            unbundle=runtime_beside,
+        )
+        .entry_path
+    )
+    page.set_viewport_size({"width": 900, "height": 700})
+    page.goto(entry.as_uri())
+    if runtime_beside:
+        page.wait_for_function(
+            "() => document.querySelector('om-fallback .om-fallback p')"
+            ".textContent.includes('web server')",
+            timeout=10_000,
+        )
+        shown = page.evaluate(
+            "() => document.querySelector('om-fallback .om-fallback p').textContent"
+        )
+        assert shown == SERVED_ONLY_NOTE
+        assert page.locator("om-fallback").is_visible()
+        return
+    page.wait_for_function(
+        "() => customElements.get('om-map') !== undefined", timeout=30_000
+    )
+    deadline = time.monotonic() + 20
+    while _notice(page) is None and time.monotonic() < deadline:
+        page.wait_for_timeout(250)
+    assert _notice(page) == (
+        "Could not load: Water. This map has to be served from a web server to "
+        "show it; README.txt says how."
+    )
+
+
 @pytest.mark.parametrize("opened", ["file", "http"])
 def test_a_service_draws_in_its_publishers_style(
     page, runtime, tile_host, tmp_path, opened

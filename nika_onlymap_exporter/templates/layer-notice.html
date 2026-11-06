@@ -19,6 +19,10 @@
         reports it - a feature layer whose next request succeeded, or a
         tile layer whose failure it retracted. The map's own diagnostics are
         watched for that, switched on only once a layer has failed.
+      - A layer that reads a file beside the page (a raster or a tile
+        archive in a Folder or Share ZIP) fails on a page opened from disk,
+        where browsers refuse to read it: its line says the map has to be
+        served, as the README does, rather than only that it failed.
       - A WMS layer whose service gave a click no answer - it does not let
         web pages read it (CORS), or did not answer at all - is named on a
         line of its own, once, until a click on it is answered. The page's
@@ -59,16 +63,35 @@
           layer.removeAttribute("data");
           return true;
         };
+        // Whether a layer reads a file next to the page: one the page does
+        // not carry inside it (`place.siblings`), at a relative address.
+        // Opened from disk, no browser reads one.
+        var besidePage = function (layer) {
+          var address = layer && (layer.getAttribute("data") || layer.getAttribute("src"));
+          return place.siblings && !!address && !/^[a-z][a-z0-9+.-]*:/i.test(address);
+        };
         var show = function () {
           if (notice) notice.remove();
           notice = null;
-          var names = Object.keys(failed).map(function (id) {
-            return failed[id].name;
-          });
+          var fromDisk = location.protocol === "file:";
+          var names = Object.keys(failed)
+            .filter(function (id) {
+              return !(fromDisk && failed[id].beside);
+            })
+            .map(function (id) {
+              return failed[id].name;
+            });
+          var unserved = Object.keys(failed)
+            .filter(function (id) {
+              return fromDisk && failed[id].beside;
+            })
+            .map(function (id) {
+              return failed[id].name;
+            });
           var silent = Object.keys(unanswered).map(function (id) {
             return unanswered[id];
           });
-          if (!names.length && !silent.length) return;
+          if (!names.length && !silent.length && !unserved.length) return;
           notice = document.createElement("om-widget");
           notice.setAttribute("position", place.position);
           notice.setAttribute("order", String(place.order));
@@ -89,6 +112,13 @@
           panel.className = "q2w-notice";
           panel.setAttribute("role", "status");
           var lines = [];
+          if (unserved.length) {
+            lines.push(
+              "Could not load: " + unserved.join(", ") + ". This map has to be " +
+                "served from a web server to show " +
+                (unserved.length === 1 ? "it" : "them") + "; README.txt says how."
+            );
+          }
           if (names.length) lines.push("Could not load: " + names.join(", "));
           if (silent.length) lines.push("Could not get details from: " + silent.join(", "));
           lines.forEach(function (line) {
@@ -125,7 +155,11 @@
           // A layer showing its embedded copy has no request left to fail.
           if (layer && layer.getAttribute("data-q2w-live") === "fell-back") return;
           if (failed[id]) return;
-          failed[id] = { name: (layer && layer.getAttribute("label")) || id, seen: false };
+          failed[id] = {
+            name: (layer && layer.getAttribute("label")) || id,
+            seen: false,
+            beside: besidePage(layer),
+          };
           show();
           if (!watching) {
             watching = true;

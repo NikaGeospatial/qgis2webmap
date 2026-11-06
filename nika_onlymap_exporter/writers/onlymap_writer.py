@@ -218,11 +218,14 @@ class OnlyMapWriter:
         runtime_file: str | None = None,
         embedded_rasters: tuple[tuple[str, bytes], ...] = (),
         embedded_pictures: tuple[PopupPicture, ...] = (),
+        sibling_data: bool = False,
     ) -> str:
         """Fill the artifact template. No string-built HTML beyond the manifest.
 
         `embedded_pictures` are the popup pictures a page with no folder
-        carries inside it (`packaging.popup_pictures`)."""
+        carries inside it (`packaging.popup_pictures`). `sibling_data` says a
+        layer reads a file beside the page (a raster or a tile archive in a
+        Folder or Share ZIP), which a page opened from disk cannot read."""
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
         manifest = build_manifest(project, verdict, compress_data=compress_data)
         if any(
@@ -235,9 +238,11 @@ class OnlyMapWriter:
         clicks = _feature_info_block(project)
         if clicks:
             manifest += "\n" + clicks
-        notice = _layer_notice_block(project)
+        notice = _layer_notice_block(project, sibling_data)
         if notice:
             manifest += "\n" + notice
+        if runtime_file:
+            manifest += "\n" + _SERVED_ONLY_BLOCK
 
         if runtime_file:
             # An import rather than a `src=` attribute, so the template's single
@@ -449,6 +454,7 @@ class OnlyMapWriter:
                 runtime_file,
                 staging.embedded + archives.embedded,
                 embedded_pictures,
+                sibling_data=bool(staging.files or archives.files),
             ),
             encoding="utf-8",
         )
@@ -914,11 +920,31 @@ def _feature_info_block(project: ExportProject) -> str:
     return template.replace("@FEATURE_INFO_SETUP@", setup.replace("</", "<\\/"))
 
 
-def _layer_notice_block(project: ExportProject) -> str:
+# What a page whose runtime is a file beside it (a Folder) shows opened from
+# disk, where JavaScript runs but browsers refuse to run that file, so the
+# runtime's fallback would blame JavaScript. In the README's words
+# (`exporters.folder`). A plain script, which runs from disk.
+SERVED_ONLY_NOTE = (
+    "This map has to be served from a web server: browsers will not run its "
+    "files from a folder opened by double-click. Upload the folder to a web "
+    "server, or run npx http-server inside it and open the address it prints."
+)
+_SERVED_ONLY_BLOCK = (
+    "    <script>\n"
+    '      if (location.protocol === "file:") {\n'
+    '        var q2wNote = document.querySelector("om-fallback .om-fallback p");\n'
+    f"        if (q2wNote) q2wNote.textContent = {json.dumps(SERVED_ONLY_NOTE)};\n"
+    "      }\n"
+    "    </script>"
+)
+
+
+def _layer_notice_block(project: ExportProject, sibling_data: bool = False) -> str:
     """The page's answer to a layer that fails to load: live features switch
     to their embedded copy, and anything else is named in a small notice
     (`templates/layer-notice.html`). Empty for a map with no layer read from
-    the web, which has nothing that can fail that way.
+    the web or from a file beside the page (`sibling_data`), which has
+    nothing that can fail that way.
 
     The notice joins the bottom-left corner's stack, just above the licence
     notice (`BOTTOM_LEFT_ORDER`), where the runtime lays it out with the
@@ -926,12 +952,13 @@ def _layer_notice_block(project: ExportProject) -> str:
     slots do not make room for each other sideways, and on a narrow map, or
     at a big Size, the notice reached across the licence notice.
     """
-    if not loads_layers_from_the_web(project):
+    if not (sibling_data or loads_layers_from_the_web(project)):
         return ""
     place = {
         "position": WIDGET_POSITIONS["layer-notice"],
         "order": BOTTOM_LEFT_ORDER["layer-notice"],
         "scale": round(project.settings.chrome_scale, 3),
+        "siblings": sibling_data,
     }
     template = LAYER_NOTICE_PATH.read_text(encoding="utf-8").rstrip()
     return template.replace("@FALLBACK_TYPE@", FALLBACK_SCRIPT_TYPE).replace(
