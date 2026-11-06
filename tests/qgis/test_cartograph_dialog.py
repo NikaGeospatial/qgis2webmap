@@ -965,10 +965,20 @@ class TestBuildThreadsAndJobs:
     def test_a_web_map_job_waits_for_a_cartograph_build(
         self, qgis_app, project
     ) -> None:
+        import time
+
         dialog = _dialog(project)
         try:
             dialog._cartograph._job = object()  # a cartograph build in flight
-            assert dialog._start_job(lambda _p: None, lambda _r: None, "x") is False
+            ran: list[object] = []
+            assert dialog._start_job(lambda _p: "done", ran.append, "x")
+            assert dialog._job is None  # never beside the build
+            dialog._cartograph._job = None
+            deadline = time.monotonic() + 10
+            while not ran and time.monotonic() < deadline:
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            assert ran == ["done"]
         finally:
             dialog._cartograph._job = None
             dialog.close()
