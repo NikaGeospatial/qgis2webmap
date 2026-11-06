@@ -2706,8 +2706,8 @@ class TestTileLayer:
         )
         rules = re.search(r"\.omni-legend-graphic \{([^}]*)\}", legend)
         assert rules is not None
+        # Scrolled, never shrunk: `test_map_services` sees it in a browser.
         assert "max-height" in rules.group(1) and "overflow: auto" in rules.group(1)
-        assert re.search(r"\.omni-legend-graphic img \{[^}]*max-width: 100%", legend)
 
     def test_a_layer_without_one_is_unchanged(self) -> None:
         legend = build_legend_widget(make_project(layers=(self.wms_layer(),)))

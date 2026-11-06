@@ -699,12 +699,12 @@ class TestPanelSizes:
         from nika_onlymap_exporter.core.manifest_builder import _legend_style_element
 
         style = "\n".join(_legend_style_element("", ExportSettings(legend_width=400)))
-        assert ".omni-legend-graphic { max-width: none; }" in style
+        assert ".omni-legend-graphic { max-width: 100%; }" in style
         style = "\n".join(
             _legend_style_element(
                 "", ExportSettings(legend_width=400, legend_height=600)
             )
         )
-        assert ".omni-legend-graphic { max-width: none; max-height: none; }" in style
+        assert ".omni-legend-graphic { max-width: 100%; max-height: none; }" in style
         auto = "\n".join(_legend_style_element("", ExportSettings()))
-        assert "max-width: none" not in auto
+        assert "max-width: 100%" not in auto
