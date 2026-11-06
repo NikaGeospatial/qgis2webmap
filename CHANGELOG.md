@@ -269,6 +269,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   A click made while the pointer was still moving no longer adds a stray
   point where the pointer went next, and on a touch screen two taps a
   little apart close an area the way the map takes them, as a double-tap.
+- Closing the dialog while a language is downloading no longer brings QGIS
+  down, and pressing "Use" (or picking the language) again during the
+  download no longer starts a second one: the language controls wait until
+  it is done.
 
 ## [0.3.2] - 2026-11-05
 

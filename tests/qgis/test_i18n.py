@@ -722,6 +722,47 @@ def test_picking_a_language_reopens_the_dialog_in_it(
             plugin.dialog.close()
 
 
+def test_a_second_press_or_a_close_during_a_download_is_harmless(
+    qgis_app, installed_plugin, project, make_memory_layer, release_zip
+):
+    """The download waits in an event loop of its own. Pressed again in it,
+    nothing more is downloaded; the window closed (and deleted) in it, the
+    download finishes with no error."""
+    from qgis.PyQt.QtCore import QEventLoop, QTimer
+
+    from nika_onlymap_exporter.plugin import Qgis2WebMapPlugin
+
+    class FakeIface:
+        def mainWindow(self):  # noqa: N802 - mirrors the QGIS interface
+            return None
+
+    project.addMapLayer(make_memory_layer("roads", features=[("a", [1.0, 2.0])]))
+    plugin = Qgis2WebMapPlugin(FakeIface())
+    plugin.run()
+    dialog = plugin.dialog
+    picker = dialog.language_picker
+    calls: list[str] = []
+    answer = serve_release(release_zip, calls)
+
+    def slow(url: str):
+        if len(calls) == 0:
+            loop = QEventLoop()
+            QTimer.singleShot(20, lambda: picker.choose("es"))
+            QTimer.singleShot(60, dialog.close)
+            QTimer.singleShot(400, loop.quit)
+            loop.exec()
+        return answer(url)
+
+    picker._fetch = slow
+    picker.choose("es")  # raises if anything touches the deleted window
+    for _ in range(5):
+        qgis_app.processEvents()
+
+    assert len(calls) == 1
+    assert plugin.dialog is None
+    assert installed_plugin.installed_pack("es") is not None
+
+
 def test_the_fidelity_words_from_core_are_in_the_catalogue(qgis_app) -> None:
     """Core has no Qt, so its verdict and topic names are registered in the
     panel; a word added in core must be added there too."""

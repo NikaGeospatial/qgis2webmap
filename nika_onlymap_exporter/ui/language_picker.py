@@ -18,6 +18,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from qgis.PyQt import sip
 from qgis.PyQt.QtCore import QSettings, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QGuiApplication
 from qgis.PyQt.QtWidgets import (
@@ -38,17 +39,34 @@ def _setting() -> str:
     return str(QSettings().value(languages.SETTING_KEY, languages.AUTO, type=str))
 
 
+# True while a download runs. It waits in an event loop of its own, in which
+# the dialog stays usable: a second press would start a second download inside
+# the first, and the window can be closed - and deleted - under it.
+_downloading = False
+
+
 def _install(parent: QWidget, code: str, fetch: languages.Fetcher | None) -> bool:
-    """Download the packs if `code`'s is missing. False, having said why, on failure."""
+    """Download the packs if `code`'s is missing. False, having said why, on
+    failure; False too, saying nothing, while another download runs or when
+    `parent` was closed and deleted during this one (the packs are installed
+    then, and there is nothing left to show them in)."""
+    global _downloading
     if languages.installed_pack(code) is not None:
         return True
+    if _downloading:
+        return False
+    _downloading = True
+    parent.setEnabled(False)
     QGuiApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
     try:
         languages.download(code, fetch or languages.qgis_fetcher())
     except Exception as exc:
         QGuiApplication.restoreOverrideCursor()
+        alive = not sip.isdeleted(parent)
+        if alive:
+            parent.setEnabled(True)
         QMessageBox.warning(
-            parent,
+            parent if alive else None,
             tr("Language not downloaded"),
             tr("{language} could not be downloaded.").format(
                 language=languages.NATIVE_NAMES.get(code, code)
@@ -56,7 +74,12 @@ def _install(parent: QWidget, code: str, fetch: languages.Fetcher | None) -> boo
             + f"\n\n{exc}",
         )
         return False
+    finally:
+        _downloading = False
     QGuiApplication.restoreOverrideCursor()
+    if sip.isdeleted(parent):
+        return False
+    parent.setEnabled(True)
     return True
 
 
@@ -101,7 +124,8 @@ class LanguagePicker(QComboBox):
         if choice not in (languages.AUTO, languages.ENGLISH) and not _install(
             self, choice, self._fetch
         ):
-            self.refresh()  # back to what is actually in use
+            if not sip.isdeleted(self):
+                self.refresh()  # back to what is actually in use
             return
         QSettings().setValue(languages.SETTING_KEY, choice)
         self.refresh()
