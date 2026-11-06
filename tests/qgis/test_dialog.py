@@ -1634,6 +1634,141 @@ class TestAutosaveIsGatedOnALiveSession:
             dialog._server = None
             dialog.close()
 
+    def _wait_until(self, qgis_app, condition, seconds: float = 60.0) -> None:
+        import time
+
+        deadline = time.monotonic() + seconds
+        while not condition() and time.monotonic() < deadline:
+            qgis_app.processEvents()
+            time.sleep(0.02)
+        assert condition()
+
+    def test_live_switched_off_while_the_preview_builds_opens_a_one_off(
+        self, qgis_app, project, make_memory_layer, monkeypatch, runtime_required
+    ) -> None:
+        import threading
+
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        monkeypatch.setattr(module.QDesktopServices, "openUrl", lambda url: True)
+        writing = threading.Event()
+        written = module.write_preview
+
+        def held(*args, **kwargs):
+            writing.wait(30)
+            return written(*args, **kwargs)
+
+        monkeypatch.setattr(module, "write_preview", held)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.live_switch.setChecked(True)
+            dialog.preview_button.click()
+            self._wait_until(
+                qgis_app,
+                lambda: dialog.status_label.text() == "Building the preview...",
+            )
+            dialog.live_switch.click()  # off, while the page is being written
+            writing.set()
+            self._wait_until(qgis_app, lambda: dialog._job is None)
+
+            assert not dialog._live_running()
+            assert dialog.preview_button.text() == "Preview"
+        finally:
+            dialog.close()
+
+    def test_after_save_as_the_open_tab_is_served_the_new_map(
+        self,
+        qgis_app,
+        project,
+        make_memory_layer,
+        tmp_path,
+        monkeypatch,
+        runtime_required,
+    ) -> None:
+        """The preview directory is keyed by the project's name: a rebuild
+        after Save As is written under the new one, and the tab already open
+        - same address - is served it."""
+        import urllib.request
+
+        from nika_onlymap_exporter.ui.preview import preview_directory
+
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.main_dialog.QDesktopServices.openUrl",
+            lambda url: True,
+        )
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.live_switch.setChecked(True)
+            dialog.preview_button.click()
+            self._wait_until(
+                qgis_app, lambda: dialog._server is not None and dialog._job is None
+            )
+            server = dialog._server
+            old_root = server.root
+            url = server.url
+
+            project.setFileName(str(tmp_path / "saved-as.qgz"))
+            dialog.state.map_name = "After Save As"
+            dialog._poll_for_changes()
+            self._wait_until(
+                qgis_app,
+                lambda: not dialog._rebuild_timer.isActive() and dialog._job is None,
+            )
+
+            assert dialog._server is server
+            assert (
+                server.root == preview_directory(dialog._project_identity()).resolve()
+            )
+            with urllib.request.urlopen(url, timeout=10) as response:
+                assert "After Save As" in response.read().decode("utf-8")
+            assert not old_root.exists()
+        finally:
+            dialog.close()
+
+    def test_a_request_made_while_the_preview_rebuilds_runs_after_it(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """An Export confirmed in a dialog while a live rebuild started behind
+        it is written once the rebuild is done - never refused with "Still
+        working on the last request.", which the user did not make."""
+        import threading
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            rebuilding = threading.Event()
+            done: list[str] = []
+            assert dialog._start_job(
+                lambda progress: rebuilding.wait(30),
+                lambda _result: done.append("rebuild"),
+                "Updating the preview...",
+                quiet=True,
+            )
+            assert dialog._start_job(
+                lambda progress: "map",
+                done.append,
+                "Writing the map...",
+            )
+            assert dialog.status_label.text() == "Writing the map..."
+            rebuilding.set()
+            self._wait_until(qgis_app, lambda: done == ["rebuild", "map"], 15)
+        finally:
+            dialog.close()
+
+    def test_a_rebuild_while_the_cartograph_saves_comes_back_for_it(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._cartograph._job = object()  # a cartograph build under way
+            assert not dialog._ensure_export(
+                lambda export, report: None, "Updating the preview...", quiet=True
+            )
+            assert dialog._rebuild_timer.isActive()
+            assert dialog.status_label.text() != "Still working on the last request."
+        finally:
+            dialog._cartograph._job = None
+            dialog.close()
+
 
 class TestShareBuildsWhatItNeeds:
     """No Share action should make the user produce a file first.
@@ -3241,6 +3376,57 @@ class TestExportIsBack:
             dialog.path_edit.setText(str(tmp_path / "peaks.zip"))
             assert dialog._resolve_destination() == tmp_path / "peaks.zip"
         finally:
+            dialog.close()
+
+    def test_an_export_landing_after_the_project_changed_saves_nothing_into_it(
+        self,
+        qgis_app,
+        project,
+        make_memory_layer,
+        tmp_path,
+        monkeypatch,
+        runtime_required,
+    ) -> None:
+        """The map is written; the dialog's settings, which belong to the
+        project that was cleared, are not written into the one now open."""
+        import threading
+        import time
+
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        writing = threading.Event()
+        built = module.build_artifact
+
+        def held(*args, **kwargs):
+            writing.wait(30)
+            return built(*args, **kwargs)
+
+        saved: list[object] = []
+        monkeypatch.setattr(module, "build_artifact", held)
+        monkeypatch.setattr(module.QMessageBox, "information", lambda *a, **k: None)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.path_edit.setText(str(tmp_path / "peaks.html"))
+            dialog.on_export()
+            deadline = time.monotonic() + 60
+            while (
+                dialog.status_label.text() != "Writing the map..."
+                and time.monotonic() < deadline
+            ):
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            monkeypatch.setattr(
+                module, "save_state", lambda project, state: saved.append(project)
+            )
+            dialog._on_project_clearing()
+            writing.set()
+            while dialog._job is not None and time.monotonic() < deadline:
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            assert (tmp_path / "peaks.html").exists()
+            assert saved == []
+        finally:
+            writing.set()
             dialog.close()
 
     def test_switching_type_mid_read_keeps_the_pressed_destination(

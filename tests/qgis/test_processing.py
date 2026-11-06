@@ -288,6 +288,36 @@ class TestRuntimePreflight:
         assert "QGIS2WebMap by NIKA" in str(excinfo.value)
         assert read_calls == [], "the project was read despite the runtime refusing"
 
+    def test_an_accepted_runtime_not_on_disk_is_fetched_through_qgis_first(
+        self, qgis_app, monkeypatch, tmp_path
+    ) -> None:
+        """A plugin update pinning a newer runtime: accepted before, so no
+        refusal - but downloaded here, before the read, through QGIS's network
+        settings (where a government machine's proxy is set), not at the
+        write through a download that knows nothing of them."""
+        from nika_onlymap_exporter.packaging import runtime_manager as rm
+        from nika_onlymap_exporter.processing import export_project as module
+        from nika_onlymap_exporter.ui import runtime_setup
+
+        monkeypatch.setattr(rm, "discover_runtime_dir", lambda: None)
+        monkeypatch.setenv("ONLYMAP_RUNTIME_CACHE", str(tmp_path))
+        rm.record_licence_acceptance(rm.read_lock()["version"], tmp_path)
+        used: list[object] = []
+
+        def through_qgis(feedback=None):
+            def download(url, on_progress=None):
+                used.append(feedback)
+                raise rm.RuntimeDownloadError("check Settings -> Options -> Network")
+
+            return download
+
+        monkeypatch.setattr(runtime_setup, "make_qgis_downloader", through_qgis)
+        feedback = qgis_core.QgsProcessingFeedback()
+
+        with pytest.raises(module.QgsProcessingException, match="Network"):
+            module.ExportProjectAlgorithm._check_runtime_first(feedback)
+        assert used == [feedback]
+
     def test_an_available_runtime_passes_quietly(self, qgis_app, monkeypatch) -> None:
         from nika_onlymap_exporter.processing import export_project as module
 

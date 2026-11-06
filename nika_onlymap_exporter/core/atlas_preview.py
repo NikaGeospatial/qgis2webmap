@@ -4,9 +4,11 @@ The Cartograph panel's page is the layout itself, so showing page N of a series
 is QGIS's own atlas preview: seeking the atlas moves every atlas-driven map and
 sets the feature that labels and `@atlas_*` variables read. Seeking leaves the
 maps where the last page put them, and the layout is the user's document, so
-this object remembers what each map showed before the first page and puts it
-back on `release()` - without touching how the atlas drives the maps, which the
-user may have edited in between.
+this object remembers what each map showed before the first page and puts the
+ones the atlas drives back on `release()` - without touching how the atlas
+drives the maps, which the user may have edited in between. A map the atlas
+does not drive (an inset) is never moved by a page, so an edit to it while the
+preview is open stays.
 
 Copyright (C) 2026 NIKA
 SPDX-License-Identifier: GPL-2.0-or-later
@@ -116,8 +118,9 @@ class AtlasPreview:
         atlas.seekTo(self._previewed)
         context.setFeature(self._feature)
         context.setLayer(self._context_layer)
-        # Last: seeking a page moves the atlas's maps again.
+        # Last: seeking a page moves the atlas's maps again. Only those: one
+        # the atlas does not drive (now) is where the user put it.
         for item, state in self._maps:
-            if not sip.isdeleted(item):
+            if not sip.isdeleted(item) and item.atlasDriven():
                 state.restore_view(item)
         self._maps = []

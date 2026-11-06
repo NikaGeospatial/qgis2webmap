@@ -80,6 +80,9 @@ class LiveCounts(QObject):
         self._project = None
         self._maps: dict[str, QgsLayoutItemMap] = {}
         self._outcomes: dict[str, lc.CountOutcome] = {}
+        # What a counter read before it was set to "…", by uuid: put back if
+        # the calculation that would replace it never comes (`_detach`).
+        self._before_pending: dict[str, str] = {}
         self._jobs: dict[str, _Job] = {}
         self._request = 0
         self._tree: LayerTreeWatcher | None = None
@@ -126,6 +129,7 @@ class LiveCounts(QObject):
     def _detach(self) -> None:
         self._debounce.stop()
         self._cancel_jobs()
+        self._restore_pending()
         layout, self._layout = self._layout, None
         if layout is not None and not sip.isdeleted(layout):
             with contextlib.suppress(TypeError, RuntimeError):
@@ -153,6 +157,19 @@ class LiveCounts(QObject):
     def close(self) -> None:
         """Stop listening (the dialog is closing)."""
         self._detach()
+
+    def _restore_pending(self) -> None:
+        """Give a counter left reading "…" its last number back: the layout
+        is no longer followed, and "…" would otherwise be saved with it."""
+        layout = self._layout
+        before, self._before_pending = self._before_pending, {}
+        if layout is None or sip.isdeleted(layout):
+            return
+        for uuid, text in before.items():
+            number = layout.itemByUuid(uuid)
+            if lc.is_count_number(number) and not sip.isdeleted(number):
+                number.setText(text)
+                number.refresh()
 
     def _watch_maps(self) -> None:
         layout = self._layout
@@ -291,7 +308,12 @@ class LiveCounts(QObject):
 
     def _show_pending(self) -> None:
         """A count is taking its time: the old number must not stand for it."""
+        layout = self._layout
         for uuid in list(self._jobs):
+            if layout is not None and not sip.isdeleted(layout):
+                number = layout.itemByUuid(uuid)
+                if lc.is_count_number(number):
+                    self._before_pending.setdefault(uuid, number.text())
             self._store(uuid, lc.CountOutcome(lc.CountState.PENDING))
 
     def _finish(
@@ -310,6 +332,8 @@ class LiveCounts(QObject):
             self._outcomes.pop(uuid, None)
             return
         self._outcomes[uuid] = outcome
+        if outcome.state is not lc.CountState.PENDING:
+            self._before_pending.pop(uuid, None)
         changed = lc.apply_outcome(number, outcome)
         self.outcome_changed.emit(uuid)
         if changed and outcome.state is not lc.CountState.PENDING:

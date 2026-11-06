@@ -210,6 +210,48 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   browser will not read names the layer and says the same.
 - The README of a map with rasters or tile archives says what it carries,
   such as "1 raster image", rather than "0 map features".
+- A runtime download that fails on its own (no internet, a proxy QGIS has
+  not been told about, a full disk) now says why, with the address it tried
+  and the proxy advice; it used to end as silently as a Cancel, leaving only
+  "The OnlyMap runtime is needed to build a map". A full disk no longer
+  shows a Python error instead.
+- The OnlyMap licence and the runtime download are no longer offered again
+  by a cartograph's autosave after each edit, by closing the window (which
+  could show the licence twice) or by unloading the plugin. Picking a
+  layout asks once a session, Check now, Preview and Export ask every time.
+  A vector tile decoder that could not be downloaded is not downloaded again
+  for every export in the same session, and one completed later reaches the
+  next cartograph save instead of it loading the decoder from the web.
+- Cancel while the OnlyMap runtime downloads now stops the export, also when
+  pressed during its last part (the vector tile decoder).
+- The Processing algorithms, after a plugin update that pins a newer
+  runtime, download it before reading the project and through QGIS's network
+  settings, as the dialog does; behind a proxy set only in QGIS they used to
+  fail at the very end.
+- A cartograph's Live count no longer saves as "…": switching to another
+  layout while a count was still calculating left "…" in the layout, its
+  file and QGIS's designer. The count gets its last number back, and a
+  layout not on screen counts its Live counts afresh when it is saved.
+- The live preview follows a Save As: the open tab used to keep showing
+  the map from before the project was saved under a new name, while the
+  dialog said "Live preview updated."
+- The live preview no longer misses a change made while its tab is still
+  reloading from the previous one, and a tab whose connection dropped and
+  came back more than five times keeps following the dialog.
+- Turning Live off while a live Preview is being built now opens a one-off
+  preview, as the switch says, rather than starting a live session.
+- Leaving a cartograph's Atlas tab no longer undoes what was done meanwhile
+  to a map the atlas does not drive, such as an inset zoomed while paging
+  through the series; only the maps the pages moved are put back.
+- An Export or Preview asked for while the live preview is rebuilding or a
+  cartograph is saving (one started behind a question the export asked) now
+  runs once that is done; it used to be dropped with "Still working on the
+  last request.". A live preview change made while a cartograph saves, and
+  the save of a layout not on screen while the web map exports, now wait
+  their turn instead of being lost.
+- An export that finishes after the project was closed or another one
+  opened no longer writes the old project's dialog settings into the new
+  one.
 
 ## [0.3.2] - 2026-11-05
 

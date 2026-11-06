@@ -24,6 +24,14 @@ from nika_onlymap_exporter.ui.runtime_setup import (
 qgis_core = pytest.importorskip("qgis.core")
 
 
+@pytest.fixture(autouse=True)
+def _forget_the_session(monkeypatch):
+    """What one test's session learnt about the runtime is not the next's."""
+    from nika_onlymap_exporter.ui import runtime_setup
+
+    monkeypatch.setattr(runtime_setup, "_session", {})
+
+
 class TestBundledLicence:
     def test_the_licence_ships_with_the_plugin(self) -> None:
         """It has to be readable *before* the runtime is downloaded.
@@ -234,3 +242,230 @@ class TestQgisDownloader:
             make_qgis_downloader()(
                 "https://registry.npmjs.org/@nika-js/onlymap/-/nope-0.0.0.tgz"
             )
+
+
+@pytest.fixture
+def fresh_session(monkeypatch, tmp_path):
+    """No runtime anywhere, the cache in `tmp_path`."""
+    from nika_onlymap_exporter.ui import runtime_setup
+
+    monkeypatch.setattr(runtime_setup, "discover_runtime_dir", lambda: None)
+    monkeypatch.setenv("ONLYMAP_RUNTIME_CACHE", str(tmp_path))
+    return runtime_setup
+
+
+def _package_without_worker() -> bytes:
+    """The pinned runtime's npm tarball, minus the decoder worker."""
+    import io
+    import tarfile
+
+    source = rm.discover_runtime_dir()
+    if source is None:
+        pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+    package = io.BytesIO()
+    with tarfile.open(fileobj=package, mode="w:gz") as archive:
+        for name in (*rm.STORED_GZIPPED, rm.RUNTIME_LICENCE):
+            data = rm.read_runtime_file(source, name)
+            if data is None or name == rm.MVT_WORKER:
+                continue
+            folder = "" if name == rm.RUNTIME_LICENCE else "dist/"
+            info = tarfile.TarInfo(f"{rm.TARBALL_PREFIX}/{folder}{name}")
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    return package.getvalue()
+
+
+class TestFailedDownload:
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            rm.RuntimeDownloadError("Could not download: no route to the proxy"),
+            OSError(28, "No space left on device"),
+        ],
+        ids=["network", "disk"],
+    )
+    def test_the_error_box_says_why(
+        self, qgis_app, fresh_session, tmp_path, monkeypatch, failure
+    ) -> None:
+        """A download that fails on its own - no Cancel pressed - tells the
+        user the cause and the address, rather than ending as silently as a
+        cancel."""
+        version = rm.read_lock()["version"]
+        rm.record_licence_acceptance(version, tmp_path)
+        shown: list[str] = []
+
+        def failing(feedback=None):
+            def download(url, on_progress=None):
+                raise failure
+
+            return download
+
+        monkeypatch.setattr(fresh_session, "make_qgis_downloader", failing)
+        monkeypatch.setattr(
+            fresh_session.QMessageBox,
+            "critical",
+            lambda parent, title, text: shown.append(text),
+        )
+
+        assert fresh_session.ensure_runtime() is None
+        assert len(shown) == 1
+        assert str(failure.args[-1]) in shown[0]
+        assert rm.tarball_url(version) in shown[0]
+
+    def test_cancel_during_a_first_download_exports_nothing(
+        self, qgis_app, fresh_session, tmp_path, monkeypatch
+    ) -> None:
+        """Cancel under "Downloading the OnlyMap runtime" stops the export,
+        even when it is pressed while the decoder (the last part) downloads."""
+        version = rm.read_lock()["version"]
+        rm.record_licence_acceptance(version, tmp_path)
+        package = _package_without_worker()
+
+        def cancelled_at_the_decoder(feedback=None):
+            def download(url, on_progress=None):
+                if url == rm.tarball_url(version):
+                    return package
+                feedback.cancel()
+                raise rm.RuntimeDownloadError("The download was cancelled.")
+
+            return download
+
+        def must_not(*args, **kwargs):
+            raise AssertionError("a cancel was reported as a failure")
+
+        monkeypatch.setattr(
+            fresh_session, "make_qgis_downloader", cancelled_at_the_decoder
+        )
+        monkeypatch.setattr(fresh_session.QMessageBox, "critical", must_not)
+
+        assert fresh_session.ensure_runtime() is None
+
+
+class TestSessionMemory:
+    """What one QGIS session remembers, so that a save nobody pressed for
+    never puts the licence or a download on screen."""
+
+    def _count_prompts(self, monkeypatch, runtime_setup, answer):
+        prompts: list[int] = []
+
+        class Licence:
+            def __init__(self, *args, **kwargs) -> None:
+                prompts.append(1)
+
+            def exec(self):
+                return answer()
+
+        monkeypatch.setattr(runtime_setup, "RuntimeLicenceDialog", Licence)
+        return prompts
+
+    def test_a_declined_licence_is_asked_again_only_when_pressed_for(
+        self, qgis_app, fresh_session, monkeypatch
+    ) -> None:
+        from qgis.PyQt.QtWidgets import QDialog
+
+        never, first_time, always = (
+            fresh_session.Ask.NEVER,
+            fresh_session.Ask.FIRST_TIME,
+            fresh_session.Ask.ALWAYS,
+        )
+
+        prompts = self._count_prompts(
+            monkeypatch, fresh_session, lambda: QDialog.DialogCode.Rejected
+        )
+
+        assert fresh_session.ensure_runtime(ask=never) is None
+        assert prompts == [], "a save nobody pressed for asked"
+        assert fresh_session.ensure_runtime(ask=first_time) is None
+        assert prompts == [1]
+        # Declined: picking another layout, editing, closing ask no more.
+        for ask in (first_time, never, first_time):
+            assert fresh_session.ensure_runtime(ask=ask) is None
+        assert prompts == [1]
+        # Export pressed: the user may have changed their mind.
+        assert fresh_session.ensure_runtime(ask=always) is None
+        assert prompts == [1, 1]
+
+    def test_no_second_licence_inside_the_first(
+        self, qgis_app, fresh_session, monkeypatch
+    ) -> None:
+        """A timer firing inside the licence dialog's own event loop (a close
+        waiting on its save, an autosave) asks nothing more."""
+        from qgis.PyQt.QtWidgets import QDialog
+
+        inner: list[object] = []
+
+        def answer():
+            inner.append(fresh_session.ensure_runtime())
+            return QDialog.DialogCode.Rejected
+
+        prompts = self._count_prompts(monkeypatch, fresh_session, answer)
+
+        assert fresh_session.ensure_runtime() is None
+        assert prompts == [1]
+        assert inner == [None]
+
+    def test_a_decoder_that_did_not_come_is_not_fetched_for_every_export(
+        self, qgis_app, fresh_session, tmp_path, monkeypatch
+    ) -> None:
+        """Runtime installed, decoder worker not (the network refused it):
+        later exports this session are made without it, with no download."""
+        version = rm.read_lock()["version"]
+        rm.record_licence_acceptance(version, tmp_path)
+        package = _package_without_worker()
+        requests: list[str] = []
+
+        def registry(feedback=None):
+            def download(url, on_progress=None):
+                requests.append(url)
+                if url == rm.tarball_url(version):
+                    return package
+                raise rm.RuntimeDownloadError("refused")
+
+            return download
+
+        monkeypatch.setattr(fresh_session, "make_qgis_downloader", registry)
+
+        first = fresh_session.ensure_runtime()
+        assert isinstance(first, rm.FetchingRuntime)
+        asked = len(requests)
+        for _ in range(3):
+            again = fresh_session.ensure_runtime()
+            assert isinstance(again, rm.FetchingRuntime)
+        assert len(requests) == asked, "the decoder was downloaded again"
+
+
+class TestCartographBundle:
+    def test_a_decoder_that_arrives_later_reaches_the_next_save(
+        self, qgis_app, fresh_session, tmp_path
+    ) -> None:
+        """The cartograph keeps the runtime it read between saves; a decoder
+        worker completed since (by a web map export) is read in, rather than
+        every later cartograph loading it from the web."""
+        import shutil
+        import types
+
+        from nika_onlymap_exporter.ui.cartograph.controller import (
+            CartographController,
+        )
+
+        source = rm.discover_runtime_dir()
+        if source is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        version = rm.read_lock()["version"]
+        cache = tmp_path / version
+        cache.mkdir()
+        for name in (rm.RUNTIME_JS, rm.RUNTIME_CSS, *rm.STORED_GZIPPED):
+            stored = rm.stored_path(source, name)
+            if stored is not None and name != rm.MVT_WORKER:
+                shutil.copy(stored, cache / stored.name)
+        controller = types.SimpleNamespace(dialog=None, _runtime=None, _last_error="")
+        never = fresh_session.Ask.NEVER
+
+        first = CartographController._load_runtime(controller, never)
+        assert first is not None and first.mvt_worker is None
+
+        worker = rm.stored_path(source, rm.MVT_WORKER)
+        assert worker is not None
+        shutil.copy(worker, cache / worker.name)
+        second = CartographController._load_runtime(controller, never)
+        assert second is not None and second.mvt_worker is not None

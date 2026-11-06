@@ -343,3 +343,116 @@ class TestAnEditThenALanguageRebuild:
         assert _wait_for(qgis_app, lambda: plugin.dialog is not old)
         assert "Bonjour" in target.read_text(encoding="utf-8")
         plugin.unload()
+
+
+class TestTheRuntimeIsAskedForOnlyWhenTheUserActs:
+    def test_edits_and_closing_never_ask(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        """Picking a layout may ask for the runtime once, Check now always;
+        the autosave after an edit and the save a close waits for never put
+        the licence or a download on screen."""
+        import nika_onlymap_exporter.ui.cartograph.controller as controller_module
+        from nika_onlymap_exporter.ui.runtime_setup import Ask
+
+        asks: list[Ask] = []
+        installed = controller_module.ensure_runtime
+
+        def recording(parent=None, ask=Ask.ALWAYS):
+            asks.append(ask)
+            return installed(parent, ask)
+
+        monkeypatch.setattr(controller_module, "ensure_runtime", recording)
+        target = tmp_path / "survey.html"
+        dialog, cartograph, layout, label = open_saved_cartograph(
+            qgis_app, project, target, _wait_for
+        )
+        assert asks[0] is Ask.FIRST_TIME
+
+        asks.clear()
+        edit_label(layout, label, "New")
+        assert _wait_for(qgis_app, lambda: "New" in _text(target))
+        assert asks and set(asks) == {Ask.NEVER}
+
+        asks.clear()
+        cartograph.check_now()
+        assert _wait_for(qgis_app, lambda: cartograph._job is None)
+        assert Ask.ALWAYS in asks
+
+        asks.clear()
+        edit_label(layout, label, "Newer")
+        _click_close(dialog)
+        assert _wait_for(qgis_app, lambda: not dialog.isVisible())
+        assert "Newer" in _text(target)
+        assert asks and set(asks) == {Ask.NEVER}
+
+
+class TestALayoutNotOnScreen:
+    def test_its_save_counts_its_live_counts_afresh(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        """Nothing follows a layout's Live counts while another is on screen,
+        so its own save counts them, rather than writing whatever its numbers
+        last read (a "…" among them)."""
+        import nika_onlymap_exporter.core.cartograph_export as export_module
+
+        counted: dict[str, list[bool]] = {}
+        installed = export_module.prepare_cartograph
+
+        def recording(layout, *args, refresh_counts=True, **kwargs):
+            counted.setdefault(layout.name(), []).append(refresh_counts)
+            return installed(layout, *args, refresh_counts=refresh_counts, **kwargs)
+
+        monkeypatch.setattr(export_module, "prepare_cartograph", recording)
+        survey_file = tmp_path / "survey.html"
+        dialog, cartograph, survey, label = open_saved_cartograph(
+            qgis_app, project, survey_file, _wait_for
+        )
+        try:
+            add_survey_layout(project, name="Other")
+            other_file = tmp_path / "other.html"
+            cartograph.show_layout_named("Other")
+            cartograph.file_edit.setText(str(other_file))
+            cartograph._on_file_edited(str(other_file))
+            assert _wait_for(
+                qgis_app, lambda: other_file.exists() and cartograph._job is None
+            )
+            counted.clear()
+
+            edit_label(survey, label, "Away")
+
+            assert _wait_for(qgis_app, lambda: "Away" in _text(survey_file))
+            assert counted.get("Survey") and all(counted["Survey"])
+            assert not any(counted.get("Other", []))
+        finally:
+            dialog.close()
+
+    def test_its_save_waits_out_a_web_map_job(
+        self, qgis_app, project, export, tmp_path
+    ) -> None:
+        """An edit to a layout not on screen while the web map exports is
+        saved once the export is done, not dropped."""
+        survey_file = tmp_path / "survey.html"
+        dialog, cartograph, survey, label = open_saved_cartograph(
+            qgis_app, project, survey_file, _wait_for
+        )
+        try:
+            add_survey_layout(project, name="Other")
+            other_file = tmp_path / "other.html"
+            cartograph.show_layout_named("Other")
+            cartograph.file_edit.setText(str(other_file))
+            cartograph._on_file_edited(str(other_file))
+            assert _wait_for(
+                qgis_app, lambda: other_file.exists() and cartograph._job is None
+            )
+            dialog._job = object()  # a web-map export reading the project
+
+            edit_label(survey, label, "Away")
+            _wait_for(qgis_app, lambda: False, timeout=1.5)
+            assert "Away" not in _text(survey_file)
+            dialog._job = None
+
+            assert _wait_for(qgis_app, lambda: "Away" in _text(survey_file))
+        finally:
+            dialog._job = None
+            dialog.close()

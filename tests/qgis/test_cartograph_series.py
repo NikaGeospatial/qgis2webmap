@@ -416,6 +416,21 @@ class TestPreview:
         assert s.tab.preview_page() == 1
         assert s.page_text().startswith("2 of 3")
 
+    def test_leaving_the_tab_keeps_an_edit_to_a_map_the_atlas_does_not_drive(
+        self, series
+    ) -> None:
+        s = series(maps=2, atlas_on=True)
+        main, inset = s.built.maps[0], s.built.maps[1]
+        assert main.atlasDriven() and not inset.atlasDriven()
+        s.tab.next_button.click()
+        moved = QgsRectangle(inset.extent())
+        moved.scale(0.5)
+        inset.zoomToExtent(moved)
+        edited = QgsRectangle(inset.extent())
+        s.cartograph.open_section("layout")
+        s.app.processEvents()
+        assert inset.extent() == edited
+
     def test_the_current_feature_stays_through_a_setting_change(self, series) -> None:
         s = series(atlas_on=True)
         s.tab.next_button.click()  # A-1

@@ -199,7 +199,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
     )
 
     @classmethod
-    def _check_runtime_first(cls) -> None:
+    def _check_runtime_first(cls, feedback=None) -> None:
         """Refuse before reading the project, not after translating it.
 
         The licence gate is a precondition, and a first run used to discover it
@@ -207,11 +207,23 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         translating symbology, all of it discarded. The work was never going to
         be usable, and a failure at the end of a long job reads as a crash where
         the same message up front reads as a prompt.
-        """
-        from ..packaging.runtime_manager import default_provider
 
+        A runtime whose licence was accepted but which is not on disk yet (a
+        plugin update pinning a newer one) is downloaded here too, through
+        QGIS's network settings as the dialog does: the write step's own
+        download knows nothing of a proxy set only in QGIS, and would fail
+        after the whole read.
+        """
+        from ..packaging.runtime_manager import FetchingRuntime, default_provider
+        from ..ui.runtime_setup import make_qgis_downloader
+
+        provider = default_provider()
         try:
-            default_provider().preflight()
+            provider.preflight()
+            if isinstance(provider, FetchingRuntime) and not provider.is_core_cached():
+                provider.fetch(downloader=make_qgis_downloader(feedback))
+        except OSError as exc:
+            raise QgsProcessingException(str(exc)) from exc
         except RuntimeNotAcceptedError as exc:
             # Headless: there is no one to show a licence to, and accepting a
             # commercial licence on a user's behalf from a batch run is not a
@@ -272,7 +284,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         background thread, where QGIS says not to touch the GUI-owned project.
         What is stored holds no project or layer, only what the worker reads.
         """
-        self._check_runtime_first()
+        self._check_runtime_first(feedback)
         self._prepared = self._prepare(parameters, context)
         return True
 
@@ -288,7 +300,7 @@ class ExportProjectAlgorithm(QgsProcessingAlgorithm):
         if self._prepared is None:
             # Called without `prepareAlgorithm` (a script, a test): same thread
             # as the caller, which is the one that owns the project.
-            self._check_runtime_first()
+            self._check_runtime_first(feedback)
             self._prepared = self._prepare(parameters, context)
         pending, report = self._prepared
         self._prepared = None

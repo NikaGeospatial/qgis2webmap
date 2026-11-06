@@ -62,6 +62,7 @@ _PAGE_RELOAD_SCRIPT = """<script>(function () {
   var attempts = 0;
   function connect() {
     var source = new EventSource("__RELOAD_PATH__?rev");
+    source.onopen = function () { attempts = 0; };
     source.onmessage = function (event) {
       if (event.data.indexOf("rev:") === 0
           && Number(event.data.slice(4)) !== served) location.reload();
@@ -75,6 +76,49 @@ _PAGE_RELOAD_SCRIPT = """<script>(function () {
   connect();
 })();</script>
 """
+
+# Written with the revision of the server the page is published as
+# (`PreviewServer.notify_reload`), which the server's stream reports first on
+# connecting: a rebuild that lands while the tab reloads, between its response
+# and its stream, is still followed.
+RELOAD_SCRIPT = f"""
+    <script>
+      // Preview only: reload when the plugin rebuilds the artifact.
+      //
+      // Opened from a file:// path this does nothing at all, deliberately. The
+      // preview file is a real artifact and someone will eventually
+      // double-click it; a dead EventSource retrying against a port that was
+      // never there would be pure noise.
+      (function () {{
+        if (location.protocol === "file:") return;
+        var served = __REVISION__;
+        var attempts = 0;
+        function connect() {{
+          var source = new EventSource("{RELOAD_PATH}?rev");
+          source.onopen = function () {{ attempts = 0; }};
+          source.onmessage = function (event) {{
+            if (event.data.indexOf("rev:") === 0
+                && Number(event.data.slice(4)) > served) location.reload();
+          }};
+          source.onerror = function () {{
+            // The dialog closed, or the server went away. Retry briefly and
+            // then give up: a tab left open for hours must not sit in an
+            // endless reconnect loop against a dead port.
+            source.close();
+            attempts += 1;
+            if (attempts <= 5) setTimeout(connect, 1000);
+          }};
+        }}
+        connect();
+      }})();
+    </script>
+"""
+
+
+def reload_listener(revision: int = 0) -> str:
+    """`RELOAD_SCRIPT` for a page published as `revision` of its server."""
+    return RELOAD_SCRIPT.replace("__REVISION__", str(int(revision)))
+
 
 # How long an idle SSE connection waits before emitting a comment. Without it a
 # proxy or the browser may drop a silent connection, and the preview would go
@@ -405,15 +449,18 @@ class PreviewServer:
             return self.url
 
         self._stopping = False
-        root = self._root
         only = self._only
 
+        preview = self
+
         class _Bound(_PreviewHandler):
-            root_real = os.path.realpath(root)
             only_name = only
 
             def __init__(self, *args: object, **kwargs: object) -> None:
-                super().__init__(*args, directory=str(root), **kwargs)  # type: ignore[arg-type]
+                # Read per request, so `serve_root` takes effect at once.
+                served = preview.root
+                self.root_real = os.path.realpath(served)
+                super().__init__(*args, directory=str(served), **kwargs)  # type: ignore[arg-type]
 
         httpd = _PreviewHTTPServer((BIND_HOST, 0), _Bound)
         # Threads must not keep the QGIS process alive if `stop` is somehow
@@ -499,11 +546,25 @@ class PreviewServer:
             inbox.put(f"rev:{revision}")
 
     def notify_reload(self) -> None:
-        """Tell every connected page to reload itself."""
+        """Tell every connected page that the next revision is published.
+
+        A page reloads when it was written for an older revision than the
+        server's (`reload_listener`), and a stream asked with `?rev`
+        starts with the server's revision: a page reloading when this was
+        sent, or connecting only after, still learns of it.
+        """
         with self._lock:
+            self._revision += 1
+            revision = self._revision
             clients = list(self._clients)
         for inbox in clients:
-            inbox.put("reload")
+            inbox.put(f"rev:{revision}")
+
+    def serve_root(self, root: Path) -> None:
+        """Serve `root` from now on, at the same address: a page already
+        open stays connected and follows (the project was saved under a new
+        name, which keys its preview directory)."""
+        self._root = Path(root).resolve()
 
     def stop(self) -> None:
         """Shut down and release every blocked event stream.

@@ -54,7 +54,7 @@ from ..packaging.dependency_scanner import (
 from ..packaging.raster_cog import CancelCheck, ProgressCallback
 from ..writers.onlymap_writer import ArtifactResult, OnlyMapWriter
 from .links import FEATURE_REQUEST_URL
-from .live_server import RELOAD_PATH
+from .live_server import RELOAD_SCRIPT, reload_listener
 
 PREVIEW_DIR_NAME = "qgis2webmap-preview"
 
@@ -102,37 +102,6 @@ CAMERA_SCRIPT = """
         map.setAttribute("center", `[${saved.lng}, ${saved.lat}]`);
         map.setAttribute("zoom", String(saved.zoom));
       }
-    </script>
-"""
-
-
-RELOAD_SCRIPT = f"""
-    <script>
-      // Preview only: reload when the plugin rebuilds the artifact.
-      //
-      // Opened from a file:// path this does nothing at all, deliberately. The
-      // preview file is a real artifact and someone will eventually
-      // double-click it; a dead EventSource retrying against a port that was
-      // never there would be pure noise.
-      (function () {{
-        if (location.protocol === "file:") return;
-        var attempts = 0;
-        function connect() {{
-          var source = new EventSource("{RELOAD_PATH}");
-          source.onmessage = function (event) {{
-            if (event.data === "reload") location.reload();
-          }};
-          source.onerror = function () {{
-            // The dialog closed, or the server went away. Retry briefly and
-            // then give up: a tab left open for hours must not sit in an
-            // endless reconnect loop against a dead port.
-            source.close();
-            attempts += 1;
-            if (attempts <= 5) setTimeout(connect, 1000);
-          }};
-        }}
-        connect();
-      }})();
     </script>
 """
 
@@ -363,8 +332,10 @@ def prune_stale_previews(max_age_days: float = 7.0) -> None:
 # its tab closes, but deaf to "reload" - a live session started later on the
 # same server must not turn this tab live behind the user's back.
 PRESENCE_SCRIPT = RELOAD_SCRIPT.replace(
-    'if (event.data === "reload") location.reload();', "/* presence only */"
-)
+    """if (event.data.indexOf("rev:") === 0
+                && Number(event.data.slice(4)) > served) location.reload();""",
+    "/* presence only */",
+).replace("__REVISION__", "0")
 
 
 def compose_preview_hook(
@@ -372,6 +343,7 @@ def compose_preview_hook(
     live: bool = False,
     final: bool = False,
     served: bool = False,
+    revision: int = 0,
 ) -> str:
     """Everything injected at the template's `@PREVIEW_HOOK@`, for a preview.
 
@@ -384,7 +356,7 @@ def compose_preview_hook(
     # blanks, behaving unlike the file `final` claims to match byte-for-byte.
     hook = terrain_zoom_clamp(project) + CAMERA_SCRIPT
     if live:
-        hook += RELOAD_SCRIPT
+        hook += reload_listener(revision)
     elif served:
         hook += PRESENCE_SCRIPT
     # `final` promises byte-for-byte what ships, so the call to action stays
@@ -420,6 +392,7 @@ def write_preview(
     served: bool = False,
     on_progress: ProgressCallback | None = None,
     should_cancel: CancelCheck | None = None,
+    revision: int = 0,
 ) -> ArtifactResult:
     """Build a preview artifact through the production writer.
 
@@ -432,6 +405,7 @@ def write_preview(
     is off by default so that a preview written for any other reason carries
     nothing that expects a server to exist. `served` without `live` is a
     one-off preview on that server: it says it is there, and never reloads.
+    `revision` is the server revision a live page is published as.
 
     `on_progress` and `should_cancel` reach the writer's raster pass, the one
     slow part. A preview is written in place with no commit step, so a cancelled
@@ -450,7 +424,7 @@ def write_preview(
         mode=preview_mode(project),
         compress=final,
         preview_hook=compose_preview_hook(
-            project, live=live, final=final, served=served
+            project, live=live, final=final, served=served, revision=revision
         ),
         on_progress=on_progress,
         should_cancel=should_cancel,

@@ -519,6 +519,28 @@ class TestLongCounts:
         assert number.text() == str(expected)
         assert not pane.live_counts.busy()
 
+    def test_leaving_the_layout_mid_count_gives_the_number_back(
+        self, qgis_app, crowded, monkeypatch
+    ) -> None:
+        """A count still reading "…" when the page shows another layout reads
+        its last number again: "…" would be saved with the layout and shown
+        in QGIS's own designer."""
+        page, pane, layer = crowded
+        from nika_onlymap_exporter.ui.cartograph import live_counts
+
+        monkeypatch.setattr(live_counts, "SLICE_SECONDS", 0.0)
+        monkeypatch.setattr(lc, "BATCH", 5)
+        number = _add(qgis_app, pane, page)
+        _pick(_setup(pane).layer_combo, layer.id())
+        _wait_for(qgis_app, lambda: number.text().isdigit(), "the count", 60.0)
+        last = number.text()
+        page.frame.zoomToExtent(QgsRectangle(0, 0, 4, 4))
+        _number_shows(qgis_app, number, "\N{HORIZONTAL ELLIPSIS}")
+
+        pane.show_layout(None)
+
+        assert number.text() == last
+
 
 class TestInvalidSources:
     def test_a_removed_layer_gives_a_dash_and_says_why(

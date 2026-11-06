@@ -26,6 +26,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import shutil
 import sys
 import time
 import traceback
@@ -274,6 +275,8 @@ FIDELITY_POLL_MS = 500
 # How long a change must settle before a rebuild. Dragging a colour picker emits
 # a change per pixel, and each rebuild re-runs the production writer.
 LIVE_DEBOUNCE_MS = 400
+# How often a request waiting for the one job slot looks whether it is free.
+WAITING_JOB_POLL_MS = 100
 
 # Whether Preview stays live. Per machine, like the theme: a working habit,
 # not a property of the map.
@@ -768,6 +771,15 @@ class MainDialog(QDialog):
         # dialog's fourth rule exists to prevent.
         self._job: BackgroundJob | None = None
         self._job_on_success: Callable[[object], None] | None = None
+        # Whether the running job is one nobody pressed for (the live
+        # preview's rebuild), and the one request the user made meanwhile,
+        # started when the slot frees rather than refused: (work, on_success,
+        # label, project generation).
+        self._job_quiet = False
+        self._waiting_job: tuple[object, object, str, int] | None = None
+        self._waiting_job_timer = QTimer(self)
+        self._waiting_job_timer.setInterval(WAITING_JOB_POLL_MS)
+        self._waiting_job_timer.timeout.connect(self._start_waiting_job)
         self._cached_export = None
         self._cached_report = None
         self._cached_signature: str | None = None
@@ -3875,7 +3887,9 @@ class MainDialog(QDialog):
     ) -> bool:
         """Run `work` on a worker thread, `on_success` back on this one.
 
-        Returns False if something is already running. One job at a time is a
+        Returns False if it can neither start nor wait for the slot
+        (`_refuse_while_busy`); a request that waits returns True and starts
+        once the running job or cartograph save is done. One job at a time is a
         hard rule: each job works from a snapshot of the project taken when it
         was requested, and two jobs would race to write the same preview and
         cache.
@@ -3885,11 +3899,20 @@ class MainDialog(QDialog):
         dialog per keystroke for a user who is mid-edit and whose next change
         may well fix it.
         """
-        if self._refuse_while_busy():
+        if self._refuse_while_busy(quiet):
             return False
+        if self._job is not None or self._cartograph.busy:
+            # Asked for while the live preview rebuilds or a cartograph saves
+            # (say, from inside a dialog that let one start): it waits for
+            # them rather than being dropped.
+            self._waiting_job = (work, on_success, label, self._project_generation)
+            self.status_label.setText(label)
+            self._waiting_job_timer.start()
+            return True
 
         job = BackgroundJob(work)
         self._job = job
+        self._job_quiet = quiet
         job.progressed.connect(self._on_job_progress)
         job.committing.connect(self._on_job_committing)
         job.failed.connect(
@@ -3909,12 +3932,41 @@ class MainDialog(QDialog):
         job.start()
         return True
 
-    def _refuse_while_busy(self) -> bool:
-        """Say so and return True if a job or the cartograph is already working."""
-        if self._job is not None or self._cartograph.busy:
+    def _refuse_while_busy(self, quiet: bool = False) -> bool:
+        """Return True if this request cannot start now, nor wait to.
+
+        The user's own last request still running is said so. A `quiet`
+        request (the live preview's rebuild) gives way to anything - a job, a
+        cartograph save, a request waiting - and its timer comes back for it,
+        with the settings as they are by then. Anything else waits
+        (`_start_job`).
+        """
+        busy = self._job is not None or self._cartograph.busy
+        if quiet:
+            if busy or self._waiting_job is not None:
+                self._rebuild_timer.start()
+                return True
+            return False
+        if self._job is not None and not self._job_quiet:
             self.status_label.setText(tr("Still working on the last request."))
             return True
         return False
+
+    def _start_waiting_job(self) -> None:
+        """Start the request that waited for the slot, once it is free."""
+        waiting = self._waiting_job
+        if self._shut_down or waiting is None:
+            self._waiting_job = None
+            self._waiting_job_timer.stop()
+            return
+        if self._job is not None or self._cartograph.busy:
+            return
+        self._waiting_job = None
+        self._waiting_job_timer.stop()
+        work, on_success, label, generation = waiting
+        if generation != self._project_generation:
+            return  # asked of a project that has since been replaced
+        self._start_job(work, on_success, label)
 
     def _set_busy(self, busy: bool, label: str = "") -> None:
         """Show the work, and stop the user starting more of it.
@@ -4159,16 +4211,20 @@ class MainDialog(QDialog):
         if self._shut_down or not self._live_running():
             return
 
-        if self._job is not None:
-            # Something is already running - either this rebuild or an export.
-            # Come back after it, so the last edit is never the dropped one.
-            self._rebuild_timer.start()
+        if self._refuse_while_busy(quiet=True):
+            # Something is already running - this rebuild, an export, a
+            # cartograph save - or waiting to. Come back after it, so the last
+            # edit is never the dropped one.
             return
 
         def then(export, _report) -> None:
             # Built here, on the GUI thread, because it reads the licence field.
             writer = self._writer()
+            # Read per rebuild: a Save As since the last one moves the preview
+            # to the new name's directory, which the server then serves.
             identity = self._project_identity()
+            # The revision this page is published as (`notify_reload`).
+            revision = self._server.revision + 1 if self._server is not None else 0
 
             def work(progress: Progress):
                 progress.step(READ_SHARE, tr("Updating the preview..."))
@@ -4179,11 +4235,20 @@ class MainDialog(QDialog):
                     live=True,
                     on_progress=self._writing_progress(progress),
                     should_cancel=progress.should_cancel,
+                    revision=revision,
                 )
 
             def on_written(_result) -> None:
                 if self._shut_down or self._server is None:
                     return
+                root = preview_directory(identity).resolve()
+                if self._server.root != root:
+                    # Saved under a new name since the last rebuild: the open
+                    # tab follows to the new directory, and the old one,
+                    # which closing would no longer find, goes now.
+                    old_root = self._server.root
+                    self._server.serve_root(root)
+                    shutil.rmtree(old_root, ignore_errors=True)
                 self._server.notify_reload()
                 self.status_label.setText(tr("Live preview updated."))
 
@@ -4450,7 +4515,7 @@ class MainDialog(QDialog):
             then(current, self._cached_report)
             return True
 
-        if self._refuse_while_busy():
+        if self._refuse_while_busy(quiet):
             return False
 
         self._pending_canvas_extent = canvas_extent
@@ -4604,7 +4669,9 @@ class MainDialog(QDialog):
                 return
 
             self._last_snapshot = self.state.snapshot()
-            if live and self._server is not None and not self._live_running():
+            # Live turned off while this was being built: opened as a one-off.
+            live_now = live and self.live_switch.isChecked()
+            if live_now and self._server is not None and not self._live_running():
                 # A fresh server for a live session: an old one-off tab still
                 # connected to this one would count as a viewer, and keep the
                 # session rebuilding after its own tab had closed.
@@ -4619,7 +4686,7 @@ class MainDialog(QDialog):
                 return
 
             QDesktopServices.openUrl(QUrl(url))
-            if not live:
+            if not live_now:
                 self._idle_timer.start()
                 self.status_label.setText(
                     tr(
@@ -4870,7 +4937,10 @@ class MainDialog(QDialog):
                 return
 
             result, outcome = built
-            save_state(self.project, self.state)
+            # A project cleared or replaced while this wrote is not the one
+            # these settings are about (`_shutdown` says the same).
+            if not self._project_cleared:
+                save_state(self.project, self.state)
             self._remember_destination(destination)
 
             # What the map file was written from, so a later Share action
@@ -5043,6 +5113,8 @@ class MainDialog(QDialog):
         job, self._job = self._job, None
         if job is not None:
             retire(job, SHUTDOWN_WAIT_MS)
+        self._waiting_job = None
+        self._waiting_job_timer.stop()
 
         try:
             # A project that was cleared or replaced is not the one these

@@ -18,6 +18,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+from enum import Enum, auto
 from pathlib import Path
 
 from qgis.PyQt.QtCore import Qt
@@ -197,12 +198,49 @@ def bundled_licence_text() -> str:
     )
 
 
-def ensure_runtime(parent=None) -> RuntimeProvider | None:
+class Ask(Enum):
+    """Whether a caller may put the licence or a download on screen."""
+
+    # The user pressed something that needs the runtime: Export, Preview,
+    # Check now. Asked again after a refusal - they may have changed their mind
+    # or fixed their network since.
+    ALWAYS = auto()
+    # A save that follows the user's own choice (picking a layout): asks only
+    # when nothing has been asked or tried for this runtime this session.
+    FIRST_TIME = auto()
+    # A save nobody pressed for - an autosave after an edit, a close, an
+    # unload: uses what is on disk and never asks or downloads.
+    NEVER = auto()
+
+
+class Acquisition(Enum):
+    """How this session's last attempt to get the runtime ended."""
+
+    DECLINED = auto()  # the licence was not accepted
+    CANCELLED = auto()  # the user stopped the download
+    FAILED = auto()  # the download failed, and the user was told why
+    # The runtime is installed and its decoder worker could not be added
+    # (failed or cancelled): maps are made without it for the rest of the
+    # session rather than downloading it again for every export.
+    CORE_ONLY = auto()
+
+
+# By runtime version, for this QGIS session only: a new session tries again.
+_session: dict[str, Acquisition] = {}
+
+# True while the licence or a download is on screen. Its event loop runs the
+# dialogs' timers (an autosave, a close polling for its save), and none of them
+# may open a second licence dialog or download inside the first.
+_acquiring = False
+
+
+def ensure_runtime(parent=None, ask: Ask = Ask.ALWAYS) -> RuntimeProvider | None:
     """Make sure a runtime is available, asking and downloading if needed.
 
     Returns a provider ready to `load()`, or `None` when the user declined or
     the download failed - in which case they have already been told why, and
-    the caller should simply not export.
+    the caller should simply not export. `ask` says whether this caller may
+    ask at all; one that may not gets `None` unless the runtime is installed.
 
     A local runtime short-circuits everything: contributors, CI, and machines
     with a manually installed runtime pack never see a prompt.
@@ -213,11 +251,19 @@ def ensure_runtime(parent=None) -> RuntimeProvider | None:
     provider = FetchingRuntime()
     if provider.is_cached():
         return provider
+    tried = _session.get(provider.version)
+    may_ask = not _acquiring and (
+        ask is Ask.ALWAYS or (ask is Ask.FIRST_TIME and tried is None)
+    )
     if provider.is_core_cached():
         # Only a decoder worker is missing, from a cache written before exports
         # carried it. Open source, so no licence to ask for, and the map is
         # made either way: without it the export says what the map then needs.
+        if not may_ask or tried is Acquisition.CORE_ONLY:
+            return provider
         return _download_with_progress(provider, parent, required=False)
+    if not may_ask:
+        return None
 
     if not provider.version:
         QMessageBox.critical(
@@ -234,16 +280,26 @@ def ensure_runtime(parent=None) -> RuntimeProvider | None:
         return _download_with_progress(provider, parent)
 
     dialog = RuntimeLicenceDialog(provider.version, bundled_licence_text(), parent)
-    # `exec()`, not `exec_()`: PyQt6 removed the trailing-underscore alias, and
-    # QGIS 4 ships PyQt6. Likewise every enum below is accessed through its
-    # scope (`Qt.TextFormat.RichText`, not `Qt.RichText`) - PyQt6 dropped the
-    # unscoped names, and PyQt5 accepts the scoped form, so scoped is the one
-    # spelling that works on both.
-    if dialog.exec() != QDialog.DialogCode.Accepted:
+    if _ask_for_licence(dialog) != QDialog.DialogCode.Accepted:
+        _session[provider.version] = Acquisition.DECLINED
         return None
 
     record_licence_acceptance(provider.version)
     return _download_with_progress(provider, parent)
+
+
+def _ask_for_licence(dialog: RuntimeLicenceDialog) -> int:
+    global _acquiring
+    _acquiring = True
+    try:
+        # `exec()`, not `exec_()`: PyQt6 removed the trailing-underscore alias,
+        # and QGIS 4 ships PyQt6. Likewise every enum here is accessed through
+        # its scope (`Qt.TextFormat.RichText`, not `Qt.RichText`) - PyQt6
+        # dropped the unscoped names, and PyQt5 accepts the scoped form, so
+        # scoped is the one spelling that works on both.
+        return dialog.exec()
+    finally:
+        _acquiring = False
 
 
 def _download_with_progress(
@@ -263,7 +319,11 @@ def _download_with_progress(
     no byte progress for this request. A bar frozen at 0% for the whole
     download reads as a hung plugin; a moving indeterminate one is honest about
     what is known - that work is happening, but not how far along it is.
+
+    Cancel stops what the dialog names: the whole runtime, so nothing is
+    exported, or only the decoder, so the map is made without it.
     """
+    global _acquiring
     from qgis.core import QgsFeedback
 
     progress = QProgressDialog(
@@ -285,22 +345,39 @@ def _download_with_progress(
     progress.canceled.connect(feedback.cancel)
     QApplication.processEvents()
 
+    _acquiring = True
     try:
         provider.fetch(downloader=make_qgis_downloader(feedback))
-    except RuntimeUnavailableError as exc:
+    except (RuntimeUnavailableError, OSError) as exc:
+        # Read before the dialog closes: `close()` emits `canceled` too, which
+        # would make every failure look like the user's Cancel.
+        cancelled = feedback.isCanceled()
+        progress.canceled.disconnect(feedback.cancel)
         progress.close()
-        # The runtime is in place and only its decoder worker failed: the map
-        # is made without it, as when only the worker was being completed.
         if not required or provider.is_core_cached():
+            if required and cancelled:
+                # Cancelled under "Downloading the OnlyMap runtime": the
+                # runtime arrived, the export the user stopped does not run.
+                _session[provider.version] = Acquisition.CANCELLED
+                return None
+            # The runtime is in place and only its decoder worker failed: the
+            # map is made without it, as when only the worker was being
+            # completed.
+            _session[provider.version] = Acquisition.CORE_ONLY
             return provider
-        if not feedback.isCanceled():
-            QMessageBox.critical(
-                parent,
-                tr("OnlyMap runtime"),
-                f"{exc}\n\nDownload URL:\n{tarball_url(provider.version)}",
-            )
+        if cancelled:
+            _session[provider.version] = Acquisition.CANCELLED
+            return None
+        _session[provider.version] = Acquisition.FAILED
+        QMessageBox.critical(
+            parent,
+            tr("OnlyMap runtime"),
+            f"{exc}\n\nDownload URL:\n{tarball_url(provider.version)}",
+        )
         return None
     finally:
+        _acquiring = False
         progress.close()
 
+    _session.pop(provider.version, None)
     return provider
