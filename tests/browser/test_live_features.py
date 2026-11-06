@@ -12,6 +12,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import threading
 import time
@@ -328,6 +329,71 @@ class TestLiveFirst:
             assert state["errors"] >= 1
         finally:
             services.failing = False
+
+
+# Points of any colour: what the map draws at all.
+COUNT_DRAWN = COUNT_POINTS.replace(
+    "data[i + 2] > 190 && data[i] < 70 && data[i + 1] < 110 && data[i + 3] > 200",
+    "data[i + 3] > 150",
+)
+
+
+@pytest.mark.parametrize("renderer", ["categorized", "graduated"])
+def test_what_qgis_does_not_draw_stays_undrawn_live(
+    page, runtime, services, tmp_path, renderer
+) -> None:
+    """A style QGIS draws only some features of - lakes only, no class for
+    rivers; depths from 2 up - keeps the layer live: the runtime's filter
+    leaves out the rest, which used to need the embedded copy."""
+    from nika_onlymap_exporter.core.export_ir import (
+        CategorySpec,
+        GraduatedClassSpec,
+        ValueRange,
+    )
+    from nika_onlymap_exporter.core.fidelity_report import FidelityReportBuilder
+    from nika_onlymap_exporter.core.live_features import resolve_live
+
+    blue = SymbolSpec(fill_color=Color(r=20, g=60, b=230), radius=9.0)
+    spec = (
+        RendererSpec(
+            kind=RendererKind.CATEGORIZED,
+            field_name="kind",
+            categories=(CategorySpec("lake", "Lake", blue),),
+            unmatched_hidden=True,
+        )
+        if renderer == "categorized"
+        else RendererSpec(
+            kind=RendererKind.GRADUATED,
+            field_name="depth",
+            classes=(GraduatedClassSpec(2.0, 9.0, "Deep", blue),),
+            value_ranges=(ValueRange(0.0, 2.0, False), ValueRange(2.0, 9.0, True)),
+        )
+    )
+    url = wfs_template(services.url("cors/wfs"), TYPENAME)
+    layer = _layer(url, LiveMode.LIVE_FIRST)
+    layer = resolve_live(
+        dataclasses.replace(
+            layer,
+            renderer=spec,
+            live=LiveFeaturesSpec(url=url, host="127.0.0.1", service="WFS"),
+        ),
+        FidelityReportBuilder(),
+        too_big_bytes=10**9,
+    )
+    assert layer.live is not None, "the layer was embedded"
+    entry = _export(runtime, tmp_path, layer)
+    _open(page, entry.as_uri())
+    # Six lakes of twelve stations; nine deeper than 2 m (2 m itself is the
+    # switched-off range's, which QGIS tests first).
+    expected = 6 if renderer == "categorized" else 9
+    counted = [0]
+
+    def check(page):
+        counted[0] = page.evaluate(COUNT_DRAWN)
+        return counted[0] == expected
+
+    _wait(page, check)
+    assert counted[0] == expected
 
 
 class TestNotice:

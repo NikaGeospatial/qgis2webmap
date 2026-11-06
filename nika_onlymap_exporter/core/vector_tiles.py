@@ -57,7 +57,7 @@ from .layer_reader import (
     read_attribution,
     scale_range,
 )
-from .manifest_builder import tile_undrawn_kept
+from .manifest_builder import undrawn_left
 from .popup_translator import translate_popup
 from .renderer_translator import translate_renderer
 
@@ -292,10 +292,10 @@ def _report_undrawn_features(
 ) -> None:
     """The rows for the features QGIS does not draw, which a layer read as
     tiles leaves in its archive rather than out of the map: the map leaves
-    them undrawn (`manifest_builder.tile_filter`, `_tile_renderer`), and
+    them undrawn (`manifest_builder.undrawn_filter`, `_tile_renderer`), and
     says what it cannot."""
     subject = f"Symbology of '{name}'"
-    kept = tile_undrawn_kept(renderer)
+    kept = undrawn_left(renderer)
     if kept == "neighbour colour":
         # The row below says which are drawn after all.
         instead = "matching features stay in the tile archive the map carries."

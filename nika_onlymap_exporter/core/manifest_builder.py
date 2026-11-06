@@ -1260,16 +1260,18 @@ def build_vector_tile_layer_element(
     )
 
 
-def tile_filter(renderer: RendererSpec) -> list[tuple[str, str]]:
-    """The runtime's filter leaving out a tile layer's features that QGIS does
-    not draw, which no colour can do alone: an undrawn feature would still
-    answer a click and light up under the pointer.
+def undrawn_filter(renderer: RendererSpec) -> list[tuple[str, str]]:
+    """The runtime's filter leaving out the features QGIS does not draw from
+    a layer the map does not get to drop them from - one drawn from a tile
+    archive or loaded live - which no colour can do alone: an undrawn
+    feature would still answer a click and light up under the pointer.
 
     A categorized layer without an "all other values" class keeps its classes'
     values, so switched-off classes and values no class claims go; a graduated
     one keeps the span from its lowest drawn range to its highest, so values
-    outside every range, in switched-off ranges at either end, and NULL (a
-    tile leaves the field out) go. Nothing for the rest (`tile_undrawn_kept`).
+    outside every range, in switched-off ranges at either end, and in a tile
+    NULL (which leaves the field out) go. Nothing for the rest
+    (`undrawn_left`).
     """
     field = renderer.field_name
     if not field or renderer.field_generated:
@@ -1282,19 +1284,40 @@ def tile_filter(renderer: RendererSpec) -> list[tuple[str, str]]:
                 ("filter-categories", json.dumps(values, ensure_ascii=False)),
             ]
     if renderer.kind is RendererKind.GRADUATED and renderer.classes:
-        span = [
-            min(c.lower for c in renderer.classes),
-            max(c.upper for c in renderer.classes),
-        ]
+        low = min(c.lower for c in renderer.classes)
+        high = max(c.upper for c in renderer.classes)
+        # QGIS tests the ranges in order: one switched off ahead of the
+        # lowest drawn range, ending where it starts, claims that value.
+        for value_range in renderer.value_ranges:
+            if value_range.drawn and value_range.lower == low:
+                break
+            if not value_range.drawn and value_range.lower <= low <= value_range.upper:
+                low = _float32_above(low)
+                break
+        span = [low, high]
         return [("filter-field", field), ("filter-range", json.dumps(span))]
     return []
 
 
-def tile_undrawn_kept(
+def _float32_above(value: float) -> float:
+    """The next number above `value` that the GPU, comparing in 32 bits, tells
+    apart from it."""
+    import struct
+
+    (bits,) = struct.unpack("<i", struct.pack("<f", value))
+    if value == 0:
+        bits = 1
+    else:
+        bits += 1 if value > 0 else -1
+    (above,) = struct.unpack("<f", struct.pack("<i", bits))
+    return float(above) if above > value else _float32_above(above)
+
+
+def undrawn_left(
     renderer: RendererSpec,
 ) -> Literal["clickable", "neighbour colour"] | None:
     """What a tile layer's map still finds that QGIS does not draw, beyond
-    `tile_filter`'s reach, or `None` when it finds nothing of the sort.
+    `undrawn_filter`'s reach, or `None` when it finds nothing of the sort.
 
     Switched-off classes of a layer with an "all other values" class, values
     no class claims past the filter's limit, and a graduated layer's values
@@ -1307,7 +1330,7 @@ def tile_undrawn_kept(
         return None
     if renderer.kind is RendererKind.CATEGORIZED:
         hidden = bool(renderer.hidden_values or renderer.unmatched_hidden)
-        return "clickable" if hidden and not tile_filter(renderer) else None
+        return "clickable" if hidden and not undrawn_filter(renderer) else None
     if renderer.kind is RendererKind.GRADUATED and renderer.classes:
         if not _inner_gaps(renderer.classes):
             return None
@@ -1385,14 +1408,14 @@ def _tile_renderer(renderer: RendererSpec) -> RendererSpec:
 def _vector_tile_symbology(layer: ExportLayer) -> list[tuple[str, str | None]]:
     """The QGIS renderer of a layer drawn from tiles: its colours, line widths
     and point sizes, as `build_layer_element` writes them for features, and
-    what leaves out the features QGIS does not draw (`tile_filter`)."""
+    what leaves out the features QGIS does not draw (`undrawn_filter`)."""
     renderer = layer.renderer
     symbol = renderer.representative_symbol or SymbolSpec()
     drawn = _tile_renderer(renderer)
     attributes: list[tuple[str, str | None]] = [
         ("get-fill-color", fill_expression(drawn, layer.geometry_kind)),
         ("get-line-color", line_color_expression(drawn, layer.geometry_kind)),
-        *tile_filter(renderer),
+        *undrawn_filter(renderer),
     ]
     if renderer.kind is RendererKind.SINGLE:
         swatch = symbol.fill_color or symbol.stroke_color
@@ -1703,6 +1726,10 @@ def _live_layer_element(
         ("data", live.url),
         ("data-q2w-live", live.mode.value),
     ]
+    # Live features arrive with what QGIS does not draw among them: the
+    # runtime's filter leaves those out, as the export drops them from a copy.
+    if not any(name.startswith("filter-") for name, _ in attributes):
+        attributes += undrawn_filter(layer.renderer)
     lines = [f"{indent}<om-layer", _attrs_to_string(attributes, inner), f"{indent}>"]
     if live.mode is LiveMode.LIVE_FIRST:
         payload = script_safe(layer.geojson_text)

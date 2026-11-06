@@ -35,6 +35,7 @@ from .export_ir import (
     RendererKind,
 )
 from .fidelity_report import FidelityReportBuilder
+from .manifest_builder import CATEGORY_FILTER_MAX, undrawn_left
 
 # QGIS provider key -> the service, as the Fidelity tab names it. Only these
 # three: the runtime pages no other feature service (SensorThings stays
@@ -161,17 +162,23 @@ def _computed_at_export(layer: ExportLayer) -> list[str]:
     renderer = layer.renderer
     if renderer.field_generated:
         reasons.append("its rule-based style (each feature's rule is worked out)")
-    elif (
-        renderer.hidden_values
-        or renderer.unmatched_hidden
-        or (
-            renderer.kind is RendererKind.GRADUATED
-            and any(not value_range.drawn for value_range in renderer.value_ranges)
-        )
-    ):
-        reasons.append(
-            "the classes switched off in its style (their features are left out)"
-        )
+    elif undrawn_left(renderer) is not None:
+        # What the runtime's filter leaves out on a live layer is left to it
+        # (`manifest_builder.undrawn_filter`); the rest is dropped at export.
+        if renderer.kind is RendererKind.GRADUATED:
+            reasons.append(
+                "the ranges switched off between drawn ones in its style, or "
+                "the gaps between its ranges (their features are left out)"
+            )
+        elif renderer.unmatched_hidden:
+            reasons.append(
+                f"which of its features belong to its more than "
+                f"{CATEGORY_FILTER_MAX} categories (the others are left out)"
+            )
+        else:
+            reasons.append(
+                "the categories switched off in its style (their features are left out)"
+            )
     labeling = layer.labeling
     if labeling.enabled and labeling.field_name:
         if labeling.number_format is not None:
@@ -233,9 +240,8 @@ def resolve_live(
             )
         if computed:
             causes.append(
-                f"{_listed(computed)} {'is' if len(computed) == 1 else 'are'} "
-                "worked out from the features when the map is exported, which "
-                "features loaded live would not carry"
+                f"the map works out {_listed(computed)} from the features when "
+                "it is exported, which features loaded live would not carry"
             )
         detail = (
             f"Embedded, not loaded live from {live.host}: {'; and '.join(causes)}. "

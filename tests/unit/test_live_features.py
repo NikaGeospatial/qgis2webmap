@@ -346,10 +346,10 @@ class TestResolve:
                 {"cluster_max_zoom": 9},
                 "Embedded, not loaded live from h: the map cannot load it live "
                 "because of its date fields, which the service sends as numbers; "
-                "and its count bubbles (where points stop merging is worked out) "
-                "is worked out from the features when the map is exported, which "
-                "features loaded live would not carry. The map shows the features "
-                "as they were then.",
+                "and the map works out its count bubbles (where points stop "
+                "merging is worked out) from the features when it is exported, "
+                "which features loaded live would not carry. The map shows the "
+                "features as they were then.",
             ),
         ],
         ids=["wfs-1.1", "date-fields-and-bubbles"],
