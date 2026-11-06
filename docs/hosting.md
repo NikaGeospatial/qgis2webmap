@@ -64,29 +64,32 @@ says what each one sees.
 Opening the exported file directly, or putting it on an ordinary static host,
 needs nothing special. But if you serve it from a site that sets a strict
 **Content Security Policy**, the map will not draw unless that policy allows
-`unsafe-eval` for scripts.
+three things for scripts:
 
-This is not a quirk of one feature. The map renderer turns your QGIS symbology
-into small expressions — the colour for each category, the class breaks of a
-graduated layer, label text — and compiles them in the browser. That
-compilation step is what a policy without `unsafe-eval` blocks, so a page that
-forbids it loses the whole map, not just the styling.
+- `'unsafe-eval'`: the map renderer turns your QGIS symbology into small
+  expressions - the colour for each category, the class breaks of a graduated
+  layer, label text - and compiles them in the browser. A policy without it
+  loses the whole map, not just the styling.
+- `'unsafe-inline'`: the exported page starts the map with scripts written
+  into the page itself.
+- `blob:`: a single-file export carries the runtime packed inside the page and
+  unpacks it into a `blob:` address to run it.
 
-What you will see: the map area stays empty and the browser console reports a
-Content Security Policy violation.
+What you will see without them: the map area stays empty and the browser
+console reports a Content Security Policy violation.
 
-The fix is to allow `unsafe-eval` in the `script-src` directive of the page
-hosting the map, ideally scoped to just that page:
+The fix is to allow them in the `script-src` directive of the page hosting the
+map, ideally scoped to just that page:
 
 ```
-Content-Security-Policy: script-src 'self' 'unsafe-eval'
+Content-Security-Policy: script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:
 ```
 
 If the map uses layers with SVG or shaped markers, it also carries those markers
 as embedded images, so the policy has to allow `data:` images:
 
 ```
-Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data:
+Content-Security-Policy: script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; img-src 'self' data:
 ```
 
 Without it the markers do not appear and the rest of the map draws normally,
@@ -97,7 +100,7 @@ draws, loaded from the service, so the policy has to allow images from its
 host too (here `https://maps.example.org`):
 
 ```
-Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data: https://maps.example.org
+Content-Security-Policy: script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; img-src 'self' data: https://maps.example.org
 ```
 
 Without it the legend lists the layer by name, with no picture. A popup
@@ -105,11 +108,12 @@ picture that is a web address is an image from its host in the same way, so
 the policy has to allow that host too for the picture to show.
 
 A map with a PMTiles archive or a vector tile layer starts the decoder it
-carries for their tiles as a worker from a `data:` address, so the policy has
-to allow workers from `data:` too, or those layers stay empty:
+carries for their tiles as a worker from a `data:` address, and a map with a
+web raster (COG) starts its decoder from a `blob:` address, so a policy that
+sets `worker-src` has to allow both, or those layers stay empty:
 
 ```
-Content-Security-Policy: script-src 'self' 'unsafe-eval'; img-src 'self' data:; worker-src data:
+Content-Security-Policy: script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; img-src 'self' data:; worker-src blob: data:
 ```
 
 A policy that also sets `connect-src` (or `default-src`) has to allow the

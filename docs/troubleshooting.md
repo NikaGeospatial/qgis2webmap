@@ -286,8 +286,10 @@ a licence grant — commercial use needs a key either way. See
 ### The map is blank on my own site but fine locally
 
 Your site's **Content Security Policy**. The map's styling is driven by
-expressions the runtime evaluates at draw time, so a policy without
-`'unsafe-eval'` in `script-src` stops it rendering — not partly, entirely. See
+expressions the runtime evaluates at draw time, and the page starts the map
+with scripts of its own, so a policy without `'unsafe-eval'`,
+`'unsafe-inline'` and `blob:` in `script-src` stops it rendering — not partly,
+entirely. See
 [hosting](hosting.md#if-your-site-sets-a-content-security-policy).
 
 ### A WMS or WMTS layer is empty in the map
