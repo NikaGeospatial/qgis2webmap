@@ -1623,6 +1623,9 @@ def finish_cartograph_full(
     embedded_rasters: dict[str, bytes] = {}
     # By name, which is the picture's hash: carried once for every frame.
     embedded_pictures: dict[str, PopupPicture] = {}
+    # By path: an archive drawn in two frames is carried and counted once,
+    # and two of the same file name are carried under names of their own.
+    carried_archives: dict[str, str] = {}
     shown_in: set[str] = set()
     reported_remote: set[str] = set()
     measured: list[Mapping[str, int]] = []
@@ -1661,6 +1664,7 @@ def finish_cartograph_full(
             OutputMode.STANDALONE_HTML,
             report,
             embedded_bytes=sum(len(data) for data in embedded_rasters.values()),
+            carried=carried_archives,
         )
         # One that cannot be carried is left out of the frame, as a raster
         # is; the rows the staging wrote say why.
@@ -1678,6 +1682,7 @@ def finish_cartograph_full(
         )
         for name, data in archives.embedded:
             embedded_rasters.setdefault(name, data)
+        carried_archives.update(archives.names)
         # A frame lives in the cartograph's own page, so its popup pictures
         # travel inside it, as a single-file web map's do.
         for name, picture in picture_sources(export_project.layers).items():

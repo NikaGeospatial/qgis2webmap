@@ -15,6 +15,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from pathlib import Path
@@ -203,6 +204,95 @@ class TestPmtilesArchive:
         assert tiles.url == host.url("/lakes.pmtiles")
         assert not tiles.is_archive
         assert tiles.max_zoom == 6
+
+
+class TestArchivesInACartograph:
+    """A cartograph's live frames share one page, which carries every frame's
+    archives: each under a name of its own, and each once."""
+
+    @staticmethod
+    def _sheet(project, *archives: Path) -> tuple[str, FidelityReportBuilder]:
+        from atlas_fixtures import add_map
+
+        from nika_onlymap_exporter.core.cartograph_export import (
+            export_layout_to_cartograph,
+        )
+        from nika_onlymap_exporter.packaging.runtime_manager import RuntimeBundle
+
+        project.setCrs(qgis_core.QgsCoordinateReferenceSystem("EPSG:3857"))
+        layout = qgis_core.QgsPrintLayout(project)
+        layout.initializeDefaults()
+        layout.setName("two-archives")
+        for index, path in enumerate(archives):
+            layer = _archive_layer(str(path))
+            project.addMapLayer(layer)
+            add_map(layout, [layer], x=10 + 140 * index, w=130)
+        runtime = RuntimeBundle(
+            javascript=b"// core js placeholder",
+            css=b"/* core css placeholder */",
+            version="0.13.4",
+            sha256="0" * 64,
+            cartograph_javascript=b"// cartograph js placeholder",
+            cartograph_css=b"/* cartograph css placeholder */",
+        )
+        report = FidelityReportBuilder()
+        return export_layout_to_cartograph(layout, project, runtime, report), report
+
+    @staticmethod
+    def _drawn(sheet: str) -> list[bytes]:
+        """The archive each frame's tile layer reads, in frame order."""
+        carried = {
+            name: base64.b64decode(data)
+            for name, data in re.findall(r'data-src="([^"]+)">([^<]*)</script>', sheet)
+        }
+        names = re.findall(
+            r'<om-layer\b[^>]*\btype="MVTLayer"[^>]*\bdata="([^"]+)"', sheet
+        )
+        return [carried[name] for name in names]
+
+    def test_archives_of_one_file_name_each_draw_their_own_frame(
+        self, qgis_app, project, tmp_path: Path
+    ) -> None:
+        for folder in ("a", "b"):
+            (tmp_path / folder).mkdir()
+        first = _archive(tmp_path / "a" / "tiles.pmtiles")
+        second = tmp_path / "b" / "tiles.pmtiles"
+        rivers = [
+            Feature(
+                "polygon",
+                [(8.1, 47.1), (8.3, 47.1), (8.3, 47.2), (8.1, 47.2), (8.1, 47.1)],
+                {"kind": "river"},
+            )
+        ]
+        second.write_bytes(
+            pmtiles(
+                {
+                    index: mvt({"water": rivers, "roads": ROADS}, *index)
+                    for z in range(7)
+                    for index in tiles_covering(*BOX, z)
+                },
+                TILE_MVT,
+                BOX,
+                metadata=METADATA,
+            )
+        )
+        sheet, _report = self._sheet(project, first, second)
+        assert self._drawn(sheet) == [first.read_bytes(), second.read_bytes()]
+
+    def test_an_archive_two_frames_draw_is_carried_and_counted_once(
+        self, qgis_app, project, archive, monkeypatch
+    ) -> None:
+        from nika_onlymap_exporter.packaging import tile_archives
+
+        # Room for the archive once, not twice.
+        size = archive.stat().st_size
+        monkeypatch.setattr(
+            tile_archives, "STANDALONE_RASTER_MAX_BYTES", size + size // 2
+        )
+        sheet, report = self._sheet(project, archive, archive)
+        assert self._drawn(sheet) == [archive.read_bytes()] * 2
+        assert sheet.count("data-src=") == 1
+        assert not _rows(report, FidelityStatus.BLOCKED)
 
 
 # --------------------------------------------------------------------------
