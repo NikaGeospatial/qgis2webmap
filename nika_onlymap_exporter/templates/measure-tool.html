@@ -27,14 +27,18 @@
       double-click: `draw-commit` ends it at the pointer, which the runtime
       follows on hover, so the commit is sent before the runtime sees the
       click, and the tool lets go of the map before it does, which leaves the
-      click to the map. Only when the pointer had not been followed there yet
-      - a click made while still moving - does the click place the point
-      itself, and the shape ends at the next hover. Letting go is `draw-mode`
-      off for the runtime's own measuring target, not `measure-mode` off: that
-      one also wipes the finished measurement from the map. The panel's
-      styles are inside its shadow root, which a document rule cannot reach,
-      so the compact styles go in there too. A plain script after the map, so
-      file:// is the same.
+      click to the map. Only when nothing follows the pointer (a touch) does
+      the click place the point itself, and the shape ends on it straight
+      after: a commit adds the followed pointer as a point, so ending one
+      later - at the next hover - would add a stray one. How many points are
+      placed is the runtime's count, from its `om-measure` readout, not the
+      clicks made: it ignores some (a click on the spot a shape was just
+      closed at, a second tap closing one), and a count of its own would end
+      a shape too early. Letting go is `draw-mode` off for the runtime's own
+      measuring target, not `measure-mode` off: that one also wipes the
+      finished measurement from the map. The panel's styles are inside its
+      shadow root, which a document rule cannot reach, so the compact styles
+      go in there too. A plain script after the map, so file:// is the same.
     -->
     <script>
       (function () {
@@ -45,17 +49,13 @@
         // (`measure-controller.d.ts`); `draw-*` actions take it by name.
         var TARGET = "__onlymapjs-measure";
         // The runtime's own double-tap: two taps this close in time and space
-        // close the shape rather than add a point (`draw-controller`).
+        // close the shape rather than add a point (`draw-controller`'s
+        // DOUBLE_TAP_MS and CLOSE_GUARD_PIXELS).
         var DOUBLE_TAP_MS = 350;
-        var SAME_SPOT_PX = 12;
+        var SAME_SPOT_PX = 24;
         // A double-click arrives as two clicks on one spot: one point.
         var REPEAT_MS = 500;
         var REPEAT_PX = 3;
-        // How far from a click the followed pointer may be and still be where
-        // the click was: a hover is picked a pixel or two coarser than a click.
-        var FOLLOWED_PX = 6;
-        // A touch has no hover to end the shape at: the points it placed do.
-        var NO_HOVER_MS = 400;
         var NEEDED = { distance: 2, area: 3 };
         var SHORT = { distance: "Distance", area: "Area" };
         var mac = /Mac|iPhone|iPad|iPod/.test(
@@ -93,14 +93,17 @@
           "  border-top-color: var(--om-widget-fg, #111827); }" +
           ".q2w-measure-hint[hidden] { display: none; }";
 
-        // The mode being measured, or null; the points placed in it; and a
-        // shape waiting for the pointer to be followed to its last point.
+        // The mode being measured, or null. Since it was armed: whether the
+        // runtime follows the pointer (a hover came), its last readout's
+        // segment count and whether it followed the pointer then, and
+        // whether it took any click (`clicking`: one is being handled).
         var armed = null;
-        var points = 0;
+        var pointed = false;
+        var reading = { segments: 0, pointed: false };
+        var accepted = false;
+        var clicking = false;
         var counted = null;
-        var waiting = null;
         var press = { modified: false, x: 0, y: 0, touch: false };
-        var hover = null;
         var lastTap = null;
         var hint = null;
         var root = null;
@@ -109,11 +112,22 @@
           if (hint) hint.hidden = armed !== "area";
         };
         var reset = function () {
-          points = 0;
+          pointed = false;
+          reading = { segments: 0, pointed: false };
+          accepted = false;
           counted = null;
           lastTap = null;
-          if (waiting) clearTimeout(waiting);
-          waiting = null;
+        };
+        // The points the runtime has placed. Its readout counts the line's
+        // segments, or the ring's corners, up to the pointer it follows;
+        // with nothing placed it reads 0 either way.
+        var placed = function () {
+          var n = reading.segments;
+          if (armed === "distance") {
+            if (reading.pointed) return n;
+            return n > 0 ? n + 1 : accepted ? 1 : 0;
+          }
+          return Math.max(0, n - (reading.pointed ? 1 : 0));
         };
         // The pressed look is the widget's, on its mode button; it reads it
         // back to decide whether the next press arms or disarms.
@@ -133,17 +147,6 @@
           map.emit("draw-mode", { target: TARGET, mode: "none" });
           release();
           showHint();
-        };
-        // Whether the runtime has followed the pointer to where it was pressed.
-        var followed = function () {
-          if (!hover || typeof map.project !== "function") return false;
-          var at = map.project(hover);
-          var box = map.getBoundingClientRect();
-          return (
-            !!at &&
-            Math.abs(box.left + at[0] - press.x) <= FOLLOWED_PX &&
-            Math.abs(box.top + at[1] - press.y) <= FOLLOWED_PX
-          );
         };
 
         var adopt = function () {
@@ -228,22 +231,27 @@
           },
           true
         );
+        // Sent by the runtime as it acts on a point, after every listener of
+        // `om-map-point` below has run.
+        map.addEventListener("om-measure", function (event) {
+          var detail = event.detail;
+          if (!armed || !detail || typeof detail.segments !== "number") return;
+          reading = { segments: detail.segments, pointed: pointed };
+          if (clicking) accepted = true;
+        });
         // Every listener of this runs before the runtime acts on the point.
         map.addEventListener("om-map-point", function (event) {
           var detail = event.detail;
           if (!detail || !detail.coordinate) return;
           if (detail.kind === "hover") {
-            hover = detail.coordinate;
-            // The shape ends here, once the runtime has followed the pointer.
-            if (waiting) Promise.resolve(true).then(finish);
+            if (armed) pointed = true;
             return;
           }
           if (!armed || detail.kind !== "click") return;
-          if (waiting) {
-            // Ended before this click can place anything.
-            finish(true);
-            return;
-          }
+          clicking = true;
+          Promise.resolve().then(function () {
+            clicking = false;
+          });
           var now = Date.now();
           var near = function (spot, px) {
             return Math.abs(spot.x - press.x) <= px && Math.abs(spot.y - press.y) <= px;
@@ -254,7 +262,7 @@
             lastTap = second ? null : { x: press.x, y: press.y, at: now };
             if (second) {
               // The runtime closes the shape on this tap, if it has enough.
-              if (points >= NEEDED[armed]) setTimeout(finish, 0, false);
+              if (placed() >= NEEDED[armed]) setTimeout(finish, 0, false);
               return;
             }
           }
@@ -263,25 +271,21 @@
           if (repeat) return;
           var last =
             armed === "distance"
-              ? points + 1 >= NEEDED.distance
-              : press.modified && points + 1 >= NEEDED.area;
-          if (!last) {
-            points += 1;
-            return;
-          }
-          if (!press.touch && followed()) {
+              ? placed() + 1 >= NEEDED.distance
+              : press.modified && placed() + 1 >= NEEDED.area;
+          if (!last) return;
+          if (pointed) {
             finish(true);
             return;
           }
-          // This click places the point; the next hover, or for a touch the
-          // lack of one, ends the shape on it.
-          points += 1;
-          waiting = setTimeout(finish, NO_HOVER_MS, true);
+          // Nothing follows the pointer: this click places the last point,
+          // and the shape ends on it once the runtime has.
+          Promise.resolve(true).then(finish);
         });
         // The runtime closes the shape on these with the pointer as its last
         // point, so one point fewer is enough; let go once it has.
         map.addEventListener("dblclick", function () {
-          if (armed === "area" && points + 1 >= NEEDED.area) {
+          if (armed === "area" && placed() + 1 >= NEEDED.area) {
             setTimeout(finish, 0, false);
           }
         });
@@ -289,7 +293,7 @@
           if (!armed) return;
           if (event.key === "Escape") {
             reset();
-          } else if (event.key === "Enter" && points + 1 >= NEEDED[armed]) {
+          } else if (event.key === "Enter" && placed() + 1 >= NEEDED[armed]) {
             setTimeout(finish, 0, false);
           }
         });

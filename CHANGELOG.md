@@ -263,6 +263,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - An export that finishes after the project was closed or another one
   opened no longer writes the old project's dialog settings into the new
   one.
+- The measure tool counts the points the map actually placed. Starting a
+  new distance on the spot the last one ended at, which the map ignores as
+  the end of a double-click, used to end the new one with nothing measured.
+  A click made while the pointer was still moving no longer adds a stray
+  point where the pointer went next, and on a touch screen two taps a
+  little apart close an area the way the map takes them, as a double-tap.
 
 ## [0.3.2] - 2026-11-05
 

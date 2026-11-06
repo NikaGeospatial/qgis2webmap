@@ -58,6 +58,7 @@ from nika_onlymap_exporter.writers.onlymap_writer import OnlyMapWriter
 START = (0.7, 51.5)
 END = (-0.5, 51.5)
 FEATURE = (0.1, 51.1)
+MIDDLE = (0.1, 51.5)
 
 MEASURE = 'om-widget[type="measure"]'
 READOUT = f"{MEASURE} .readout"
@@ -521,6 +522,57 @@ class TestOneDistanceAtATime:
         assert second == pytest.approx(first / 2, rel=0.05)
         assert _pressed(page, DISTANCE) == "false"
 
+    def test_starting_again_where_the_last_one_ended_still_measures(
+        self, page, measure_map
+    ) -> None:
+        """The runtime ignores a click on the spot a line was just ended at.
+        The tool counts the points the runtime placed, not the clicks: the
+        ignored one starts nothing, and the next two clicks are the line."""
+        _open(page, measure_map)
+        _measure(page)
+
+        page.locator(DISTANCE).click(timeout=10_000)
+        _click_at(page, END)  # where the last line ended
+        _click_at(page, MIDDLE)
+        assert _pressed(page, DISTANCE) == "true", "it ended with one point"
+        _click_at(page, START)
+
+        shown = _kilometres(page.locator(READOUT).inner_text(timeout=10_000))
+        assert shown == pytest.approx(_haversine_km(MIDDLE, START), rel=0.05)
+        assert _pressed(page, DISTANCE) == "false"
+
+    def test_a_click_the_pointer_was_not_followed_to_adds_no_stray_point(
+        self, page, measure_map
+    ) -> None:
+        """A click made while the pointer was still moving, before the
+        runtime followed it there: the line ends where the runtime had the
+        pointer, with no point added at the next position it follows. Driven
+        through the runtime's own routing of map points, which a real
+        pointer goes through, to place the hovers exactly."""
+        _open(page, measure_map)
+        page.locator(DISTANCE).click(timeout=10_000)
+        route = (
+            "([coordinate, kind]) => document.querySelector('om-map')"
+            ".handleMapPoint(coordinate, kind)"
+        )
+        for coordinate, kind in (
+            (START, "hover"),
+            (START, "click"),
+            (MIDDLE, "hover"),
+            (END, "click"),
+            ((0.3, 51.8), "hover"),
+        ):
+            page.evaluate(route, [list(coordinate), kind])
+            # Apart, as clicks a hand makes are: not one double-click.
+            page.wait_for_timeout(600)
+
+        finished = page.locator(READOUT).inner_text(timeout=10_000)
+        assert re.search(r"·\s*1 segment\b", finished), finished
+        assert _kilometres(finished) == pytest.approx(
+            _haversine_km(START, MIDDLE), rel=0.05
+        )
+        assert _pressed(page, DISTANCE) == "false"
+
 
 class TestClosingAnArea:
     @staticmethod
@@ -593,8 +645,10 @@ class TestClosingAnArea:
         page.locator(AREA).click(timeout=10_000)
         assert not _hint_shown(page)
 
+    # The runtime takes two taps up to 24 px apart as a double-tap.
+    @pytest.mark.parametrize("apart", [0, 16])
     def test_a_double_tap_still_closes_it_on_a_touch_screen(
-        self, browser, measure_map
+        self, browser, measure_map, apart
     ) -> None:
         context = browser.new_context(
             viewport={"width": 1000, "height": 800}, has_touch=True, is_mobile=True
@@ -612,7 +666,7 @@ class TestClosingAnArea:
             x, y = _screen_point(page, CORNERS[2])
             page.touchscreen.tap(x, y)
             page.wait_for_timeout(80)
-            page.touchscreen.tap(x, y)
+            page.touchscreen.tap(x + apart, y)
             page.wait_for_timeout(600)
 
             assert self._readout_perimeter(page) == pytest.approx(
