@@ -252,7 +252,8 @@ def _download_with_progress(
     """Run the download behind a cancellable progress dialog.
 
     Not `required` when the runtime is already there and only a decoder worker
-    is being completed: a failure then returns the provider, unannounced.
+    is being completed: a failure then returns the provider, unannounced, as
+    does a worker failing after the runtime itself was installed.
 
     Synchronous on purpose. A background thread would need cancellation,
     partial-state cleanup and a way to stop the user starting a second export
@@ -288,7 +289,9 @@ def _download_with_progress(
         provider.fetch(downloader=make_qgis_downloader(feedback))
     except RuntimeUnavailableError as exc:
         progress.close()
-        if not required:
+        # The runtime is in place and only its decoder worker failed: the map
+        # is made without it, as when only the worker was being completed.
+        if not required or provider.is_core_cached():
             return provider
         if not feedback.isCanceled():
             QMessageBox.critical(

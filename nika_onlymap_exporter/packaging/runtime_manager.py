@@ -39,7 +39,9 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import gzip
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -50,6 +52,7 @@ import tempfile
 import urllib.error
 import urllib.request
 import zlib
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
@@ -535,10 +538,14 @@ def download_tarball(
                 chunks.append(chunk)
                 if on_progress is not None:
                     on_progress(received, total_bytes)
-    except urllib.error.URLError as exc:
+    # `urlopen` reports a failure to connect as a `URLError`; one once the
+    # answer is arriving (a timeout, a reset connection) as the `OSError` or
+    # `HTTPException` it is.
+    except (OSError, http.client.HTTPException) as exc:
         what = "the OnlyMap runtime" if package == NPM_PACKAGE else package
+        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
         raise RuntimeDownloadError(
-            f"Could not download {what} from {url}.\n\n{exc.reason}\n\n"
+            f"Could not download {what} from {url}.\n\n{reason}\n\n"
             "The download is needed once per machine; every export afterwards "
             "works offline. If this machine has no internet access, install the "
             "runtime pack manually and point ONLYMAP_RUNTIME_DIR at it."
@@ -578,7 +585,7 @@ def extract_runtime(tarball: bytes, destination: Path) -> None:
         archive_path = Path(scratch) / "runtime.tgz"
         archive_path.write_bytes(tarball)
 
-        with tarfile.open(archive_path, "r:gz") as archive:
+        with _opened_tarball(archive_path) as archive:
             for member_name, output_name in wanted.items():
                 try:
                     member = archive.getmember(member_name)
@@ -599,6 +606,25 @@ def extract_runtime(tarball: bytes, destination: Path) -> None:
         )
 
 
+@contextlib.contextmanager
+def _opened_tarball(path: Path) -> Iterator[tarfile.TarFile]:
+    """The gzipped tarball at `path`, open for reading.
+
+    What arrives is not always a tarball: a captive portal or a proxy's
+    sign-in page answers with HTML and a 200, and a dropped connection leaves
+    a truncated one. Each is a download that failed, raised as one, rather
+    than whichever error the archive reader trips over first.
+    """
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            yield archive
+    except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile) as exc:
+        raise RuntimeDownloadError(
+            f"the download is not the package it should be ({exc}). A network "
+            "that asks you to sign in first answers like this."
+        ) from exc
+
+
 def extract_worker(tarball: bytes, member_path: str) -> bytes:
     """One decoder worker's bytes out of its npm tarball.
 
@@ -609,7 +635,7 @@ def extract_worker(tarball: bytes, member_path: str) -> bytes:
     with tempfile.TemporaryDirectory() as scratch:
         archive_path = Path(scratch) / "worker.tgz"
         archive_path.write_bytes(tarball)
-        with tarfile.open(archive_path, "r:gz") as archive:
+        with _opened_tarball(archive_path) as archive:
             try:
                 member = archive.getmember(wanted)
             except KeyError:
@@ -951,16 +977,22 @@ class FetchingRuntime:
             )
 
     def load(self) -> RuntimeBundle:
+        """The runtime, downloaded first only when it is not installed.
+
+        An installed runtime is read with no network at all, its decoder
+        worker or not: a missing worker is completed by `ui.runtime_setup`,
+        through QGIS's network settings, before an export from the dialog.
+        Without the worker - none fetched, or bytes that are not the pinned
+        build, which are never installed - a map is still made: the page then
+        loads it from the web, and the export says so (`onlymap_writer`).
+        """
         self.preflight()
         if not self.is_core_cached():
-            self.fetch()
-        elif not self.is_cached():
-            # Only a decoder worker is missing. A map is still made without it
-            # when it cannot be fetched (no network, or bytes that are not the
-            # pinned build, which are never installed): the page then loads it
-            # from the web, and the export says so (`onlymap_writer`).
-            with contextlib.suppress(RuntimeDownloadError):
+            try:
                 self.fetch()
+            except RuntimeDownloadError:
+                if not self.is_core_cached():
+                    raise
 
         return LocalRuntime(self.cached_dir()).load()
 

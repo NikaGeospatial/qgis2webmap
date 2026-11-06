@@ -124,12 +124,14 @@ class TestEnsureRuntime:
         assert downloads == [provider.version]
         assert provider.version != "0.0.1"
 
+    @pytest.mark.parametrize("network", ["offline", "sign-in page"])
     def test_a_cache_missing_only_the_decoder_still_exports_offline(
-        self, qgis_app, tmp_path, monkeypatch
+        self, qgis_app, tmp_path, monkeypatch, network
     ):
         """A cache from before maps carried the vector tile decoder, on a
-        computer with no internet: no licence asked again (the runtime is
-        there), no error, and a provider the export can use."""
+        computer with no internet or behind a network that answers with its
+        sign-in page: no licence asked again (the runtime is there), no error,
+        and a provider the export can use."""
         import shutil
 
         from nika_onlymap_exporter.ui import runtime_setup
@@ -149,7 +151,9 @@ class TestEnsureRuntime:
 
         def offline(feedback=None):
             def download(url, on_progress=None):
-                raise rm.RuntimeDownloadError("no network")
+                if network == "offline":
+                    raise rm.RuntimeDownloadError("no network")
+                return b"<html><body>Sign in to the Wi-Fi</body></html>"
 
             return download
 
@@ -158,6 +162,53 @@ class TestEnsureRuntime:
 
         monkeypatch.setattr(runtime_setup, "make_qgis_downloader", offline)
         monkeypatch.setattr(runtime_setup, "RuntimeLicenceDialog", must_not)
+        monkeypatch.setattr(runtime_setup.QMessageBox, "critical", must_not)
+
+        provider = ensure_runtime()
+
+        assert isinstance(provider, rm.FetchingRuntime)
+        assert provider.is_core_cached() and not provider.is_cached()
+
+    def test_a_first_download_whose_decoder_fails_still_exports(
+        self, qgis_app, tmp_path, monkeypatch
+    ):
+        """The runtime arrives and its decoder worker does not: the export goes
+        ahead without the worker, with no error box."""
+        import io
+        import tarfile
+
+        from nika_onlymap_exporter.ui import runtime_setup
+
+        source = rm.discover_runtime_dir()
+        if source is None:
+            pytest.skip("OnlyMap runtime not available; set ONLYMAP_RUNTIME_DIR")
+        version = rm.read_lock()["version"]
+        package = io.BytesIO()
+        with tarfile.open(fileobj=package, mode="w:gz") as archive:
+            for name in (*rm.STORED_GZIPPED, rm.RUNTIME_LICENCE):
+                data = rm.read_runtime_file(source, name)
+                if data is None or name == rm.MVT_WORKER:
+                    continue
+                folder = "" if name == rm.RUNTIME_LICENCE else "dist/"
+                info = tarfile.TarInfo(f"{rm.TARBALL_PREFIX}/{folder}{name}")
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+        monkeypatch.setattr(runtime_setup, "discover_runtime_dir", lambda: None)
+        monkeypatch.setenv("ONLYMAP_RUNTIME_CACHE", str(tmp_path))
+        rm.record_licence_acceptance(version, tmp_path)
+
+        def registry(feedback=None):
+            def download(url, on_progress=None):
+                if url == rm.tarball_url(version):
+                    return package.getvalue()
+                return b"<html><body>Sign in to the Wi-Fi</body></html>"
+
+            return download
+
+        def must_not(*args, **kwargs):
+            raise AssertionError("the user was told the export failed")
+
+        monkeypatch.setattr(runtime_setup, "make_qgis_downloader", registry)
         monkeypatch.setattr(runtime_setup.QMessageBox, "critical", must_not)
 
         provider = ensure_runtime()

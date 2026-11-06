@@ -716,26 +716,102 @@ class TestDecoderWorkerIsFetched:
         assert provider.is_cached()
         assert (WORKER_PACKAGE, "4.4.3") in asked
 
-    def test_a_cache_without_it_is_completed_without_the_runtime_again(
-        self, tmp_path, monkeypatch
-    ) -> None:
-        """No licence to ask for (it is the OnlyMap licence that gates, and the
-        runtime is there), and only the worker crosses the network."""
-        self.lock(monkeypatch)
-        asked = self.serve(monkeypatch, self.WORKER)
+    def installed_without_it(self, tmp_path) -> rm.FetchingRuntime:
+        """A cache from before exports carried the worker."""
         provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
         cache = provider.cached_dir()
         cache.mkdir(parents=True)
         (cache / rm.RUNTIME_JS).write_bytes(self.JS)
         (cache / rm.RUNTIME_CSS).write_bytes(self.CSS)
+        assert provider.is_core_cached() and not provider.is_cached()
+        return provider
+
+    def test_a_cache_without_it_is_completed_without_the_runtime_again(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """No licence to ask for (it is the OnlyMap licence that gates, and the
+        runtime is there), and only the worker crosses the network: when the
+        dialog completes it (`ui.runtime_setup`)."""
+        self.lock(monkeypatch)
+        asked = self.serve(monkeypatch, self.WORKER)
+        provider = self.installed_without_it(tmp_path)
         assert not rm.licence_accepted("1.0.0", tmp_path)
 
-        assert provider.is_core_cached() and not provider.is_cached()
+        provider.fetch()
         bundle = provider.load()
 
         assert bundle.mvt_worker == self.WORKER
         assert asked == [(WORKER_PACKAGE, "4.4.3")]
         assert provider.is_cached()
+
+    def test_an_export_without_it_never_reaches_for_the_network(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """A machine that has the runtime exports offline, worker or not; the
+        map then loads the worker from the web, and says so."""
+        self.lock(monkeypatch)
+
+        def no_network(*args, **kwargs):
+            raise AssertionError("an export reached for the network")
+
+        monkeypatch.setattr(rm, "download_tarball", no_network)
+        monkeypatch.setattr(rm.urllib.request, "urlopen", no_network)
+
+        bundle = self.installed_without_it(tmp_path).load()
+
+        assert bundle.javascript == self.JS
+        assert bundle.mvt_worker is None
+
+    @pytest.mark.parametrize(
+        "failure",
+        ["sign-in page", "truncated", "timeout", "connection reset", "cut short"],
+    )
+    def test_a_worker_that_fails_to_arrive_leaves_the_runtime_installed(
+        self, tmp_path, monkeypatch, failure
+    ) -> None:
+        """A first install (Processing's, with no dialog) whose worker download
+        goes wrong, each way a network can: the runtime is installed and the
+        export goes ahead without the worker."""
+        self.lock(monkeypatch)
+        rm.record_licence_acceptance("1.0.0", tmp_path)
+        whole = worker_tarball(self.WORKER)
+        body = {
+            "sign-in page": b"<html><body>Sign in to the Wi-Fi</body></html>",
+            "truncated": whole[: len(whole) // 2],
+        }.get(failure, whole)
+
+        class Answer(io.BytesIO):
+            def __init__(self, data: bytes, broken: bool) -> None:
+                super().__init__(data)
+                self.broken = broken
+
+            def getheader(self, name: str) -> str | None:
+                return None
+
+            def read(self, size: int | None = -1) -> bytes:
+                if self.broken:
+                    raise {
+                        "timeout": TimeoutError("The read operation timed out"),
+                        "connection reset": ConnectionResetError(104, "reset"),
+                        "cut short": rm.http.client.IncompleteRead(b"", 100),
+                    }[failure]
+                return super().read(size)
+
+        def urlopen(request, timeout=None):
+            if WORKER_PACKAGE in request.full_url:
+                return Answer(
+                    body, failure in ("timeout", "connection reset", "cut short")
+                )
+            return Answer(npm_tarball(self.JS, self.CSS), False)
+
+        monkeypatch.setattr(rm.urllib.request, "urlopen", urlopen)
+        provider = rm.FetchingRuntime(cache_dir=tmp_path, version="1.0.0")
+
+        bundle = provider.load()
+
+        assert bundle.javascript == self.JS
+        assert bundle.mvt_worker is None
+        assert provider.is_core_cached() and not provider.is_cached()
 
     def test_one_that_is_not_the_pinned_build_is_refused(
         self, tmp_path, monkeypatch
