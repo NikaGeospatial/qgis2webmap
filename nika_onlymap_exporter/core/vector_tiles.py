@@ -733,8 +733,11 @@ def read_vector_tile_layer(
     )
     report.approximated(
         f"Labels on '{name}'",
-        "The style's labels are placed one per feature, in the browser's own "
-        "fonts, so they can sit and look a little differently from QGIS's.",
+        "The style's labels, road shields and icons are placed one per "
+        "feature, in the browser's own fonts, without QGIS's check that each "
+        "has room: where features are dense, such as a road network's "
+        "shields, they can pile up on one another, and they sit and look "
+        "differently from QGIS's.",
         layer_id,
     )
     undrawn = sorted(

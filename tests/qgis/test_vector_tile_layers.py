@@ -457,6 +457,8 @@ class TestVectorTileService:
         approximated = _rows(report, FidelityStatus.APPROXIMATED)
         assert "background layers are not drawn" in approximated
         assert "browser's own fonts" in approximated
+        # basemap.de's road shields piled up in every browser (2026-11-06).
+        assert "can pile up on one another" in approximated
         # Read from QGIS's cache: exporting contacts nobody.
         assert service.requests == []
 
