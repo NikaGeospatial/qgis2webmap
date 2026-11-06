@@ -5245,10 +5245,25 @@ class MainDialog(QDialog):
         elif clicked is not None and clicked is choices.get("discard"):
             self.close_without_saving()
         else:
-            self._cartograph.stop_close_save()
-            self.reopen_after_close = False
-            self.close_button.setEnabled(True)
-            self.status_label.setText("")
+            self._cancel_close()
+
+    def keep_open(self) -> None:
+        """Opened again (the menu, Ctrl+Alt+W) while a close waits for the
+        cartograph's save: the window stays, as if that close had been
+        cancelled. The save carries on and lands as any autosave would. While
+        the user is being asked what to do about a failed save, the question
+        stays theirs."""
+        if self._close_result is None or self._close_failure_box is not None:
+            return
+        self._close_result = None
+        self._close_limit_timer.stop()
+        self._cancel_close()
+
+    def _cancel_close(self) -> None:
+        self._cartograph.stop_close_save()
+        self.reopen_after_close = False
+        self.close_button.setEnabled(True)
+        self.status_label.setText("")
 
     def _on_project_clearing(self) -> None:
         """The project is being cleared or replaced under the open dialog.

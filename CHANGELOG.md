@@ -273,6 +273,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   down, and pressing "Use" (or picking the language) again during the
   download no longer starts a second one: the language controls wait until
   it is done.
+- Opening the dialog again (Ctrl+Alt+W or the menu) while it waits to
+  close on a cartograph save now keeps it open; it used to close as soon as
+  the save landed.
 
 ## [0.3.2] - 2026-11-05
 

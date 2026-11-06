@@ -308,6 +308,9 @@ class Qgis2WebMapPlugin:
                 # reorder layers or restyle while it is open.
                 self.dialog.finished.connect(self._on_dialog_finished)
                 self.dialog.languageChanged.connect(self._reopen_dialog)
+            else:
+                # Asked for while closing: it stays open.
+                self.dialog.keep_open()
 
             self.dialog.show()
             self.dialog.raise_()

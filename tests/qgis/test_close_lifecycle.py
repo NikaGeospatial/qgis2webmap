@@ -145,6 +145,50 @@ class TestCloseFinishesThePendingSave:
         assert _wait_for(qgis_app, lambda: not dialog.isVisible())
         assert "Newest" in target.read_text(encoding="utf-8")
 
+    def test_opening_it_again_while_the_close_waits_keeps_it_open(
+        self, qgis_app, project, export, tmp_path
+    ) -> None:
+        """Ctrl+Alt+W (or the menu) while the window waits to close on a save:
+        it stays open, and the save still lands."""
+        import nika_onlymap_exporter
+
+        plugin = nika_onlymap_exporter.classFactory(FakeIface())
+        plugin.initGui()
+        try:
+            layout, label = add_survey_layout(project)
+            plugin.run_cartograph(layout.name())
+            dialog = plugin.dialog
+            cartograph = dialog._cartograph
+            target = tmp_path / "kept.html"
+            cartograph.show_layout_named(layout.name())
+            cartograph.file_edit.setText(str(target))
+            cartograph._on_file_edited(str(target))
+            assert _wait_for(
+                qgis_app,
+                lambda: (
+                    target.exists()
+                    and cartograph._job is None
+                    and not cartograph._autosave_timer.isActive()
+                ),
+            )
+            export.worker_started.clear()
+            export.hold_workers()
+            edit_label(layout, label, "Kept")
+            assert _wait_for(qgis_app, export.worker_started.is_set)
+            _click_close(dialog)
+            assert dialog.isVisible()
+
+            plugin.run()
+            export.release()
+            assert _wait_for(qgis_app, lambda: "Kept" in _text(target))
+            _wait_for(qgis_app, lambda: False, timeout=0.5)
+
+            assert plugin.dialog is dialog and dialog.isVisible()
+            assert dialog.close_button.isEnabled()
+        finally:
+            export.release()
+            plugin.unload()
+
     def test_the_window_says_it_is_saving_while_the_close_waits(
         self, qgis_app, saved, export
     ) -> None:
