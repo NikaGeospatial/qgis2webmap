@@ -4145,9 +4145,10 @@ class MainDialog(QDialog):
     def _live_running(self) -> bool:
         """Whether a preview is open and following the dialog.
 
-        Both halves, because a raster map's one-off preview is served too - a
-        browser will not read the raster from a page opened off the disk - and
-        that preview is not live: nothing rebuilds it.
+        Both halves, because a raster map's one-off preview is served too -
+        Chrome, Edge and Safari will not read the raster from a page opened
+        off the disk (Firefox does) - and that preview is not live: nothing
+        rebuilds it.
         """
         timer = getattr(self, "_watch_timer", None)
         return (

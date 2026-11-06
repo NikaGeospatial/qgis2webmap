@@ -372,8 +372,9 @@ def preview_mode(project: ExportProject) -> OutputMode:
     inside one.
 
     A raster is read from its own file in pieces, so its preview is written as
-    a folder and has to be served over HTTP - a browser will not fetch those
-    pieces from a page opened straight off the disk.
+    a folder and has to be served over HTTP - Chrome, Edge and Safari will not
+    fetch those pieces from a page opened straight off the disk (Firefox
+    does), and the preview must work in whichever browser opens it.
     """
     if (
         standalone_raster_reason(project) is not None
