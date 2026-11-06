@@ -18,6 +18,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from urllib.parse import quote
 
@@ -270,7 +271,9 @@ CASES = {
 
 @pytest.fixture
 def offline(qgis_app):
-    """QGIS with every request that is not in its cache sent nowhere."""
+    """QGIS with every request that is not in its cache sent nowhere, and
+    every answer a test recorded taken out of the cache again after it."""
+    from qgis.PyQt.QtCore import QUrl
     from qgis.PyQt.QtNetwork import QNetworkProxy
 
     manager = qgis_core.QgsNetworkAccessManager.instance()
@@ -278,15 +281,27 @@ def offline(qgis_app):
     manager.setFallbackProxyAndExcludes(
         QNetworkProxy(QNetworkProxy.ProxyType.HttpProxy, "127.0.0.1", 9), [], []
     )
+    recorded.clear()
     yield manager
+    for url in recorded:
+        manager.cache().remove(QUrl(url))
+    recorded.clear()
     manager.setFallbackProxyAndExcludes(*before)
+
+
+# The addresses `_record` answered in this test, for `offline` to forget.
+recorded: list[str] = []
 
 
 def _record(manager, url: str, body: bytes) -> None:
     """Put `body` in QGIS's network cache as the answer to `url`, fresh for a
-    day: what QGIS keeps after fetching the capabilities itself."""
+    day: what QGIS keeps after fetching the capabilities itself. The cache is
+    the test session's own (`tests/hermetic.py`), and `offline` takes the
+    answer out after the test."""
     from qgis.PyQt.QtCore import QDateTime, QUrl
     from qgis.PyQt.QtNetwork import QNetworkCacheMetaData
+
+    recorded.append(url)
 
     meta = QNetworkCacheMetaData()
     meta.setUrl(QUrl(url))
@@ -398,3 +413,18 @@ def test_a_service_that_keeps_no_capabilities_says_what_readers_get(
     projected = crs != "EPSG:3857"
     assert ("each tile is asked in EPSG:4326" in detail) is projected
     assert ("add the layer again with EPSG:3857 chosen" in detail) is projected
+
+
+def test_the_network_cache_is_the_test_sessions_own(offline, tmp_path_factory) -> None:
+    """What `_record` puts in QGIS's network cache lands in this session's
+    temporary directory, never in the cache the user's own QGIS reads."""
+    session = tmp_path_factory.getbasetemp().resolve()
+    cache = Path(os.environ.get("XDG_CACHE_HOME", "")).resolve()
+    assert cache.is_relative_to(session), f"QGIS caches in {cache}"
+
+    def files() -> set[Path]:
+        return {path for path in cache.rglob("*") if path.is_file()}
+
+    before = files()
+    _record(offline, "https://cache-check.invalid/capabilities", b"<x/>" * 64)
+    assert files() - before, "the recorded answer is not in the session's cache"

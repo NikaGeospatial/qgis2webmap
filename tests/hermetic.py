@@ -8,7 +8,11 @@ pointed at `scratch` here, before the plugin can make a folder:
 
 - the default save root (`QGIS2WEBMAP_SAVE_ROOT`, read by the plugin itself),
 - the QGIS profile `QgsApplication` keeps its own settings and databases in,
-- `QSettings`, including the user's chosen save folder.
+- `QSettings`, including the user's chosen save folder,
+- QGIS's network cache, which every QGIS on the machine shares: a test that
+  puts a recorded answer in it under a real service's address would hand that
+  answer to the user's own QGIS for as long as it stays fresh (it did, for a
+  day, 2026-11-06).
 
 HOME is left alone; nothing is redirected by changing it.
 
@@ -53,6 +57,7 @@ def start_qgis(scratch: Path, gui: bool = True):
 
     scratch = Path(scratch)
     prepare(scratch)
+    isolate_network_cache(scratch / "cache")
     profile = scratch / "profile"
     profile.mkdir(parents=True, exist_ok=True)
     # The variable, not the constructor's profile argument: PyQGIS 4.2
@@ -64,6 +69,15 @@ def start_qgis(scratch: Path, gui: bool = True):
     isolate_settings(scratch / "qsettings")
     pin_application_font()
     return app
+
+
+def isolate_network_cache(directory: Path) -> None:
+    """Point QGIS's network cache into `directory`. Call before the
+    `QgsApplication`: Qt places the cache under `XDG_CACHE_HOME`, read once,
+    and QGIS shares one disk cache per process."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    os.environ["XDG_CACHE_HOME"] = str(directory)
 
 
 def pin_application_font(point_size: float = 9.0) -> None:
