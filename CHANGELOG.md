@@ -279,6 +279,23 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   carries an access key, or that is not a web (`http` or `https`) address, is
   left out. A cartograph's legend still lists the
   layer by name; the Checks tab says so.
+- **Line labels repeat along long lines.** With **Repeat** set in a line
+  layer's label placement, labels repeat where QGIS repeats them: the line cut
+  into equal pieces at least that long, each labelled at its middle, the
+  distance in millimetres, points, pixels or inches taken at the view where
+  the layer fills the map, and in map units or metres on the ground as set.
+  With no Repeat set, a long line is labelled again every 250 pixels at that
+  view, either side of the label QGIS draws at its middle, so a line keeps a
+  label in view as you zoom in; a line shorter than three spacings keeps its
+  one label. The repeats are fixed along the line, so a layer's labels show
+  from the zoom where no repeat overlaps the next. At most 50 labels sit on
+  one line and 5,000 on one layer; past either the repeats spread out, and the
+  Fidelity tab says so.
+- **Formatted numbers** in a layer's label settings apply to labels from a
+  field or an expression, and to a point layer's **Names**: a label that reads as a number has the decimal
+  places and plus sign QGIS draws, in QGIS's number format for its language
+  (for example `+1.234,50` in German, with a narrow no-break space between
+  thousands in French). The text is worked out at export.
 
 ### Changed
 - **The Processing algorithm exports what the dialog would.** *Export to
@@ -298,24 +315,6 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   dialog's Save, it draws an image frame at least at the resolution the page
   is saved at - the saved Print settings', else 300 dpi - where it used to
   draw it at the frame's own resolution, 200 dpi by default.
-
-- **Line labels repeat along long lines.** With **Repeat** set in a line
-  layer's label placement, labels repeat where QGIS repeats them: the line cut
-  into equal pieces at least that long, each labelled at its middle, the
-  distance in millimetres, points, pixels or inches taken at the view where
-  the layer fills the map, and in map units or metres on the ground as set.
-  With no Repeat set, a long line is labelled again every 250 pixels at that
-  view, either side of the label QGIS draws at its middle, so a line keeps a
-  label in view as you zoom in; a line shorter than three spacings keeps its
-  one label. The repeats are fixed along the line, so a layer's labels show
-  from the zoom where no repeat overlaps the next. At most 50 labels sit on
-  one line and 5,000 on one layer; past either the repeats spread out, and the
-  Fidelity tab says so.
-- **Formatted numbers** in a layer's label settings apply to labels from a
-  field or an expression, and to a point layer's **Names**: a label that reads as a number has the decimal
-  places and plus sign QGIS draws, in QGIS's number format for its language
-  (for example `+1.234,50` in German, with a narrow no-break space between
-  thousands in French). The text is worked out at export.
 
 ### Fixed
 - At Appearance > Size **Largest**, a long legend or layer list no longer
