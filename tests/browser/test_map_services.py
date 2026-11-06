@@ -570,6 +570,95 @@ class TestTileAddressesWithoutAnExtension:
         assert measured["found"] == pytest.approx(measured["expected"], abs=2.5)
 
 
+def _striped_png(stripe: int = 16, size: int = 256) -> bytes:
+    """A `size`-pixel tile of red and blue vertical stripes `stripe` pixels wide."""
+    import struct
+    import zlib
+
+    row = b"\0" + b"".join(
+        bytes((230, 20, 20) if (x // stripe) % 2 == 0 else (20, 20, 230))
+        for x in range(size)
+    )
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(kind + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", crc)
+
+    header = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(row * size))
+        + chunk(b"IEND", b"")
+    )
+
+
+STRIPE_WIDTH = """
+async () => {
+  const el = document.querySelector('om-map');
+  const img = new Image();
+  const url = await el.snapshot();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve; img.onerror = reject; img.src = url;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width; canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const ratio = img.width / el.getBoundingClientRect().width;
+  const y = Math.round(img.height / 2);
+  const { data } = ctx.getImageData(0, y, img.width, 1);
+  const kinds = [];
+  for (let x = 0; x < img.width; x++) {
+    const [r, b, a] = [data[x * 4], data[x * 4 + 2], data[x * 4 + 3]];
+    kinds.push(a < 200 ? 0 : r > 150 && b < 100 ? 1 : b > 150 && r < 100 ? 2 : 0);
+  }
+  // Whole runs only: from the first change of colour to the last.
+  const changes = [];
+  for (let x = 1; x < kinds.length; x++) {
+    if (kinds[x] && kinds[x - 1] && kinds[x] !== kinds[x - 1]) changes.push(x);
+  }
+  if (changes.length < 3) return null;
+  return (changes[changes.length - 1] - changes[0]) / (changes.length - 1) / ratio;
+}
+"""
+
+
+def test_xyz_tiles_draw_at_their_own_resolution(page, runtime, tmp_path) -> None:
+    """QGIS draws an XYZ layer's 256-pixel tiles pixel for pixel; so must
+    the map, rather than a zoom level too coarse at twice the size."""
+    from fake_cog_server import FakeCogServer
+    from fake_tile_archive import tiles_covering
+
+    center = (8.3, 47.15)
+    stripes = _striped_png()
+    files = {
+        f"/xyz/{z}/{x}/{y}.png": stripes
+        for z in range(10, 15)
+        for (_, x, y) in tiles_covering(8.0, 47.0, 8.6, 47.3, z)
+    }
+    with FakeCogServer(files) as host:
+        layer = replace(
+            _wms_layer(host.url("/wms")),
+            source_kind=SourceKind.FILE,
+            tiles=TileSpec(host.url("/xyz/{z}/{x}/{y}.png"), 0, 19),
+        )
+        _open(page, _export(runtime, tmp_path, layer))
+        # A whole zoom, where a tile of the right level is drawn one to one.
+        page.evaluate(
+            "(c) => document.querySelector('om-map')"
+            ".flyTo(c, 12, { duration: 0 })",
+            list(center),
+        )
+        page.evaluate(SETTLE)
+        deadline = time.monotonic() + 20
+        width = page.evaluate(STRIPE_WIDTH)
+        while width is None and time.monotonic() < deadline:
+            page.wait_for_timeout(250)
+            width = page.evaluate(STRIPE_WIDTH)
+    assert width == pytest.approx(16, abs=1.5), f"stripes are {width} px wide"
+
+
 SLIDER = """
 () => {
   const widget = document.querySelector('om-widget[type="time-slider"]');

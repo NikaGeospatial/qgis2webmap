@@ -1028,8 +1028,9 @@ class TileSpec:
     min_zoom: int = 0
     max_zoom: int = 19
     # The tiles' size in pixels, when it is known and matters: a WMTS grid's,
-    # or the size a WMS template asks for (`{width}`/`{height}`). `None`
-    # leaves the runtime's default.
+    # or the size a WMS template asks for (`{width}`/`{height}`). `None` is
+    # an XYZ layer's 256 (`manifest_builder.XYZ_TILE_SIZE`), or on a national
+    # WMTS grid the grid's own.
     tile_size: int | None = None
     # The legend pictures the service draws for a WMS or WMTS layer, as
     # QGIS's legend shows them; empty for XYZ tiles, which have none.

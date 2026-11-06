@@ -1138,6 +1138,10 @@ def build_tile_layer_element(
     ]
     if tiles.tile_size is not None:
         attributes.append(("tile-size", str(tiles.tile_size)))
+    elif tiles.tile_matrix_set is None:
+        # An XYZ layer: drawn by the runtime's own default (512) instead, its
+        # 256-pixel tiles came a zoom level too coarse, at half resolution.
+        attributes.append(("tile-size", str(XYZ_TILE_SIZE)))
     attributes.extend(_tile_service_attributes(tiles))
     if layer.opacity < 1.0:
         attributes.append(("opacity", _number(layer.opacity)))
@@ -1169,6 +1173,12 @@ def _tile_service_attributes(tiles: TileSpec) -> list[tuple[str, str | None]]:
     if tiles.feature_info is not None:
         attributes.append((FEATURE_INFO_ATTRIBUTE, tiles.feature_info))
     return attributes
+
+
+# The size of the tiles QGIS draws an XYZ layer from. A source QGIS is told
+# serves high resolution tiles (`tilePixelRatio=2`) gives 512-pixel tiles of
+# the same ground, which QGIS draws at 192 dpi: 256 pixels of the map still.
+XYZ_TILE_SIZE = 256
 
 
 # The attribute a WMS layer that answers clicks carries its GetFeatureInfo
