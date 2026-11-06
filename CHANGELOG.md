@@ -61,11 +61,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   other sites, is down, or the reader is offline). A categorized or
   graduated style that leaves features undrawn - classes switched off, or no
   "all other values" class - stays live: the map leaves those features out
-  as they arrive. A layer whose look is worked out from its features at
+  as they arrive, and a point layer's count bubbles merge its live points.
+  A layer whose look is worked out from its features at
   export - a rule-based style, a category switched off beside an "all other
   values" class, a range switched off between drawn ones, labels, Value Map
   or Value Relation values in its popup, a
-  filter panel, count bubbles, popup pictures, virtual or joined fields - or
+  filter panel, count bubbles on a layer whose style leaves features out,
+  popup pictures, virtual or joined fields - or
   that QGIS filters, needs a login or is a WFS 1.x, stays embedded as
   before; one over 20 MB is live only. A **Features** choice on the layer's
   *This layer only* row on the Layers tab picks live first, embedded or live
@@ -108,7 +110,10 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   runtime, the first export from the dialog downloads just the script (about
   240 KB). Until it has - offline, behind a network's sign-in page, or from
   Processing, which never downloads - such maps load it from unpkg.com, and
-  the export says so; the export itself never waits on the network. In a
+  the export and the Fidelity tab say so, as the map does when unpkg.com
+  cannot be reached; the export itself never waits on the network. A map
+  whose layers are all read from archives opens on them, with the default
+  data extent. In a
   cartograph, each archive is carried once, however many interactive frames
   draw it. Categories and ranges switched off in QGIS, and features no
   category or range claims, are not drawn, though the archive still carries
@@ -185,6 +190,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `https://` for its tiles, legend and clicks, as it was added. It used to be asked
   on `http://`, which such a service only redirects to `https://`, and
   Safari then showed it only as plain pictures under the rest of the map.
+- A layer read from an `http://` address (tiles, a web raster or archive,
+  live features) has a Fidelity row saying a map put on an `https://`
+  website, as GitHub Pages and most hosts are, may not show it, and the map's
+  notice names it with that reason when the browser blocks it
+  ([qgis2web#933](https://github.com/qgis2web/qgis2web/issues/933)). It used
+  to go blank there with nothing saying why.
 - XYZ tile layers (and a basemap added as one) are drawn at the resolution
   QGIS draws them, pixel for pixel. They were drawn a zoom level too coarse,
   at twice the size: blurrier imagery and labels twice as big.

@@ -304,8 +304,10 @@ developer tools (Console) show a refused or failed request, and the map page
 reports the cause on its `om-validation-error` event. Common causes:
 
 - **The service is on `http://` and the map is served over `https://`.**
-  Browsers block it, unless the service also answers on `https://`. Only the
-  service's provider can change that; a map opened from a file or in
+  Chrome, Edge and Safari block it (Firefox shows tiles as plain pictures),
+  unless the service also answers on `https://`. The Fidelity tab says so for
+  any layer on `http://`, and the map's notice names the layer and the reason.
+  Only the service's provider can change that; a map opened from a file or in
   **Preview in browser** is not affected.
 - **The service answers with an error** - a WMS error message instead of a
   picture, or an HTTP error such as 404 - often because the layer name, style
