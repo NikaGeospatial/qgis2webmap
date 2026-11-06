@@ -209,6 +209,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   came back more than five times keeps following the dialog.
 - Turning Live off while a live Preview is being built now opens a one-off
   preview, as the switch says, rather than starting a live session.
+- Leaving a cartograph's Atlas tab no longer undoes what was done meanwhile
+  to a map the atlas does not drive, such as an inset zoomed while paging
+  through the series; only the maps the pages moved are put back.
 
 ## [0.3.2] - 2026-11-05
 
