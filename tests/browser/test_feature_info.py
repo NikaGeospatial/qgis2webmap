@@ -541,6 +541,51 @@ class TestClicks:
         )
         assert lines == ["Could not get details from: Closed WMS"]
 
+    def test_only_a_click_that_asked_the_service_clears_its_line(
+        self, page, runtime, services, tmp_path
+    ) -> None:
+        """A click the service could not be asked for (no place on the map
+        to ask about) says nothing of it: the layer notice keeps naming it."""
+        layer = _wms_layer(services, "wms", "Closed WMS", path="nocors/wms")
+        _open(page, _export(runtime, tmp_path, layer))
+        (answer,) = _answered(page, _click(page, CLICK))["answers"]
+        assert answer["status"] == "failed"
+        before = page.evaluate("() => window.__clicks.length")
+        box = page.locator("om-map").bounding_box()
+        assert box is not None
+        x, y = page.evaluate(
+            "(c) => document.querySelector('om-map').project(c)", list(CLICK)
+        )
+        page.evaluate(
+            """() => {
+              const map = document.querySelector('om-map');
+              map.__project = map.project;
+              map.project = () => null;
+            }"""
+        )
+        try:
+            page.mouse.move(box["x"] + x, box["y"] + y, steps=10)
+            page.wait_for_timeout(100)
+            page.mouse.click(box["x"] + x, box["y"] + y)
+            assert _answered(page, before)["answers"] == []
+        finally:
+            page.evaluate(
+                """() => {
+                  const map = document.querySelector('om-map');
+                  map.project = map.__project;
+                }"""
+            )
+        lines = page.evaluate(
+            """() => {
+              const notice = document.querySelector(
+                'om-widget[data-q2w-layer-notice]');
+              const root = notice && notice.root;
+              const panel = root && root.querySelector('.q2w-notice');
+              return panel ? [...panel.children].map((row) => row.textContent) : null;
+            }"""
+        )
+        assert lines == ["Could not get details from: Closed WMS"]
+
     def test_a_click_a_feature_popup_opens_for_asks_no_service(
         self, page, runtime, services, tmp_path
     ) -> None:

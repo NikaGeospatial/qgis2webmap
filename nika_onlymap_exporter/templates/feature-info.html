@@ -450,9 +450,15 @@
                 new CustomEvent("q2w-feature-info", {
                   detail: {
                     coordinate: click,
-                    answers: answers.map(function (answer) {
-                      return { layerId: answer.layerId, name: answer.name, status: answer.status };
-                    }),
+                    // Only the layers this click asked: one it could not
+                    // ask says nothing about whether its service answers.
+                    answers: answers
+                      .filter(function (answer) {
+                        return answer.status !== "unasked";
+                      })
+                      .map(function (answer) {
+                        return { layerId: answer.layerId, name: answer.name, status: answer.status };
+                      }),
                   },
                 })
               );
@@ -462,7 +468,7 @@
               var template = layer.getAttribute("data-q2w-feature-info") || "";
               var url = fill(template, layer, click);
               if (!url) {
-                answer.status = "empty";
+                answer.status = "unasked";
                 done();
                 return;
               }
