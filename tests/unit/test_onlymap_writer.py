@@ -9,6 +9,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import base64
+import dataclasses
 import re
 from dataclasses import fields
 from datetime import datetime, timezone
@@ -591,6 +592,28 @@ class TestVectorTileWorker:
             for warning in result.warnings
         )
         assert "unpkg.com" in result.network_dependencies
+
+    @pytest.mark.parametrize("carried", [True, False])
+    def test_an_archive_drawn_through_the_webs_decoder_says_so(
+        self, tmp_path, carried: bool
+    ) -> None:
+        """A carried archive is no web layer, but without the worker its
+        decoder is: the Fidelity tab names the host, and the page names the
+        layer when the decoder cannot be had (offline, a filtered network)."""
+        source = tmp_path / "roads.pmtiles"
+        source.write_bytes(b"x")
+        archive = dataclasses.replace(
+            _vector_tile_layer("roads"),
+            vector_tiles=VectorTileSpec(str(source), path=str(source)),
+        )
+        result = OnlyMapWriter(
+            runtime_provider=FakeRuntime(self.WORKER if carried else None)
+        ).write(make_project(layers=(archive,)), tmp_path / "out")
+        rows = [i for i in result.fidelity if i.subject == "Vector tile decoder"]
+        page = result.entry_path.read_text(encoding="utf-8")
+        assert bool(rows) is not carried
+        assert all("unpkg.com" in row.detail for row in rows)
+        assert ("data-q2w-layer-notice" in page) is not carried
 
 
 class TestOsmFromAFile:
