@@ -492,6 +492,29 @@ class TestExporters:
         assert "HOW TO OPEN IT" in readme
         assert "sends one anonymous usage report to NIKA" in readme
 
+    def test_it_counts_what_the_map_carries(self, tmp_path) -> None:
+        """A tile archive's features stay in the archive: "0 map features"
+        would tell its recipient the map is empty."""
+        from nika_onlymap_exporter.core.export_ir import VectorTileSpec
+
+        archive = make_layer(
+            layer_id="lakes",
+            geojson=None,
+            feature_count=0,
+            vector_tiles=VectorTileSpec("lakes.pmtiles", path="/data/lakes.pmtiles"),
+        )
+        points = make_layer(layer_id="points", feature_count=3)
+        result = ArtifactResult(
+            entry_path=tmp_path / "index.html", mode=OutputMode.FOLDER
+        )
+        for layers, said in (
+            ([archive], "contains 1 tile archive."),
+            ([points, archive], "contains 3 map features and 1 tile archive."),
+            ([points], "contains 3 map features."),
+        ):
+            readme = build_readme(make_project(layers), result, "Open index.html.")
+            assert said in readme
+
     def test_an_offline_map_says_it_needs_no_internet(self, tmp_path) -> None:
         result = ArtifactResult(
             entry_path=tmp_path / "index.html", mode=OutputMode.FOLDER

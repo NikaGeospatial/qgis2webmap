@@ -72,7 +72,7 @@ def build_readme(
         others = "Nothing else leaves your machine."
     size_line = (
         f"This map is {result.total_bytes / 1024 / 1024:.1f} MB and contains "
-        f"{sum(layer.feature_count for layer in project.layers):,} map features."
+        f"{_carried(project)}."
     )
     replacements = {
         "@TITLE@": project.title,
@@ -90,6 +90,39 @@ def build_readme(
     # own heading. A single pass can only ever match the template's own tokens.
     pattern = re.compile("|".join(re.escape(token) for token in replacements))
     return pattern.sub(lambda match: replacements[match.group(0)], template)
+
+
+def _carried(project: ExportProject) -> str:
+    """What the map carries, as the README counts it: its features, and the
+    raster images and tile archives it carries as files, whose features or
+    pixels it does not count."""
+    layers = project.exportable_layers
+    archives = len(
+        {
+            layer.vector_tiles.path
+            for layer in layers
+            if layer.vector_tiles is not None and layer.vector_tiles.is_archive
+        }
+    )
+    rasters = sum(
+        1 for layer in layers if layer.raster is not None and not layer.raster.remote
+    )
+    features = sum(layer.feature_count for layer in project.layers)
+    parts = [
+        f"{count:,} {noun if count == 1 else noun + 's'}"
+        for count, noun in (
+            (rasters, "raster image"),
+            (archives, "tile archive"),
+        )
+        if count
+    ]
+    if features or not parts:
+        parts.insert(0, f"{features:,} map feature{'' if features == 1 else 's'}")
+    return (
+        " and ".join(parts)
+        if len(parts) <= 2
+        else (", ".join(parts[:-1]) + " and " + parts[-1])
+    )
 
 
 def _host(entry: str) -> str:
