@@ -399,6 +399,8 @@ class Scheduler:
         self.events: queue.Queue[tuple[str, str]] = queue.Queue()
         self.stop_requested = False
         self.suspended_s = 0.0
+        # (when it was noticed, how long) for each suspend, by the wall clock.
+        self._suspends: list[tuple[float, float]] = []
         self.suspend_events: list[dict] = []
         self.min_mem_available_mb = mem_available_mb()
         self.started = time.time()
@@ -557,6 +559,7 @@ class Scheduler:
         jump = (wall - self._last_wall) - (mono - self._last_mono)
         if jump > 5:
             self.suspended_s += jump
+            self._suspends.append((wall, jump))
             self.suspend_events.append({"at": now_hms(), "seconds": round(jump)})
             say(
                 f"the machine was suspended for about {jump:.0f}s; "
@@ -606,14 +609,19 @@ class Scheduler:
         With a slot wrapper the process is launched first and only *starts* once
         the wrapper gets a slot, so timing it from the launch charged the queue to
         the stage: on a busy machine it timed out without having run. Until it
-        starts, only `SLOT_WAIT_LIMIT_S` applies.
+        starts, only `SLOT_WAIT_LIMIT_S` applies. Time the machine spent
+        suspended is not the stage's either: a laptop that slept overnight
+        would otherwise kill every stage running when it woke.
         """
         now = time.time()
         for stage in self.stages:
             if stage.status != "running" or stage.killed_for:
                 continue
             if stage.started_at is not None:
-                if now - stage.started_at > stage.timeout_s:
+                asleep = sum(
+                    seconds for at, seconds in self._suspends if at > stage.started_at
+                )
+                if now - stage.started_at - asleep > stage.timeout_s:
                     say(f"TIMEOUT {stage.name} after {stage.timeout_s / 60:.0f} min")
                     self.terminate(stage, "timeout")
             elif (

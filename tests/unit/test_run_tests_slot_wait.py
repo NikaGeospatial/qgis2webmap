@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -133,3 +134,23 @@ class TestWithoutASlotWrapperNothingChanges:
         assert stage.status == rt.FAILED
         assert stage.reason == "timeout"
         assert stage.started_at == pytest.approx(stage.launched_at)
+
+
+class TestASuspendIsNotChargedToTheStage:
+    def test_a_stage_running_while_the_machine_slept_is_not_timed_out(
+        self, tmp_path, monkeypatch
+    ):
+        """The wall clock jumps by the time asleep; the stage ran 1 s of its 3."""
+        real = time.time
+        start = real()
+        monkeypatch.setattr(
+            rt.time, "time", lambda: real() + (600.0 if real() > start + 0.5 else 0.0)
+        )
+        stage = _run(
+            tmp_path,
+            monkeypatch,
+            slot_cmd=[],
+            timeout_s=3.0,
+            command=[sys.executable, "-c", "import time; time.sleep(1)"],
+        )
+        assert stage.status == rt.PASSED, stage.reason
