@@ -1087,15 +1087,25 @@ def _data_extent(layers: list, report: FidelityReportBuilder) -> Extent | None:
     only its vectors.
     """
     per_layer: list[Extent | None] = []
+    services: list[Extent | None] = []
     for layer in layers:
         if layer.raster is not None:
             # `None` when the source CRS could not be transformed; passed
             # through rather than skipped because `union_extents` already
             # ignores it, and dropping it here would only hide the case.
             per_layer.append(layer.raster.extent)
+        elif layer.vector_tiles is not None:
+            # A tile archive is the layer's data, and frames like it. A
+            # service is mostly a base map that spans the world: it frames
+            # the map only when nothing else does, as it would otherwise open
+            # on the world, where its tiles may not start.
+            if layer.vector_tiles.path or "{z}" not in layer.vector_tiles.url:
+                per_layer.append(layer.vector_tiles.extent)
+            else:
+                services.append(layer.vector_tiles.extent)
         elif layer.geojson:
             per_layer.append(extent_from_geojson(layer.geojson))
-    extent = union_extents(per_layer)
+    extent = union_extents(per_layer) or union_extents(services)
 
     if extent is None:
         report.unsupported(

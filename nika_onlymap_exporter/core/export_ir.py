@@ -1145,6 +1145,9 @@ class VectorTileSpec:
     max_zoom: int | None = None
     # The archive's size, for what a single file can carry; 0 when remote.
     size_bytes: int = 0
+    # Where the tiles are, in WGS84, as QGIS has the layer: what a map opening
+    # on its data frames (`project_reader._data_extent`). `None` unknown.
+    extent: Extent | None = None
 
     @property
     def is_archive(self) -> bool:

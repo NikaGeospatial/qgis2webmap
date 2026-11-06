@@ -54,6 +54,7 @@ from .layer_reader import (
     _cached_capabilities,
     _live_dependency,
     geometry_kind,
+    raster_extent,
     read_attribution,
     scale_range,
 )
@@ -273,6 +274,7 @@ def read_pmtiles_layer(
             min_zoom=header["minZoom"] if header else None,
             max_zoom=header["maxZoom"] if header else None,
             size_bytes=0 if remote is not None else dependency.size_bytes or 0,
+            extent=raster_extent(layer),
         ),
         attribution=read_attribution(layer),
         group_path=group_path,
@@ -784,6 +786,7 @@ def read_vector_tile_layer(
             style_source=style_source,
             min_zoom=_zoom("zmin"),
             max_zoom=_zoom("zmax"),
+            extent=raster_extent(layer),
         ),
         attribution=read_attribution(layer),
         group_path=group_path,

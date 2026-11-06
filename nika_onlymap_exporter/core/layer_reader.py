@@ -1129,8 +1129,9 @@ def raster_source_path(layer: QgsRasterLayer) -> str:
     return (layer.source() or "").split("|", 1)[0].strip()
 
 
-def raster_extent(layer: QgsRasterLayer) -> Extent | None:
-    """The layer's extent in WGS84 degrees, or `None` if it cannot be had.
+def raster_extent(layer: QgsMapLayer) -> Extent | None:
+    """The layer's extent in WGS84 degrees, or `None` if it cannot be had: a
+    raster's, or a vector tile layer's (`core.vector_tiles`).
 
     Reprojected here rather than left in the source CRS so it can join the
     project extent union without a second, differently-implemented transform.
