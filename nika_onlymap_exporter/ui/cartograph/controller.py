@@ -652,7 +652,11 @@ class CartographController:
         - one build at a time, never while one is running. A layout whose save
         failed is left for the close, which reports it, rather than retried in
         a loop."""
-        if self._shut_down or self._job is not None or self.dialog._job is not None:
+        if self._shut_down or self._job is not None:
+            return  # its landing looks again (`_kick_other_saves`)
+        if self.dialog._job is not None:
+            # A web-map job's end calls nothing here: look again after it.
+            self._watched_edits_timer.start()
             return
         for name in self._dirty_other_documents():
             if name in self._document_errors:

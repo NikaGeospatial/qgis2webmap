@@ -1725,6 +1725,50 @@ class TestAutosaveIsGatedOnALiveSession:
         finally:
             dialog.close()
 
+    def test_a_request_made_while_the_preview_rebuilds_runs_after_it(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        """An Export confirmed in a dialog while a live rebuild started behind
+        it is written once the rebuild is done - never refused with "Still
+        working on the last request.", which the user did not make."""
+        import threading
+
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            rebuilding = threading.Event()
+            done: list[str] = []
+            assert dialog._start_job(
+                lambda progress: rebuilding.wait(30),
+                lambda _result: done.append("rebuild"),
+                "Updating the preview...",
+                quiet=True,
+            )
+            assert dialog._start_job(
+                lambda progress: "map",
+                done.append,
+                "Writing the map...",
+            )
+            assert dialog.status_label.text() == "Writing the map..."
+            rebuilding.set()
+            self._wait_until(qgis_app, lambda: done == ["rebuild", "map"], 15)
+        finally:
+            dialog.close()
+
+    def test_a_rebuild_while_the_cartograph_saves_comes_back_for_it(
+        self, qgis_app, project, make_memory_layer
+    ) -> None:
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog._cartograph._job = object()  # a cartograph build under way
+            assert not dialog._ensure_export(
+                lambda export, report: None, "Updating the preview...", quiet=True
+            )
+            assert dialog._rebuild_timer.isActive()
+            assert dialog.status_label.text() != "Still working on the last request."
+        finally:
+            dialog._cartograph._job = None
+            dialog.close()
+
 
 class TestShareBuildsWhatItNeeds:
     """No Share action should make the user produce a file first.

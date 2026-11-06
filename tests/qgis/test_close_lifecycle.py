@@ -426,3 +426,33 @@ class TestALayoutNotOnScreen:
             assert not any(counted.get("Other", []))
         finally:
             dialog.close()
+
+    def test_its_save_waits_out_a_web_map_job(
+        self, qgis_app, project, export, tmp_path
+    ) -> None:
+        """An edit to a layout not on screen while the web map exports is
+        saved once the export is done, not dropped."""
+        survey_file = tmp_path / "survey.html"
+        dialog, cartograph, survey, label = open_saved_cartograph(
+            qgis_app, project, survey_file, _wait_for
+        )
+        try:
+            add_survey_layout(project, name="Other")
+            other_file = tmp_path / "other.html"
+            cartograph.show_layout_named("Other")
+            cartograph.file_edit.setText(str(other_file))
+            cartograph._on_file_edited(str(other_file))
+            assert _wait_for(
+                qgis_app, lambda: other_file.exists() and cartograph._job is None
+            )
+            dialog._job = object()  # a web-map export reading the project
+
+            edit_label(survey, label, "Away")
+            _wait_for(qgis_app, lambda: False, timeout=1.5)
+            assert "Away" not in _text(survey_file)
+            dialog._job = None
+
+            assert _wait_for(qgis_app, lambda: "Away" in _text(survey_file))
+        finally:
+            dialog._job = None
+            dialog.close()

@@ -212,6 +212,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
 - Leaving a cartograph's Atlas tab no longer undoes what was done meanwhile
   to a map the atlas does not drive, such as an inset zoomed while paging
   through the series; only the maps the pages moved are put back.
+- An Export or Preview asked for while the live preview is rebuilding or a
+  cartograph is saving (one started behind a question the export asked) now
+  runs once that is done; it used to be dropped with "Still working on the
+  last request.". A live preview change made while a cartograph saves, and
+  the save of a layout not on screen while the web map exports, now wait
+  their turn instead of being lost.
 
 ## [0.3.2] - 2026-11-05
 
