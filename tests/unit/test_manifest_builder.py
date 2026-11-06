@@ -628,6 +628,12 @@ class TestManifest:
         )
         assert 'type="layer-switcher"' in two
 
+    def test_a_lone_layer_that_opens_switched_off_can_be_switched_on(self) -> None:
+        """Without a switcher it would stay hidden for good: a layer QGIS
+        does not draw now (switched off, or outside the time QGIS draws)."""
+        markup = build_manifest(make_project([make_layer(visible=False)]))
+        assert 'type="layer-switcher"' in markup
+
     def test_the_label_layer_is_named_after_its_own_layer(self) -> None:
         markup = build_manifest(
             make_project(

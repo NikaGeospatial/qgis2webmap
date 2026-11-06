@@ -2789,7 +2789,12 @@ def build_widget_elements(project: ExportProject, indent: str = "    ") -> str:
                 if styles
                 else f"{opening}</om-widget>"
             )
-    if settings.show_layer_switcher and _switchable_layer_count(project) > 1:
+    # A lone layer gets one too when it opens switched off: there is nothing
+    # else to switch it on with.
+    if settings.show_layer_switcher and (
+        _switchable_layer_count(project) > 1
+        or any(not layer.visible for layer in project.exportable_layers)
+    ):
         opening = (
             f'{indent}<om-widget type="layer-switcher" '
             f'position="{WIDGET_POSITIONS["layer-switcher"]}">'
