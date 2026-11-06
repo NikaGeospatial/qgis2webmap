@@ -74,3 +74,13 @@ jobs:
         with:
           files: dist/*.zip
           generate_release_notes: true
+
+      # What users get: the asset fetched back from the published release as
+      # the plugin fetches it, and verified with the plugin's own check.
+      - name: Verify the published language packs
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python scripts/verify_release_packs.py "$GITHUB_REF_NAME" && exit 0
+            sleep 20
+          done
+          exit 1

@@ -397,7 +397,10 @@ Download for a language fetches that one asset from
 `https://github.com/NikaGeospatial/qgis2webmap/releases/download/v<version>/`
 and installs every language. **A release without it has no languages.** If the
 workflow fails after tagging, build both zips from the tag and attach both to
-the release by hand.
+the release by hand. Once the release is published, the workflow fetches the
+asset back as the plugin does and checks it against the tag's pins; after
+attaching it by hand, run the same check yourself:
+`python3 scripts/verify_release_packs.py v<version>`.
 
 The Discord announcement is **not** tied to the tag, for that reason: a tag can
 land days before approval, or on a version that is then withdrawn. Instead
