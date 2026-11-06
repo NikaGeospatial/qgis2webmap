@@ -500,3 +500,38 @@ class TestALayoutNotOnScreen:
         finally:
             dialog._job = None
             dialog.close()
+
+    def test_deleting_the_layout_on_screen_while_the_close_waits_still_saves_it(
+        self, qgis_app, project, export, tmp_path
+    ) -> None:
+        """The close waits on a save of a layout switched away from; the
+        layout on screen is deleted meanwhile. That layout has nothing left to
+        save, the other still does: the window closes once it is saved."""
+        survey_file = tmp_path / "survey.html"
+        dialog, cartograph, survey, label = open_saved_cartograph(
+            qgis_app, project, survey_file, _wait_for
+        )
+        try:
+            other, _ = add_survey_layout(project, name="Other")
+            other_file = tmp_path / "other.html"
+            cartograph.show_layout_named("Other")
+            cartograph.file_edit.setText(str(other_file))
+            cartograph._on_file_edited(str(other_file))
+            assert _wait_for(
+                qgis_app, lambda: other_file.exists() and cartograph._job is None
+            )
+            export.worker_started.clear()
+            export.hold_workers()
+            edit_label(survey, label, "Away")
+            assert _wait_for(qgis_app, export.worker_started.is_set)
+            _click_close(dialog)
+            assert dialog.isVisible()
+
+            project.layoutManager().removeLayout(other)
+            export.release()
+
+            assert _wait_for(qgis_app, lambda: not dialog.isVisible())
+            assert "Away" in _text(survey_file)
+        finally:
+            export.release()
+            dialog.close()

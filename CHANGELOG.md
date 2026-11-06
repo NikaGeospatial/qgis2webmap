@@ -280,6 +280,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   designer now work while another layout is on screen in the dialog, or
   after it has closed; they used to do nothing, and print a Python error
   once the dialog was closed.
+- Deleting the layout on screen while the window waits to close on a
+  cartograph save no longer lets it close with another layout's changes
+  still unsaved; it saves that layout first.
 
 ## [0.3.2] - 2026-11-05
 

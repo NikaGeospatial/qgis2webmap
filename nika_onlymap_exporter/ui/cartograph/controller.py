@@ -763,8 +763,11 @@ class CartographController:
 
     def _abandon_close_save(self) -> None:
         """The layout a held close was saving is gone: there is nothing left to
-        save, so the close the user asked for goes ahead - on the next turn of
-        the event loop, not from inside the layout's removal."""
+        save for it, so the close the user asked for goes ahead - on the next
+        turn of the event loop, not from inside the layout's removal - unless
+        layouts switched away from are still behind, which it goes on saving."""
+        if self._close_waiter is not None and self._dirty_other_documents():
+            return
         waiter, self._close_waiter = self._close_waiter, None
         self._close_save_timer.stop()
         if waiter is not None:
