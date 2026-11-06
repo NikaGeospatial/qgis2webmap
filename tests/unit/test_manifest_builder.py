@@ -2577,9 +2577,9 @@ class TestTileLayer:
         assert html.unescape(data) == self.WMS
         assert "&amp;BBOX={bbox-epsg-3857}" in data
 
-    def test_an_xyz_layer_leaves_the_tile_size_to_the_runtime(self) -> None:
-        """Unchanged markup for the XYZ layers exported before WMS."""
-        assert "tile-size" not in build_layer_element(self.tile_layer())
+    def test_an_xyz_layer_keeps_no_tile_size_of_its_own(self) -> None:
+        """The model is unchanged for the XYZ layers exported before WMS; the
+        element asks for QGIS's 256 (`test_map_services`, in a browser)."""
         assert "tileSize" not in json.dumps(self.tile_layer().snapshot())
 
     def test_the_tile_size_is_in_the_runtime_schema(self, known_attributes) -> None:
