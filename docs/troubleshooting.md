@@ -241,7 +241,10 @@ browser.
 ### Double-clicking the Folder export does not work
 
 Correct, and it cannot. Browsers refuse to load the runtime from a separate file
-on a `file://` page. The Folder mode exists for uploading to a web server.
+on a `file://` page, and the page says so: it has to be served from a web
+server. The Folder mode exists for uploading to a web server; to try one on
+your own computer, run `npx http-server` inside the folder and open the address
+it prints.
 
 Use **Standalone HTML** for anything that has to open off a disk.
 

@@ -58,9 +58,13 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   service for the features in view, and again when the map moves elsewhere,
   following its paging up to 10,000 at a time, and switches to the copy
   embedded at export whenever the service cannot be read (it refuses maps on
-  other sites, is down, or the reader is offline). A layer whose look is
-  worked out from its features at export - a rule-based style, classes
-  switched off, labels, Value Map or Value Relation values in its popup, a
+  other sites, is down, or the reader is offline). A categorized or
+  graduated style that leaves features undrawn - classes switched off, or no
+  "all other values" class - stays live: the map leaves those features out
+  as they arrive. A layer whose look is worked out from its features at
+  export - a rule-based style, a category switched off beside an "all other
+  values" class, a range switched off between drawn ones, labels, Value Map
+  or Value Relation values in its popup, a
   filter panel, count bubbles, popup pictures, virtual or joined fields - or
   that QGIS filters, needs a login or is a WFS 1.x, stays embedded as
   before; one over 20 MB is live only. A **Features** choice on the layer's
@@ -112,10 +116,11 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   panel are not exported for such a layer, rule-based styling draws in the
   first rule's symbol, markers QGIS draws itself become circles, an archive
   compressed with zstd or brotli, which browsers cannot read, is left
-  out, a category switched off beside an "all other values" class is drawn
-  invisible (it still answers a click, and the legend lists it without a
-  colour), and a range switched off between drawn ranges is drawn in the
-  colour of the range above it.
+  out, and a category switched off beside an "all other values" class, or a
+  range switched off between drawn ranges, is drawn invisible (it still
+  answers a click, and the legend lists it without a colour). A Share ZIP or
+  Folder opened by double-click, which cannot read the archive beside its
+  page, says on the map that it has to be served.
 - **Vector tile layers export in their publisher's style.** A vector tile
   layer added with a style URL (such as a government base map's `style.json`)
   is drawn on the web map from the same tile service, in that style: its
@@ -179,6 +184,31 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `https://` for its tiles, legend and clicks, as it was added. It used to be asked
   on `http://`, which such a service only redirects to `https://`, and
   Safari then showed it only as plain pictures under the rest of the map.
+- XYZ tile layers (and a basemap added as one) are drawn at the resolution
+  QGIS draws them, pixel for pixel. They were drawn a zoom level too coarse,
+  at twice the size: blurrier imagery and labels twice as big.
+- A colour composite raster (an RGB orthophoto, from a file or a web COG) is
+  drawn across the range QGIS draws it: an 8-bit image QGIS does not stretch
+  keeps its colours, and one QGIS stretches keeps that stretch when all three
+  bands share it. The map used to stretch each band across its own values,
+  so images came out brighter or more contrasted than in QGIS. The Fidelity
+  tab's contrast row is now only for bands QGIS stretches differently.
+- A WMS or WMTS legend picture is shown at its own size, as in QGIS, and
+  scrolls sideways within the legend when it is wider than it. A wide legend,
+  such as the British Geological Survey's, used to be shrunk until its text
+  could not be read.
+- A legend no longer lists an "other" class QGIS does not have: a
+  categorized layer without an "all other values" class has none. It showed
+  a grey "other" row.
+- A map whose only layer opens switched off (unticked in QGIS, or a layer
+  that follows QGIS's time and is not drawn now) has a layer switcher, so it
+  can be switched on; it had none.
+- A Folder opened by double-click says it has to be served from a web
+  server, as its README does, instead of saying it needs JavaScript; a Share
+  ZIP or Folder whose raster beside the page cannot be read that way names
+  the layer and says the same.
+- The README of a map with rasters or tile archives says what it carries,
+  such as "1 raster image", rather than "0 map features".
 
 ## [0.3.2] - 2026-11-05
 
