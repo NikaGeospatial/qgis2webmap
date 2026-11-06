@@ -93,6 +93,7 @@ from ...core.settings import (
 from ...core.template_registry import get_template
 from ...exporters.frame_raster import encode_png
 from ...packaging.runtime_manager import (
+    FetchingRuntime,
     RuntimeBundle,
     RuntimeNotAcceptedError,
     RuntimeUnavailableError,
@@ -103,7 +104,7 @@ from ..fitted_label import FittedLabel
 from ..i18n import N_, plural, tr
 from ..live_server import BIND_HOST, NO_FILES, PAGE_PATH, PreviewServer
 from ..reveal_file import RevealOutcome, reveal_file
-from ..runtime_setup import ensure_runtime
+from ..runtime_setup import Ask, ensure_runtime
 from . import layout_thumbnails
 from .frames import FrameItem, layout_map_items
 from .frames_list import FrameRow, FramesList
@@ -211,6 +212,12 @@ def default_cartograph_path(
     safe = _file_name_part(layout_name) or "cartograph"
     project = _file_name_part(Path(project_file_name).stem)
     return base_dir / (f"{project}-{safe}.html" if project else f"{safe}.html")
+
+
+def _worker_arrived(provider: object) -> bool:
+    """Whether a downloaded runtime now has every decoder worker it pins - one
+    completed (by a web map export, say) since its bundle was read."""
+    return isinstance(provider, FetchingRuntime) and provider.is_cached()
 
 
 def _guarded(function: Callable[..., None], *args: object) -> None:
@@ -399,6 +406,11 @@ class CartographController:
         self._approved_destinations: set[str] = set()
         self._last_summary: ReportSummary | None = None
         self._runtime: RuntimeBundle | None = None
+        # Whether the next save of the layout on screen may ask for the
+        # runtime: only one the user's own act asked for (picking a layout,
+        # Check now, opening it in the browser) - never an edit's autosave, a
+        # close or a layout not on screen (`runtime_setup.Ask`).
+        self._runtime_ask = Ask.NEVER
         # "A3 landscape" / "420 x 297 mm landscape", from the last save, for
         # the hand-off prompt's print-safety line.
         self._last_page_label: str | None = None
@@ -2145,6 +2157,7 @@ class CartographController:
                 self.show_fidelity()
             # The file is a document that follows its layout: bring it up to
             # date now, not on the user's first edit.
+            self._may_ask_for_runtime(Ask.FIRST_TIME)
             self.schedule_autosave()
             # The layout just left may still have an edit to save.
             self._kick_other_saves()
@@ -2315,7 +2328,10 @@ class CartographController:
             return
 
         shown_error = self._last_error
-        runtime = self._load_runtime()
+        ask = Ask.NEVER
+        if other is None and self._close_waiter is None:
+            ask, self._runtime_ask = self._runtime_ask, Ask.NEVER
+        runtime = self._load_runtime(ask)
         if runtime is None:
             if other is not None:
                 # Belongs to that layout, not to the one on screen.
@@ -2564,15 +2580,23 @@ class CartographController:
             return
         self._on_build_failed(message, details, landing.built_for)
 
-    def _load_runtime(self) -> RuntimeBundle | None:
+    def _may_ask_for_runtime(self, ask: Ask) -> None:
+        """Let the next save of the layout on screen ask for the runtime as
+        far as `ask` allows (the more permissive request wins)."""
+        if ask is Ask.ALWAYS or self._runtime_ask is Ask.NEVER:
+            self._runtime_ask = ask
+
+    def _load_runtime(self, ask: Ask = Ask.NEVER) -> RuntimeBundle | None:
         """The runtime's bytes, read once per runtime version.
 
         `ensure_runtime` answers with a *provider* (asking and downloading
-        first if it must); the export needs what it loads. Reading 9 MB from
-        disk on every autosave would make each save visibly slower, so the
-        bundle is kept until the provider would load a different version.
+        first if it must and `ask` allows); the export needs what it loads.
+        Reading 9 MB from disk on every autosave would make each save visibly
+        slower, so the bundle is kept until the provider would load a
+        different version, or until a decoder worker missing from it has
+        arrived since.
         """
-        provider = ensure_runtime(self.dialog)
+        provider = ensure_runtime(self.dialog, ask)
         if provider is None:
             self._last_error = tr(
                 "The OnlyMap runtime is needed to save a cartograph. Nothing "
@@ -2580,8 +2604,10 @@ class CartographController:
             )
             return None
         version = getattr(provider, "version", None)
-        if self._runtime is not None and (
-            version is None or version == self._runtime.version
+        if (
+            self._runtime is not None
+            and (version is None or version == self._runtime.version)
+            and (not _worker_arrived(provider) or self._runtime.mvt_worker is not None)
         ):
             return self._runtime
         try:
@@ -2939,6 +2965,7 @@ class CartographController:
             return
         self._last_error = ""
         self._check_requested = True
+        self._may_ask_for_runtime(Ask.ALWAYS)
         self.schedule_autosave()
         self._autosave_timer.stop()
         self._run_autosave(urgent=True)
@@ -3150,6 +3177,7 @@ class CartographController:
             # Nothing on the way carries the latest edits (the last save
             # failed, or the running build predates them): save again and
             # open that. Failing again says why, and opens nothing.
+            self._may_ask_for_runtime(Ask.ALWAYS)
             self.schedule_autosave()
             needed = self._edits_made
         self._open_after_save.append((query, needed))

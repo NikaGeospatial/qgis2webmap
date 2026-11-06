@@ -179,6 +179,24 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `https://` for its tiles, legend and clicks, as it was added. It used to be asked
   on `http://`, which such a service only redirects to `https://`, and
   Safari then showed it only as plain pictures under the rest of the map.
+- A runtime download that fails on its own (no internet, a proxy QGIS has
+  not been told about, a full disk) now says why, with the address it tried
+  and the proxy advice; it used to end as silently as a Cancel, leaving only
+  "The OnlyMap runtime is needed to build a map". A full disk no longer
+  shows a Python error instead.
+- The OnlyMap licence and the runtime download are no longer offered again
+  by a cartograph's autosave after each edit, by closing the window (which
+  could show the licence twice) or by unloading the plugin. Picking a
+  layout asks once a session, Check now, Preview and Export ask every time.
+  A vector tile decoder that could not be downloaded is not downloaded again
+  for every export in the same session, and one completed later reaches the
+  next cartograph save instead of it loading the decoder from the web.
+- Cancel while the OnlyMap runtime downloads now stops the export, also when
+  pressed during its last part (the vector tile decoder).
+- The Processing algorithms, after a plugin update that pins a newer
+  runtime, download it before reading the project and through QGIS's network
+  settings, as the dialog does; behind a proxy set only in QGIS they used to
+  fail at the very end.
 
 ## [0.3.2] - 2026-11-05
 

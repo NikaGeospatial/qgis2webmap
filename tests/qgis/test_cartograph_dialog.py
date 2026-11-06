@@ -202,7 +202,7 @@ def fake_cartograph_export(monkeypatch):
             return types.SimpleNamespace(version="fake")
 
     monkeypatch.setattr(
-        controller_module, "ensure_runtime", lambda parent=None: _Provider()
+        controller_module, "ensure_runtime", lambda parent=None, ask=None: _Provider()
     )
 
     return types.SimpleNamespace(

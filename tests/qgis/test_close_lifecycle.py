@@ -343,3 +343,45 @@ class TestAnEditThenALanguageRebuild:
         assert _wait_for(qgis_app, lambda: plugin.dialog is not old)
         assert "Bonjour" in target.read_text(encoding="utf-8")
         plugin.unload()
+
+
+class TestTheRuntimeIsAskedForOnlyWhenTheUserActs:
+    def test_edits_and_closing_never_ask(
+        self, qgis_app, project, export, tmp_path, monkeypatch
+    ) -> None:
+        """Picking a layout may ask for the runtime once, Check now always;
+        the autosave after an edit and the save a close waits for never put
+        the licence or a download on screen."""
+        import nika_onlymap_exporter.ui.cartograph.controller as controller_module
+        from nika_onlymap_exporter.ui.runtime_setup import Ask
+
+        asks: list[Ask] = []
+        installed = controller_module.ensure_runtime
+
+        def recording(parent=None, ask=Ask.ALWAYS):
+            asks.append(ask)
+            return installed(parent, ask)
+
+        monkeypatch.setattr(controller_module, "ensure_runtime", recording)
+        target = tmp_path / "survey.html"
+        dialog, cartograph, layout, label = open_saved_cartograph(
+            qgis_app, project, target, _wait_for
+        )
+        assert asks[0] is Ask.FIRST_TIME
+
+        asks.clear()
+        edit_label(layout, label, "New")
+        assert _wait_for(qgis_app, lambda: "New" in _text(target))
+        assert asks and set(asks) == {Ask.NEVER}
+
+        asks.clear()
+        cartograph.check_now()
+        assert _wait_for(qgis_app, lambda: cartograph._job is None)
+        assert Ask.ALWAYS in asks
+
+        asks.clear()
+        edit_label(layout, label, "Newer")
+        _click_close(dialog)
+        assert _wait_for(qgis_app, lambda: not dialog.isVisible())
+        assert "Newer" in _text(target)
+        assert asks and set(asks) == {Ask.NEVER}

@@ -157,7 +157,7 @@ class ExportLayoutAlgorithm(QgsProcessingAlgorithm):
         )
 
     def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
-        ExportProjectAlgorithm._check_runtime_first()
+        ExportProjectAlgorithm._check_runtime_first(feedback)
         project = context.project()
         layout = self.parameterAsLayout(parameters, self.LAYOUT, context)
         if layout is None:

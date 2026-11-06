@@ -122,7 +122,9 @@ class LabelExport:
             export_module, "finish_cartograph_full", finish_cartograph_full
         )
         monkeypatch.setattr(
-            controller_module, "ensure_runtime", lambda parent=None: _Provider()
+            controller_module,
+            "ensure_runtime",
+            lambda parent=None, ask=None: _Provider(),
         )
 
 
