@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from nika_onlymap_exporter.core.export_ir import (
+    CategorySpec,
     Color,
     ExportLayer,
     ExportProject,
@@ -299,7 +300,19 @@ class TestResolve:
                 },
                 "Filter by",
             ),
-            ({"cluster_max_zoom": 9}, "count bubbles"),
+            # Bubbles would count what the style's filter leaves out.
+            (
+                {
+                    "cluster_max_zoom": 9,
+                    "renderer": RendererSpec(
+                        kind=RendererKind.CATEGORIZED,
+                        field_name="kind",
+                        categories=(CategorySpec("lake", "Lake", SymbolSpec()),),
+                        unmatched_hidden=True,
+                    ),
+                },
+                "count bubbles",
+            ),
         ],
     )
     def test_a_look_worked_out_at_export_stays_embedded(
@@ -311,6 +324,15 @@ class TestResolve:
         (item,) = items
         assert item.status.value == "preserved"
         assert reason in item.detail
+
+    def test_count_bubbles_load_live(self) -> None:
+        """The bubbles of the most common live layer, points such as stations,
+        merge live features as they do embedded ones."""
+        layer, _items = _resolve(_layer(cluster_max_zoom=9))
+        assert layer.live is not None and layer.live.mode is LiveMode.LIVE_FIRST
+        element = build_layer_element(layer)
+        assert 'cluster="true"' in element and 'cluster-max-zoom="9"' in element
+        assert "data-q2w-live" in element
 
     def test_reasons_found_reading_the_layer_keep_it_embedded_even_if_chosen(
         self,
@@ -343,13 +365,13 @@ class TestResolve:
             # NIFC's wildfire FeatureServer: date fields and count bubbles.
             (
                 ("its date fields, which the service sends as numbers",),
-                {"cluster_max_zoom": 9},
+                {"labeling": LabelingSpec(enabled=True, field_name="name")},
                 "Embedded, not loaded live from h: the map cannot load it live "
                 "because of its date fields, which the service sends as numbers; "
-                "and the map works out its count bubbles (where points stop "
-                "merging is worked out) from the features when it is exported, "
-                "which features loaded live would not carry. The map shows the "
-                "features as they were then.",
+                "and the map works out its labels (where each one goes is worked "
+                "out) from the features when it is exported, which features "
+                "loaded live would not carry. The map shows the features as they "
+                "were then.",
             ),
         ],
         ids=["wfs-1.1", "date-fields-and-bubbles"],
