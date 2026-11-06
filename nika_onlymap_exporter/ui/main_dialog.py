@@ -4937,7 +4937,10 @@ class MainDialog(QDialog):
                 return
 
             result, outcome = built
-            save_state(self.project, self.state)
+            # A project cleared or replaced while this wrote is not the one
+            # these settings are about (`_shutdown` says the same).
+            if not self._project_cleared:
+                save_state(self.project, self.state)
             self._remember_destination(destination)
 
             # What the map file was written from, so a later Share action

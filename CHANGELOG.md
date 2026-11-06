@@ -218,6 +218,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   last request.". A live preview change made while a cartograph saves, and
   the save of a layout not on screen while the web map exports, now wait
   their turn instead of being lost.
+- An export that finishes after the project was closed or another one
+  opened no longer writes the old project's dialog settings into the new
+  one.
 
 ## [0.3.2] - 2026-11-05
 

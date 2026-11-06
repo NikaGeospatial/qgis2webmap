@@ -3378,6 +3378,57 @@ class TestExportIsBack:
         finally:
             dialog.close()
 
+    def test_an_export_landing_after_the_project_changed_saves_nothing_into_it(
+        self,
+        qgis_app,
+        project,
+        make_memory_layer,
+        tmp_path,
+        monkeypatch,
+        runtime_required,
+    ) -> None:
+        """The map is written; the dialog's settings, which belong to the
+        project that was cleared, are not written into the one now open."""
+        import threading
+        import time
+
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        writing = threading.Event()
+        built = module.build_artifact
+
+        def held(*args, **kwargs):
+            writing.wait(30)
+            return built(*args, **kwargs)
+
+        saved: list[object] = []
+        monkeypatch.setattr(module, "build_artifact", held)
+        monkeypatch.setattr(module.QMessageBox, "information", lambda *a, **k: None)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.path_edit.setText(str(tmp_path / "peaks.html"))
+            dialog.on_export()
+            deadline = time.monotonic() + 60
+            while (
+                dialog.status_label.text() != "Writing the map..."
+                and time.monotonic() < deadline
+            ):
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            monkeypatch.setattr(
+                module, "save_state", lambda project, state: saved.append(project)
+            )
+            dialog._on_project_clearing()
+            writing.set()
+            while dialog._job is not None and time.monotonic() < deadline:
+                qgis_app.processEvents()
+                time.sleep(0.02)
+            assert (tmp_path / "peaks.html").exists()
+            assert saved == []
+        finally:
+            writing.set()
+            dialog.close()
+
     def test_switching_type_mid_read_keeps_the_pressed_destination(
         self, qgis_app, project, make_memory_layer, tmp_path
     ) -> None:
