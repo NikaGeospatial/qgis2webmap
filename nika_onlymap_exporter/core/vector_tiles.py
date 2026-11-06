@@ -299,8 +299,10 @@ def _report_undrawn_features(
     if kept == "neighbour colour":
         # The row below says which are drawn after all.
         instead = "matching features stay in the tile archive the map carries."
-    elif renderer.kind is RendererKind.CATEGORIZED and not renderer.unmatched_hidden:
-        # Undrawn by a clause of their own, which the legend lists as a class.
+    elif kept == "clickable" or (
+        renderer.kind is RendererKind.CATEGORIZED and not renderer.unmatched_hidden
+    ):
+        # Undrawn by a class of their own, which the legend lists.
         instead = (
             "matching features are not drawn, though they stay in the tile "
             "archive the map carries, and the legend lists them without a colour."
@@ -317,22 +319,25 @@ def _report_undrawn_features(
             )
             break
     if kept == "clickable" and clickable:
+        which = (
+            "in a range switched off between drawn ranges, or between two ranges"
+            if renderer.kind is RendererKind.GRADUATED
+            else "in a class switched off, or in no class"
+        )
         report.approximated(
             subject,
-            "The features QGIS does not draw (in a class switched off, or in no "
-            "class) are drawn invisible: they stay in the layer's tile archive, "
-            "so a click or the pointer where one lies still finds it and shows "
-            "its popup.",
+            f"The features QGIS does not draw ({which}) are drawn invisible: "
+            "they stay in the layer's tile archive, so a click or the pointer "
+            "where one lies still finds it and shows its popup.",
             layer_id,
         )
     elif kept == "neighbour colour":
         report.approximated(
             subject,
             "Values in a range switched off between drawn ranges, or between "
-            "two ranges, are drawn in the colour of the range above them: the "
-            "layer's features stay in its tile archive, and the map leaves out "
-            "only the values below its lowest drawn range and above its "
-            "highest.",
+            "two ranges, are drawn in the colour of the next range that "
+            "claims them: the ranges overlap, which QGIS tests in order and "
+            "the map cannot, and the layer's features stay in its tile archive.",
             layer_id,
         )
 

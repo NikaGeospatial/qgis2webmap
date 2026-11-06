@@ -245,8 +245,13 @@ UNDRAWN = {
                 qgis_core.QgsRendererRange(8, 20, _fill("#0000ff"), "Deep"),
             ],
         ),
-        ["stay in the tile archive the map carries.", "colour of the range above"],
-        ["omitted from the export", "not drawn"],
+        [
+            "are not drawn, though they stay in the tile archive the map carries, "
+            "and the legend lists them without a colour.",
+            "(in a range switched off between drawn ranges, or between two "
+            "ranges) are drawn invisible",
+        ],
+        ["omitted from the export", "colour of the"],
     ),
 }
 

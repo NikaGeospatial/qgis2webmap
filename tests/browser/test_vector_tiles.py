@@ -468,6 +468,19 @@ UNDRAWN_RIVER = {
         ),
         hidden_values=("river",),
     ),
+    "a-range-between-drawn-ones": RendererSpec(
+        kind=RendererKind.GRADUATED,
+        field_name="depth",
+        classes=(
+            GraduatedClassSpec(0, 2, "Shallow", _OTHER_BLUE),
+            GraduatedClassSpec(5, 20, "Deep", _LAKE_RED),
+        ),
+        value_ranges=(
+            ValueRange(0, 2, drawn=True),
+            ValueRange(2, 5, drawn=False),
+            ValueRange(5, 20, drawn=True),
+        ),
+    ),
     "outside-every-range": RendererSpec(
         kind=RendererKind.GRADUATED,
         field_name="depth",
@@ -502,7 +515,8 @@ def test_what_qgis_does_not_draw_is_not_drawn(
     assert _close(lake, (255, 0, 0)), f"the lake is {lake}"
     # With no basemap, nothing drawn is nothing in the map's picture.
     assert river[3] == 0, f"the river is drawn in {river}"
-    if case != "switched-off-beside-all-others":
+    # Drawn invisible there, so a click still finds it (a row says so).
+    if case not in ("switched-off-beside-all-others", "a-range-between-drawn-ones"):
         assert _click(page, RIVER) == []
     assert _click(page, LAKE) == ["lake"]
 

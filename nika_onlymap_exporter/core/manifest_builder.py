@@ -42,6 +42,7 @@ from .export_ir import (
     ExportSettings,
     FilterKind,
     GeometryKind,
+    GraduatedClassSpec,
     LayerFilterSpec,
     LiveFeaturesSpec,
     LiveMode,
@@ -1295,11 +1296,12 @@ def tile_undrawn_kept(
     """What a tile layer's map still finds that QGIS does not draw, beyond
     `tile_filter`'s reach, or `None` when it finds nothing of the sort.
 
-    Switched-off classes of a layer with an "all other values" class, and
-    values no class claims past the filter's limit, are drawn invisible
-    (`_tile_renderer`) and answer a click. A graduated layer's values in a
-    range switched off between drawn ones, or between two ranges, are drawn
-    in the colour of the range above them.
+    Switched-off classes of a layer with an "all other values" class, values
+    no class claims past the filter's limit, and a graduated layer's values
+    in a range switched off between drawn ones or between two ranges, are
+    drawn invisible (`_tile_renderer`) and answer a click. Ranges that
+    overlap are tested in QGIS's order, so there such values are drawn in
+    the colour of the range that claims them next.
     """
     if renderer.field_generated:
         return None
@@ -1307,31 +1309,65 @@ def tile_undrawn_kept(
         hidden = bool(renderer.hidden_values or renderer.unmatched_hidden)
         return "clickable" if hidden and not tile_filter(renderer) else None
     if renderer.kind is RendererKind.GRADUATED and renderer.classes:
-        low = min(c.lower for c in renderer.classes)
-        high = max(c.upper for c in renderer.classes)
-        inner_off = any(
-            not r.drawn and r.lower >= low and r.upper <= high
-            for r in renderer.value_ranges
-        )
-        ordered = sorted(renderer.classes, key=lambda c: c.lower)
-        gap = any(
-            later.lower > earlier.upper for earlier, later in zip(ordered, ordered[1:])
-        )
-        return "neighbour colour" if inner_off or gap else None
+        if not _inner_gaps(renderer.classes):
+            return None
+        return "clickable" if _ascending(renderer.classes) else "neighbour colour"
     return None
 
 
+def _ascending(classes: Sequence[GraduatedClassSpec]) -> bool:
+    """Whether graduated ranges ascend without overlapping, in QGIS order:
+    the ranges a threshold scale draws (`_graduated_chain`)."""
+    return all(c.lower <= c.upper for c in classes) and all(
+        later.lower >= earlier.upper for earlier, later in zip(classes, classes[1:])
+    )
+
+
+def _inner_gaps(classes: Sequence[GraduatedClassSpec]) -> list[tuple[float, float]]:
+    """The spans between drawn ranges that no drawn range claims: a range
+    switched off, or a gap between two."""
+    ordered = sorted(classes, key=lambda c: c.lower)
+    return [
+        (earlier.upper, later.lower)
+        for earlier, later in zip(ordered, ordered[1:])
+        if later.lower > earlier.upper
+    ]
+
+
 def _tile_renderer(renderer: RendererSpec) -> RendererSpec:
-    """`renderer` with the categories QGIS does not draw made undrawn.
+    """`renderer` with the classes QGIS does not draw made undrawn.
 
     A switched-off class's values get a clause of their own, ahead of an "all
     other values" class that would otherwise colour them, and with no such
     class the trailing colour, which every value no class claims gets, is
-    undrawn rather than the grey that read features never reach.
+    undrawn rather than the grey that read features never reach. A graduated
+    layer's span between two drawn ranges (a range switched off, or a gap)
+    becomes an undrawn class of its own, rather than a threshold scale's
+    colour of the range above it.
     """
+    undrawn = SymbolSpec(fill_color=UNDRAWN, stroke_color=UNDRAWN)
+    if renderer.kind is RendererKind.GRADUATED and renderer.classes:
+        if not _ascending(renderer.classes) or not _inner_gaps(renderer.classes):
+            return renderer
+        switched_off = {
+            (r.lower, r.upper) for r in renderer.value_ranges if not r.drawn
+        }
+        classes: list[GraduatedClassSpec] = [renderer.classes[0]]
+        for later in renderer.classes[1:]:
+            low = classes[-1].upper
+            if later.lower > low:
+                # A value on the boundary is the next range's, unless a
+                # switched-off range ending there claims it first, as QGIS
+                # tests the ranges in order.
+                claimed = any(high == later.lower for _, high in switched_off)
+                high = (
+                    later.lower if claimed else math.nextafter(later.lower, -math.inf)
+                )
+                classes.append(GraduatedClassSpec(low, high, "", undrawn))
+            classes.append(later)
+        return replace(renderer, classes=tuple(classes))
     if renderer.kind is not RendererKind.CATEGORIZED or not renderer.categories:
         return renderer
-    undrawn = SymbolSpec(fill_color=UNDRAWN, stroke_color=UNDRAWN)
     extra = [
         CategorySpec(value=value, label="", symbol=undrawn)
         for value in renderer.hidden_values
