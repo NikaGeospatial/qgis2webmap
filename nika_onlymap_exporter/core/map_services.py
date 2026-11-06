@@ -50,6 +50,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qsl, quote, unquote, urlsplit
 
+from .iso_time import from_iso
+
 # Codes that name Web Mercator. A service that offers only an older alias is
 # asked in that alias: the BBOX values are the same metres either way.
 WEB_MERCATOR_CODES = (
@@ -1262,9 +1264,8 @@ def parse_instant(text: str) -> datetime | None:
         text += "-01"
     if "T" in text and not re.search(r"(Z|[+-]\d{2}:?\d{2})$", text, re.IGNORECASE):
         text += "Z"
-    try:
-        found = datetime.fromisoformat(text)
-    except ValueError:
+    found = from_iso(text)
+    if found is None:
         return None
     if found.tzinfo is None:
         found = found.replace(tzinfo=timezone.utc)

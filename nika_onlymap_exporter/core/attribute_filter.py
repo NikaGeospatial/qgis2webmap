@@ -19,10 +19,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 
 from .export_ir import FilterKind, LayerFilterSpec
+from .iso_time import from_iso
 
 # Past this many values a list of tick boxes is a scroll through text rather
 # than a filter, and every value would be written into the page twice - once
@@ -155,10 +156,8 @@ def _epoch_ms(value: object) -> int | None:
     """
     if not isinstance(value, str) or not value:
         return None
-    text = value[:-1] + "+00:00" if value.endswith("Z") else value
-    try:
-        moment = datetime.fromisoformat(text)
-    except ValueError:
+    moment = from_iso(value)
+    if moment is None:
         return None
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
