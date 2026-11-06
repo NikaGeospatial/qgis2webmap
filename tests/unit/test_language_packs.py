@@ -81,7 +81,12 @@ def test_the_release_asset_holds_exactly_the_pinned_packs(
     """Built twice, the same bytes; inside, each pinned pack and nothing else."""
     packager = _package_plugin()
     i18n = tmp_path / "i18n"
-    shutil.copytree(I18N_DIR, i18n, ignore=shutil.ignore_patterns("*.ts"))
+    shutil.copytree(
+        I18N_DIR,
+        i18n,
+        ignore=shutil.ignore_patterns("*.ts"),
+        copy_function=shutil.copyfile,  # writable, from a read-only snapshot too
+    )
     monkeypatch.setattr(packager, "I18N_DIR", i18n)
     first = packager.build_language_packs(tmp_path / "a")
     for pack in i18n.iterdir():  # a fresh checkout has other file times
@@ -103,7 +108,12 @@ def test_the_release_asset_holds_exactly_the_pinned_packs(
 def test_the_packager_refuses_a_pack_that_is_not_pinned(tmp_path, monkeypatch) -> None:
     packager = _package_plugin()
     i18n = tmp_path / "i18n"
-    shutil.copytree(I18N_DIR, i18n, ignore=shutil.ignore_patterns("*.ts"))
+    shutil.copytree(
+        I18N_DIR,
+        i18n,
+        ignore=shutil.ignore_patterns("*.ts"),
+        copy_function=shutil.copyfile,  # writable, from a read-only snapshot too
+    )
     (i18n / f"{PREFIX}fr.qm").write_bytes(b"rebuilt, pin not refreshed")
     monkeypatch.setattr(packager, "I18N_DIR", i18n)
     with pytest.raises(SystemExit, match="update_translations"):
