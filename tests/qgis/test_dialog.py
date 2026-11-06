@@ -1634,6 +1634,97 @@ class TestAutosaveIsGatedOnALiveSession:
             dialog._server = None
             dialog.close()
 
+    def _wait_until(self, qgis_app, condition, seconds: float = 60.0) -> None:
+        import time
+
+        deadline = time.monotonic() + seconds
+        while not condition() and time.monotonic() < deadline:
+            qgis_app.processEvents()
+            time.sleep(0.02)
+        assert condition()
+
+    def test_live_switched_off_while_the_preview_builds_opens_a_one_off(
+        self, qgis_app, project, make_memory_layer, monkeypatch, runtime_required
+    ) -> None:
+        import threading
+
+        from nika_onlymap_exporter.ui import main_dialog as module
+
+        monkeypatch.setattr(module.QDesktopServices, "openUrl", lambda url: True)
+        writing = threading.Event()
+        written = module.write_preview
+
+        def held(*args, **kwargs):
+            writing.wait(30)
+            return written(*args, **kwargs)
+
+        monkeypatch.setattr(module, "write_preview", held)
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.live_switch.setChecked(True)
+            dialog.preview_button.click()
+            self._wait_until(
+                qgis_app,
+                lambda: dialog.status_label.text() == "Building the preview...",
+            )
+            dialog.live_switch.click()  # off, while the page is being written
+            writing.set()
+            self._wait_until(qgis_app, lambda: dialog._job is None)
+
+            assert not dialog._live_running()
+            assert dialog.preview_button.text() == "Preview"
+        finally:
+            dialog.close()
+
+    def test_after_save_as_the_open_tab_is_served_the_new_map(
+        self,
+        qgis_app,
+        project,
+        make_memory_layer,
+        tmp_path,
+        monkeypatch,
+        runtime_required,
+    ) -> None:
+        """The preview directory is keyed by the project's name: a rebuild
+        after Save As is written under the new one, and the tab already open
+        - same address - is served it."""
+        import urllib.request
+
+        from nika_onlymap_exporter.ui.preview import preview_directory
+
+        monkeypatch.setattr(
+            "nika_onlymap_exporter.ui.main_dialog.QDesktopServices.openUrl",
+            lambda url: True,
+        )
+        dialog = self._dialog(project, make_memory_layer)
+        try:
+            dialog.live_switch.setChecked(True)
+            dialog.preview_button.click()
+            self._wait_until(
+                qgis_app, lambda: dialog._server is not None and dialog._job is None
+            )
+            server = dialog._server
+            old_root = server.root
+            url = server.url
+
+            project.setFileName(str(tmp_path / "saved-as.qgz"))
+            dialog.state.map_name = "After Save As"
+            dialog._poll_for_changes()
+            self._wait_until(
+                qgis_app,
+                lambda: not dialog._rebuild_timer.isActive() and dialog._job is None,
+            )
+
+            assert dialog._server is server
+            assert (
+                server.root == preview_directory(dialog._project_identity()).resolve()
+            )
+            with urllib.request.urlopen(url, timeout=10) as response:
+                assert "After Save As" in response.read().decode("utf-8")
+            assert not old_root.exists()
+        finally:
+            dialog.close()
+
 
 class TestShareBuildsWhatItNeeds:
     """No Share action should make the user produce a file first.

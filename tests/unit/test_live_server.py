@@ -248,7 +248,7 @@ class TestReload:
 
         server.notify_reload()
         listener.join(timeout=8)
-        assert received and b"reload" in received[0]
+        assert received and f"rev:{server.revision}".encode() in received[0]
 
     def test_notify_with_no_listeners_is_harmless(self, served) -> None:
         """A preview rebuilt before the browser is open must not raise."""

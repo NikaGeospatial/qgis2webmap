@@ -26,6 +26,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import contextlib
+import shutil
 import sys
 import time
 import traceback
@@ -4168,7 +4169,11 @@ class MainDialog(QDialog):
         def then(export, _report) -> None:
             # Built here, on the GUI thread, because it reads the licence field.
             writer = self._writer()
+            # Read per rebuild: a Save As since the last one moves the preview
+            # to the new name's directory, which the server then serves.
             identity = self._project_identity()
+            # The revision this page is published as (`notify_reload`).
+            revision = self._server.revision + 1 if self._server is not None else 0
 
             def work(progress: Progress):
                 progress.step(READ_SHARE, tr("Updating the preview..."))
@@ -4179,11 +4184,20 @@ class MainDialog(QDialog):
                     live=True,
                     on_progress=self._writing_progress(progress),
                     should_cancel=progress.should_cancel,
+                    revision=revision,
                 )
 
             def on_written(_result) -> None:
                 if self._shut_down or self._server is None:
                     return
+                root = preview_directory(identity).resolve()
+                if self._server.root != root:
+                    # Saved under a new name since the last rebuild: the open
+                    # tab follows to the new directory, and the old one,
+                    # which closing would no longer find, goes now.
+                    old_root = self._server.root
+                    self._server.serve_root(root)
+                    shutil.rmtree(old_root, ignore_errors=True)
                 self._server.notify_reload()
                 self.status_label.setText(tr("Live preview updated."))
 
@@ -4604,7 +4618,9 @@ class MainDialog(QDialog):
                 return
 
             self._last_snapshot = self.state.snapshot()
-            if live and self._server is not None and not self._live_running():
+            # Live turned off while this was being built: opened as a one-off.
+            live_now = live and self.live_switch.isChecked()
+            if live_now and self._server is not None and not self._live_running():
                 # A fresh server for a live session: an old one-off tab still
                 # connected to this one would count as a viewer, and keep the
                 # session rebuilding after its own tab had closed.
@@ -4619,7 +4635,7 @@ class MainDialog(QDialog):
                 return
 
             QDesktopServices.openUrl(QUrl(url))
-            if not live:
+            if not live_now:
                 self._idle_timer.start()
                 self.status_label.setText(
                     tr(

@@ -85,6 +85,11 @@ class TestTheRestOfTheHook:
         assert "EventSource" not in compose_preview_hook(project())
         assert "EventSource" in compose_preview_hook(project(), live=True)
 
+    def test_a_live_page_carries_the_revision_it_is_published_as(self) -> None:
+        hook = compose_preview_hook(project(), live=True, revision=7)
+        assert "var served = 7;" in hook
+        assert "__REVISION__" not in compose_preview_hook(project(), served=True)
+
     def test_a_served_one_off_listens_but_never_reloads(self) -> None:
         """It connects so its server knows when the tab closes; a live session
         started later on that server must not reload it."""

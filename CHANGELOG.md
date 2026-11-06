@@ -201,6 +201,14 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   layout while a count was still calculating left "…" in the layout, its
   file and QGIS's designer. The count gets its last number back, and a
   layout not on screen counts its Live counts afresh when it is saved.
+- The live preview follows a Save As: the open tab used to keep showing
+  the map from before the project was saved under a new name, while the
+  dialog said "Live preview updated."
+- The live preview no longer misses a change made while its tab is still
+  reloading from the previous one, and a tab whose connection dropped and
+  came back more than five times keeps following the dialog.
+- Turning Live off while a live Preview is being built now opens a one-off
+  preview, as the switch says, rather than starting a live session.
 
 ## [0.3.2] - 2026-11-05
 

@@ -325,7 +325,8 @@
         "tests/browser/test_panel_sizes.py",
         "tests/browser/test_map_layout.py",
         "tests/browser/test_basemap_switcher.py",
-        "tests/browser/test_attribute_filter.py"
+        "tests/browser/test_attribute_filter.py",
+        "tests/browser/test_preview_reload.py"
       ]
     },
     "i18n": {
