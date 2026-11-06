@@ -1997,14 +1997,40 @@ def _wms_feature_info(
             subject,
             "QGIS has no stored copy of this WMS's capabilities, which say "
             "whether and how it answers clicks, and exporting never contacts "
-            f"the service to find out, so {nothing}. Open the project once while "
-            "online so QGIS reloads the service, and export again.",
+            f"the service to find out, so {nothing}. Opening the project once "
+            "while online usually brings the copy back; then export again. A "
+            "service that tells QGIS not to keep one (NASA GIBS does) never "
+            "leaves a copy, so its layer stays unclickable on the web map.",
             layer_id,
         )
         return None
     queried = [
         found for found in request.layers if parsed.layer_queryable.get(found, False)
     ]
+    # A sublayer the stored capabilities do not list at all: they cannot say
+    # whether it answers, which QGIS, reloading them, would know.
+    unlisted = [
+        found for found in request.layers if found not in parsed.layer_queryable
+    ]
+    if unlisted:
+        names = ", ".join(f"'{found}'" for found in unlisted)
+        stale = (
+            f"QGIS's stored copy of this WMS's capabilities does not list {names}, "
+            "so the web map cannot tell whether "
+            f"{'it answers' if len(unlisted) == 1 else 'they answer'} clicks"
+        )
+        remedy = (
+            "Open the project once while online so QGIS reloads the service, "
+            "and export again."
+        )
+        if not queried:
+            report.unsupported(subject, f"{stale}, and {nothing}. {remedy}", layer_id)
+        else:
+            report.approximated(
+                subject,
+                f"{stale}: a click shows only what the others answer. {remedy}",
+                layer_id,
+            )
     if not queried:
         return None
     info_format = map_services.feature_info_format(parsed.feature_info_formats)

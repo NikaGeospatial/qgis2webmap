@@ -413,6 +413,9 @@ def test_a_service_that_keeps_no_capabilities_says_what_readers_get(
     projected = crs != "EPSG:3857"
     assert ("each tile is asked in EPSG:4326" in detail) is projected
     assert ("add the layer again with EPSG:3857 chosen" in detail) is projected
+    # Reopening online never helps such a service, so its click row says so.
+    (clicks,) = [i.detail for i in report.items if i.subject == "Clicks on 'GIBS'"]
+    assert "(NASA GIBS does) never leaves a copy" in clicks
 
 
 def test_the_network_cache_is_the_test_sessions_own(offline, tmp_path_factory) -> None:

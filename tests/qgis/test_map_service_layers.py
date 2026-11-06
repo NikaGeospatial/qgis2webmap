@@ -785,6 +785,38 @@ class TestClicks:
         assert exported.tiles.feature_info is None
         assert "only in EPSG:25832" in _rows(report, FidelityStatus.UNSUPPORTED)
 
+    @pytest.mark.parametrize(
+        ("layers", "status", "asked"),
+        [
+            (("nowhere",), FidelityStatus.UNSUPPORTED, None),
+            (("target", "nowhere"), FidelityStatus.APPROXIMATED, "target"),
+        ],
+        ids=["only-unlisted", "one-unlisted"],
+    )
+    def test_a_sublayer_the_capabilities_do_not_list_is_said(
+        self, qgis_app, services, layers, status, asked
+    ) -> None:
+        """A stored copy of the capabilities older than the layer, or cut
+        down: whether the missing sublayer answers is unknown, and a row says
+        so and what to do, rather than the layer quietly not answering."""
+        exported, report = _read(
+            _wms(services.url("cors/wms"), layers=layers, crs="EPSG:3857")
+        )
+        assert exported is not None and exported.tiles is not None
+        if asked is None:
+            assert exported.tiles.feature_info is None
+        else:
+            assert exported.tiles.feature_info is not None
+            query = dict(parse_qsl(urlsplit(exported.tiles.feature_info).query))
+            assert query["QUERY_LAYERS"] == asked
+        rows = [
+            i
+            for i in report.items
+            if i.subject == "Clicks on 'WMS'" and "does not list 'nowhere'" in i.detail
+        ]
+        assert [row.status for row in rows] == [status]
+        assert "reloads the service" in rows[0].detail
+
     def test_without_capabilities_a_click_asks_nothing_and_says_why(
         self, qgis_app
     ) -> None:
