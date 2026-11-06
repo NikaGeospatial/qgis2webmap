@@ -46,7 +46,9 @@ them, or reduce **Coordinate precision** on the Map tab.
 The same map, zipped, with a short README explaining how to open it. A map
 that carries a raster or a PMTiles archive from your disk keeps it as a file
 beside the page, as in a Folder, so once extracted it has to be served rather
-than double-clicked; the README says how.
+than double-clicked; the README says how. It also says whether the map needs
+an internet connection, and names each server a map with a basemap, relief or
+web layers asks as it is used.
 
 Worth choosing even when the file is small: **many mail providers and corporate
 filters quarantine or strip `.html` attachments**, because HTML is a common
