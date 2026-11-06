@@ -75,7 +75,6 @@ from .live_features import (
     ogcapi_template,
     wfs_template,
 )
-from .map_services import HTTP_ON_HTTPS
 from .popup_translator import rename_untemplatable_fields, translate_popup
 from .raster_style import composite_bands, hue_saturation_active, should_bake
 from .renderer_translator import (
@@ -2356,23 +2355,18 @@ def _wms_time_row(
 # (`cors-fallback`, on by default), with the limits that come with them - but
 # not on a projected map, nor pictures it must warp into place
 # (`domFallbackAllowed`): those stay empty.
-# In the words `dependency_scanner.HTTP_ON_HTTPS_NOTE` says it in of every
-# other layer on http://.
-_HTTP_NOTE = (
-    f"A service on http:// {HTTP_ON_HTTPS}, unless it also answers on https://."
-)
 _CORS_NOTE = (
     "A service that does not allow web pages to read its images (CORS) still "
     "shows, as plain pictures: under every other layer of the map, hidden "
     "while the map is tilted or rotated, and left out of pictures the map "
     "saves of itself; in a cartograph frame drawn in another projection it "
-    "stays empty. " + _HTTP_NOTE
+    "stays empty."
 )
 _WARPED_CORS_NOTE = (
     "The service must allow web pages to read its images (CORS), or this "
     "layer stays empty while the rest of the map draws, since a picture the "
     "map warps into place cannot be shown any other way; a refused request "
-    "shows in the browser's developer tools. " + _HTTP_NOTE
+    "shows in the browser's developer tools."
 )
 
 

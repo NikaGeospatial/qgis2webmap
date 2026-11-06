@@ -366,8 +366,6 @@ HTTP_ON_HTTPS_NOTE = (
     "website. If {host} also answers on https://, add the layer again with "
     "that address."
 )
-# The words the WMS and WMTS rows already say it in (`layer_reader._HTTP_NOTE`).
-_HTTP_SAID = HTTP_ON_HTTPS
 
 
 def _report_http(
@@ -376,17 +374,15 @@ def _report_http(
     address: str,
     report: FidelityReportBuilder,
 ) -> None:
-    """The row for a layer read from an `http://` address, once a layer, unless
-    its reader's rows say it already."""
+    """The row for a layer read from an `http://` address, once a layer."""
     from urllib.parse import urlsplit
 
     if not address.lower().startswith("http://"):
         return
     subject = f"Address of '{layer.name}'"
     if any(
-        _HTTP_SAID in item.detail or item.subject == subject
-        for item in (*project.fidelity, *report.items)
-        if item.layer_id == layer.layer_id
+        item.subject == subject and item.layer_id == layer.layer_id
+        for item in report.items
     ):
         return
     host = urlsplit(address).hostname or address

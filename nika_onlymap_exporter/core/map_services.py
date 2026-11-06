@@ -1229,7 +1229,7 @@ def epsg_number(code: str) -> int | None:
 
 
 # What every Fidelity row about a layer on http:// says of an https:// site
-# (`layer_reader._HTTP_NOTE`, `dependency_scanner.HTTP_ON_HTTPS_NOTE`).
+# (`dependency_scanner.HTTP_ON_HTTPS_NOTE`).
 HTTP_ON_HTTPS = (
     "may not draw in a map put on an https:// website (GitHub Pages and most "
     "hosts are), where Chrome, Edge and Safari block it"

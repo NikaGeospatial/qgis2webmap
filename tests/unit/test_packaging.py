@@ -325,28 +325,18 @@ class TestDependencyScanner:
         assert ("epsg.io" in result.remote_dependencies) is looked_up
 
     @pytest.mark.parametrize(
-        ("url", "said", "already"),
+        ("url", "said"),
         [
-            pytest.param(
-                "http://tiles.example/{z}/{x}/{y}.png", True, False, id="http"
-            ),
-            pytest.param(
-                "https://tiles.example/{z}/{x}/{y}.png", False, False, id="https"
-            ),
-            # A WMS's own row says it already.
-            pytest.param(
-                "http://maps.example/wms?{bbox-epsg-3857}", False, True, id="wms"
-            ),
+            pytest.param("http://tiles.example/{z}/{x}/{y}.png", True, id="xyz"),
+            pytest.param("https://tiles.example/{z}/{x}/{y}.png", False, id="https"),
+            pytest.param("http://tiles.example/wms?{bbox-epsg-3857}", True, id="wms"),
         ],
     )
-    def test_a_layer_on_http_says_an_https_website_blocks_it(
-        self, url, said, already
-    ) -> None:
+    def test_a_layer_on_http_says_an_https_website_blocks_it(self, url, said) -> None:
         """qgis2web#933: a map put on GitHub Pages with http:// tiles came out
-        blank, and nothing said why."""
-        from dataclasses import replace
-
-        from nika_onlymap_exporter.core.export_ir import FidelityItem, TileSpec
+        blank, and nothing said why. One row a layer, naming its host, for a
+        WMS as for any other."""
+        from nika_onlymap_exporter.core.export_ir import TileSpec
 
         layer = make_layer(
             layer_id="tiles",
@@ -357,24 +347,16 @@ class TestDependencyScanner:
             tiles=TileSpec(url),
             dependencies=(
                 AssetDependency(identifier=url, disposition=AssetDisposition.REMOTE),
+                AssetDependency(identifier=url, disposition=AssetDisposition.REMOTE),
             ),
         )
-        project = make_project([layer])
-        if already:
-            row = FidelityItem(
-                subject="Layer 'Tiles'",
-                status=FidelityStatus.APPROXIMATED,
-                detail=f"A service on http:// {HTTP_ON_HTTPS}.",
-                layer_id="tiles",
-            )
-            project = replace(project, fidelity=(row,))
         report = FidelityReportBuilder()
-        scan(project, report)
+        scan(make_project([layer]), report)
         rows = [i for i in report.items if i.subject == "Address of 'Tiles'"]
         assert len(rows) == (1 if said else 0)
         if said:
             assert "tiles.example is asked on http://" in rows[0].detail
-            assert "https:// website" in rows[0].detail
+            assert HTTP_ON_HTTPS in rows[0].detail
 
     @staticmethod
     def _service_layer(*images, contextual=False) -> ExportLayer:
