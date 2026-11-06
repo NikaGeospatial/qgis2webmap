@@ -245,6 +245,78 @@ class TestCategorized:
         )
 
 
+@pytest.mark.parametrize(
+    ("field_type", "values", "category_values"),
+    [
+        # Typed into the dialog, or kept by an older project, as text.
+        pytest.param("integer", [1, 2, 3], ["1", "2"], id="whole-numbers"),
+        pytest.param("double", [1.0, 2.5, 3.0], ["1", "2.5"], id="decimals"),
+        pytest.param("string", ["1", "2", "3"], [1, 2], id="text"),
+    ],
+)
+def test_categories_match_the_values_as_the_data_carries_them(
+    qgis_app, field_type, values, category_values
+) -> None:
+    """QGIS matches a category to a feature by their strings, so it draws all
+    of these in their class colour; the map compares the values themselves
+    (in its colours, and in the filter of a live or tile layer), so each
+    category is written as the field's own type."""
+    from qgis.core import (
+        QgsCategorizedSymbolRenderer,
+        QgsFeature,
+        QgsGeometry,
+        QgsMarkerSymbol,
+        QgsPointXY,
+        QgsRenderContext,
+        QgsRendererCategory,
+        QgsVectorLayer,
+    )
+
+    layer = QgsVectorLayer(
+        f"Point?crs=EPSG:4326&field=code:{field_type}", "codes", "memory"
+    )
+    features = []
+    for index, value in enumerate(values):
+        feature = QgsFeature(layer.fields())
+        feature.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(index, 0)))
+        feature.setAttribute("code", value)
+        features.append(feature)
+    layer.dataProvider().addFeatures(features)
+    layer.setRenderer(
+        QgsCategorizedSymbolRenderer(
+            "code",
+            [
+                QgsRendererCategory(value, QgsMarkerSymbol.createSimple({}), str(value))
+                for value in category_values
+            ],
+        )
+    )
+    # What QGIS draws: the features of the first two values.
+    context = QgsRenderContext()
+    renderer = layer.renderer()
+    renderer.startRender(context, layer.fields())
+    drawn = [
+        feature["code"]
+        for feature in layer.getFeatures()
+        if renderer.symbolForFeature(feature, context) is not None
+    ]
+    renderer.stopRender(context)
+    assert drawn == values[:2]
+
+    exported = read_layer(layer, FidelityReportBuilder())
+    assert exported is not None and exported.geojson is not None
+    carried = [f["properties"]["code"] for f in exported.geojson["features"]]
+    written = [category.value for category in exported.renderer.categories]
+
+    # The same values as the browser reads them: text, or a number (1 and
+    # 1.0 are one number there).
+    def as_read(value):
+        return value if isinstance(value, str) else float(value)
+
+    assert [as_read(v) for v in written] == [as_read(v) for v in carried[:2]]
+    assert all(isinstance(v, str) is isinstance(carried[0], str) for v in written)
+
+
 class TestGraduated:
     def _graduated_layer(self, make_memory_layer, mode):
         layer = make_memory_layer(

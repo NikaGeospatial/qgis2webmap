@@ -750,8 +750,9 @@ def translate_renderer(
         return RendererSpec(kind=RendererKind.SINGLE, symbol=symbol)
 
     if isinstance(renderer, QgsCategorizedSymbolRenderer):
-        return _translate_categorized(
-            renderer, report, subject, layer_id, scale, ground
+        return _in_field_type(
+            _translate_categorized(renderer, report, subject, layer_id, scale, ground),
+            layer,
         )
 
     if isinstance(renderer, QgsGraduatedSymbolRenderer):
@@ -1091,6 +1092,51 @@ def category_key(value: object) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value)
+
+
+def _in_field_type(spec: RendererSpec, layer: QgsVectorLayer) -> RendererSpec:
+    """`spec`'s category values as the layer's field holds them.
+
+    QGIS matches a category to a feature by their strings, so a category it
+    stores as the text "1" draws a whole-number field's 1, and a number 1
+    draws a text field's "1" (a value typed in by hand, or kept by an older
+    project). The web map compares the values themselves, as the data
+    carries them, so each is written as the field's own type: numbers for a
+    numeric field, text for any other.
+    """
+    if spec.kind is not RendererKind.CATEGORIZED or not spec.field_name:
+        return spec
+    index = layer.fields().indexOf(spec.field_name)
+    if index < 0:
+        return spec
+    field = layer.fields().at(index)
+    numeric = field.isNumeric()
+
+    def typed(value: Any) -> Any:
+        if value is None or isinstance(value, bool):
+            return value
+        if not numeric:
+            return category_key(value) if isinstance(value, (int, float)) else value
+        if isinstance(value, str):
+            try:
+                number = float(value)
+            except ValueError:
+                return value
+            return int(number) if number.is_integer() else number
+        return value
+
+    return replace(
+        spec,
+        categories=tuple(
+            replace(
+                category,
+                value=typed(category.value),
+                extra_values=tuple(typed(v) for v in category.extra_values),
+            )
+            for category in spec.categories
+        ),
+        hidden_values=tuple(typed(v) for v in spec.hidden_values),
+    )
 
 
 def _category_values(value: Any) -> list[str | int | float | None]:
