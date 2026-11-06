@@ -156,155 +156,155 @@
       <translation>تحمل الصفحة {size} من البيانات المتجهة، وقد تبقى الخريطة فارغة وقتًا طويلًا أثناء فتحها، خصوصًا على جهاز بلا بطاقة رسومات. الأثقل: {layers}. بسّط هندسة هذه الطبقات، أو اضبط الإطار على صورة في إطارات الخريطة.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="573" />
+      <location filename="../core/fidelity_summary.py" line="577" />
       <source>{n} thing changes</source>
       <translation>يتغيّر {n} عنصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="573" />
+      <location filename="../core/fidelity_summary.py" line="577" />
       <source>{n} things change</source>
       <translation>تتغيّر {n} عناصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="648" />
-      <location filename="../core/fidelity_summary.py" line="645" />
+      <location filename="../core/fidelity_summary.py" line="652" />
+      <location filename="../core/fidelity_summary.py" line="649" />
       <source>See what changes</source>
       <translation>عرض ما يتغيّر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="382" />
+      <location filename="../core/fidelity_summary.py" line="386" />
       <source>Nothing to report.</source>
       <translation>لا شيء للإبلاغ عنه.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="453" />
+      <location filename="../core/fidelity_summary.py" line="457" />
       <source>{n} layer and the whole map need attention</source>
       <translation>تحتاج {n} طبقة والخريطة كاملة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="453" />
+      <location filename="../core/fidelity_summary.py" line="457" />
       <source>{n} layers and the whole map need attention</source>
       <translation>تحتاج {n} طبقات والخريطة كاملة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="459" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>{n} layer needs attention</source>
       <translation>تحتاج {n} طبقة إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="459" />
+      <location filename="../core/fidelity_summary.py" line="463" />
       <source>{n} layers need attention</source>
       <translation>تحتاج {n} طبقات إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="463" />
+      <location filename="../core/fidelity_summary.py" line="467" />
       <source>{n} needs attention</source>
       <translation>{n} يحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="463" />
+      <location filename="../core/fidelity_summary.py" line="467" />
       <source>{n} need attention</source>
       <translation>{n} تحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="465" />
+      <location filename="../core/fidelity_summary.py" line="469" />
       <source>the whole map needs attention</source>
       <translation>الخريطة كاملة تحتاج إلى انتباه</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="619" />
-      <location filename="../ui/cartograph/controller.py" line="1192" />
+      <location filename="../core/fidelity_summary.py" line="623" />
+      <location filename="../ui/cartograph/controller.py" line="1222" />
       <location filename="../ui/fidelity_panel.py" line="262" />
       <location filename="../ui/fidelity_panel.py" line="533" />
       <source>Not checked yet.</source>
       <translation>لم يُفحص بعد.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="619" />
+      <location filename="../core/fidelity_summary.py" line="623" />
       <location filename="../ui/fidelity_panel.py" line="268" />
       <location filename="../ui/fidelity_panel.py" line="534" />
       <source>Check now</source>
       <translation>افحص الآن</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="621" />
+      <location filename="../core/fidelity_summary.py" line="625" />
       <location filename="../ui/fidelity_panel.py" line="547" />
       <source>Checking what the export changes...</source>
       <translation>جارٍ فحص ما يغيّره التصدير...</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="628" />
+      <location filename="../core/fidelity_summary.py" line="632" />
       <source>See why</source>
       <translation>عرض السبب</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="632" />
+      <location filename="../core/fidelity_summary.py" line="636" />
       <source>Out of date - something changed since the last check.</source>
       <translation>قديم - تغيّر شيء منذ آخر فحص.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="634" />
+      <location filename="../core/fidelity_summary.py" line="638" />
       <location filename="../ui/fidelity_panel.py" line="606" />
       <source>Check again</source>
       <translation>افحص مرة أخرى</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="641" />
+      <location filename="../core/fidelity_summary.py" line="645" />
       <source>Review problems</source>
       <translation>مراجعة المشكلات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="385" />
+      <location filename="../core/fidelity_summary.py" line="389" />
       <source>{n} layer</source>
       <translation>{n} طبقة</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="385" />
+      <location filename="../core/fidelity_summary.py" line="389" />
       <source>{n} layers</source>
       <translation>{n} طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="385" />
+      <location filename="../core/fidelity_summary.py" line="389" />
       <source>No layers</source>
       <translation>لا طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="393" />
+      <location filename="../core/fidelity_summary.py" line="397" />
       <source>everything is kept exactly</source>
       <translation>كل شيء محفوظ كما هو تمامًا</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="422" />
+      <location filename="../core/fidelity_summary.py" line="426" />
       <source>{n} thing cannot be exported</source>
       <translation>لا يمكن تصدير {n} عنصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="422" />
+      <location filename="../core/fidelity_summary.py" line="426" />
       <source>{n} things cannot be exported</source>
       <translation>لا يمكن تصدير {n} عناصر</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="444" />
+      <location filename="../core/fidelity_summary.py" line="448" />
       <source>{parts} on export.</source>
       <translation>{parts} عند التصدير.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="626" />
+      <location filename="../core/fidelity_summary.py" line="630" />
       <source>The check failed.</source>
       <translation>فشل الفحص.</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="430" />
+      <location filename="../core/fidelity_summary.py" line="434" />
       <source>{n} layer cannot be exported</source>
       <translation>لا يمكن تصدير {n} طبقة</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="430" />
+      <location filename="../core/fidelity_summary.py" line="434" />
       <source>{n} layers cannot be exported</source>
       <translation>لا يمكن تصدير {n} طبقات</translation>
     </message>
     <message>
-      <location filename="../core/fidelity_summary.py" line="624" />
+      <location filename="../core/fidelity_summary.py" line="628" />
       <source>The check could not finish: {error}</source>
       <translation>تعذّر إكمال الفحص: {error}</translation>
     </message>
@@ -933,7 +933,7 @@ Anything that cannot be translated exactly is reported in the log. If an item is
     </message>
     <message>
       <location filename="../processing/export_layout.py" line="119" />
-      <location filename="../ui/cartograph/controller.py" line="940" />
+      <location filename="../ui/cartograph/controller.py" line="970" />
       <source>Print layout</source>
       <translation>تخطيط الطباعة</translation>
     </message>
@@ -1735,167 +1735,167 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>بسيط</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="954" />
+      <location filename="../ui/cartograph/controller.py" line="984" />
       <source>New layout from template: pick a design and build another print layout from what the map canvas shows. The layout shown here is kept as it is.</source>
       <translation>تخطيط جديد من قالب: اختر تصميمًا وأنشئ تخطيط طباعة آخر مما تعرضه لوحة الخريطة. يبقى التخطيط المعروض هنا كما هو.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1019" />
+      <location filename="../ui/cartograph/controller.py" line="1049" />
       <source>Shown wherever the layout uses the project title. Blank keeps it.</source>
       <translation>يظهر أينما استخدم التخطيط عنوان المشروع. يُبقيه فارغًا كما هو.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1644" />
+      <location filename="../ui/cartograph/controller.py" line="1674" />
       <location filename="../ui/main_dialog.py" line="762" />
       <location filename="../ui/main_dialog.py" line="3372" />
       <source>QGIS2WebMap by NIKA</source>
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3553" />
+      <location filename="../ui/cartograph/controller.py" line="3583" />
       <location filename="../ui/cartograph/series_print_dialog.py" line="44" />
       <source>Print series</source>
       <translation>طباعة السلسلة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3790" />
+      <location filename="../ui/cartograph/controller.py" line="3820" />
       <source>Describe the map here: what it shows, where the data comes from.</source>
       <translation>صف الخريطة هنا: ما الذي تُظهره، ومن أين تأتي البيانات.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3791" />
+      <location filename="../ui/cartograph/controller.py" line="3821" />
       <source>Key figure</source>
       <translation>رقم رئيسي</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3792" />
+      <location filename="../ui/cartograph/controller.py" line="3822" />
       <source>What the number means</source>
       <translation>ماذا يعني الرقم</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3793" />
+      <location filename="../ui/cartograph/controller.py" line="3823" />
       <source>Author</source>
       <translation>المؤلف</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="968" />
+      <location filename="../ui/cartograph/controller.py" line="998" />
       <source>This project has no print layouts yet. Start from a template, or import a cartograph.</source>
       <translation>لا توجد تخطيطات طباعة في هذا المشروع بعد. ابدأ من قالب، أو استورد لوحة خرائطية.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1005" />
+      <location filename="../ui/cartograph/controller.py" line="1035" />
       <source>Page settings</source>
       <translation>إعدادات الصفحة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1008" />
+      <location filename="../ui/cartograph/controller.py" line="1038" />
       <source>The page's title, attribution and colour theme. They are part of this layout and show in the preview, the web page and the PDF.</source>
       <translation>عنوان الصفحة والإسناد وسمة الألوان. وهي جزء من هذا التخطيط وتظهر في المعاينة وصفحة الويب وملف PDF.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1018" />
+      <location filename="../ui/cartograph/controller.py" line="1048" />
       <source>The project title</source>
       <translation>عنوان المشروع</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1024" />
+      <location filename="../ui/cartograph/controller.py" line="1054" />
       <location filename="../ui/cartograph/template_guide.py" line="98" />
       <location filename="../ui/cartograph/template_picker.py" line="1230" />
       <source>Title</source>
       <translation>العنوان</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1026" />
+      <location filename="../ui/cartograph/controller.py" line="1056" />
       <source>Optional, e.g. data sources</source>
       <translation>اختياري، مثل مصادر البيانات</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1028" />
+      <location filename="../ui/cartograph/controller.py" line="1058" />
       <source>Attribution</source>
       <translation>الإسناد</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1033" />
+      <location filename="../ui/cartograph/controller.py" line="1063" />
       <location filename="../ui/main_dialog.py" line="3703" />
       <source>Theme</source>
       <translation>السمة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1041" />
+      <location filename="../ui/cartograph/controller.py" line="1071" />
       <source>Map frames</source>
       <translation>إطارات الخريطة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1043" />
+      <location filename="../ui/cartograph/controller.py" line="1073" />
       <location filename="../ui/main_dialog.py" line="842" />
       <location filename="../ui/main_dialog.py" line="3332" />
       <source>Layers</source>
       <translation>الطبقات</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1053" />
+      <location filename="../ui/cartograph/controller.py" line="1083" />
       <source>Layout</source>
       <translation>التخطيط</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1057" />
-      <location filename="../ui/cartograph/controller.py" line="1219" />
+      <location filename="../ui/cartograph/controller.py" line="1087" />
+      <location filename="../ui/cartograph/controller.py" line="1249" />
       <source>Atlas</source>
       <translation>أطلس</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1063" />
-      <location filename="../ui/cartograph/controller.py" line="1193" />
-      <location filename="../ui/cartograph/controller.py" line="1196" />
+      <location filename="../ui/cartograph/controller.py" line="1093" />
+      <location filename="../ui/cartograph/controller.py" line="1223" />
+      <location filename="../ui/cartograph/controller.py" line="1226" />
       <source>Checks</source>
       <translation>الفحوصات</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1067" />
+      <location filename="../ui/cartograph/controller.py" line="1097" />
       <source>Edit</source>
       <translation>تحرير</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1089" />
+      <location filename="../ui/cartograph/controller.py" line="1119" />
       <source>Choose where the cartograph is saved</source>
       <translation>اختر مكان حفظ اللوحة الخرائطية</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1360" />
       <location filename="../ui/cartograph/controller.py" line="1390" />
-      <location filename="../ui/cartograph/controller.py" line="1373" />
+      <location filename="../ui/cartograph/controller.py" line="1420" />
+      <location filename="../ui/cartograph/controller.py" line="1403" />
       <source>Import cartograph</source>
       <translation>استيراد لوحة خرائطية</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1366" />
+      <location filename="../ui/cartograph/controller.py" line="1396" />
       <source>Cartograph (*.html *.htm)</source>
       <translation>لوحة خرائطية (*.html *.htm)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1655" />
+      <location filename="../ui/cartograph/controller.py" line="1685" />
       <source>Save cartograph as</source>
       <translation>حفظ اللوحة الخرائطية باسم</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1655" />
+      <location filename="../ui/cartograph/controller.py" line="1685" />
       <location filename="../ui/main_dialog.py" line="1645" />
       <source>Web page (*.html)</source>
       <translation>صفحة ويب (*.html)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1676" />
+      <location filename="../ui/cartograph/controller.py" line="1706" />
       <source>Replace existing file?</source>
       <translation>استبدال الملف الموجود؟</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1677" />
+      <location filename="../ui/cartograph/controller.py" line="1707" />
       <source>A file already exists at the final HTML destination:</source>
       <translation>يوجد ملف بالفعل في وجهة HTML النهائية:</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1683" />
-      <location filename="../ui/cartograph/controller.py" line="3568" />
+      <location filename="../ui/cartograph/controller.py" line="1713" />
+      <location filename="../ui/cartograph/controller.py" line="3598" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/main_dialog.py" line="3873" />
@@ -1904,49 +1904,49 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>إلغاء</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1684" />
+      <location filename="../ui/cartograph/controller.py" line="1714" />
       <source>Replace</source>
       <translation>استبدال</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1953" />
+      <location filename="../ui/cartograph/controller.py" line="1983" />
       <source>Match QGIS canvas</source>
       <translation>مطابقة لوحة QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1987" />
+      <location filename="../ui/cartograph/controller.py" line="2017" />
       <source>Smooth raster when enlarged</source>
       <translation>تنعيم الرستر عند التكبير</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2607" />
+      <location filename="../ui/cartograph/controller.py" line="2637" />
       <source>The OnlyMap runtime is needed to save a cartograph. Nothing was written.</source>
       <translation>يلزم توفر بيئة تشغيل OnlyMap لحفظ اللوحة الخرائطية. لم يُكتب شيء.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3021" />
+      <location filename="../ui/cartograph/controller.py" line="3051" />
       <source>Accessibility</source>
       <translation>إمكانية الوصول</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3024" />
-      <location filename="../ui/cartograph/controller.py" line="3063" />
+      <location filename="../ui/cartograph/controller.py" line="3054" />
+      <location filename="../ui/cartograph/controller.py" line="3093" />
       <source>Colour vision: simulate it and check the legend's colours</source>
       <translation>رؤية الألوان: محاكاتها وفحص ألوان وسيلة الإيضاح</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3028" />
+      <location filename="../ui/cartograph/controller.py" line="3058" />
       <location filename="../ui/main_dialog.py" line="3479" />
       <source>Share</source>
       <translation>مشاركة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3191" />
+      <location filename="../ui/cartograph/controller.py" line="3221" />
       <source>Saving the latest changes first - it opens when saved.</source>
       <translation>يجري حفظ آخر التغييرات أولاً - ستُفتح عند الحفظ.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3277" />
+      <location filename="../ui/cartograph/controller.py" line="3307" />
       <location filename="../ui/cartograph/series_export_dialog.py" line="114" />
       <location filename="../ui/main_dialog.py" line="1136" />
       <location filename="../ui/main_dialog.py" line="3492" />
@@ -1954,460 +1954,460 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3280" />
+      <location filename="../ui/cartograph/controller.py" line="3310" />
       <location filename="../ui/cartograph/print_settings_dialog.py" line="317" />
       <source>Save PDF…</source>
       <translation>حفظ PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3281" />
+      <location filename="../ui/cartograph/controller.py" line="3311" />
       <source>Save every page of this layout as a PDF (Ctrl+S)</source>
       <translation>احفظ كل صفحات هذا التخطيط بصيغة PDF (Ctrl+S)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3287" />
+      <location filename="../ui/cartograph/controller.py" line="3317" />
       <source>Save atlas as PDF…</source>
       <translation>حفظ الأطلس بصيغة PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3288" />
+      <location filename="../ui/cartograph/controller.py" line="3318" />
       <source>One run of pages per atlas feature, in a single PDF</source>
       <translation>دفعة صفحات لكل معلم في الأطلس، في ملف PDF واحد</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3293" />
+      <location filename="../ui/cartograph/controller.py" line="3323" />
       <source>Export PNG…</source>
       <translation>تصدير PNG…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3294" />
+      <location filename="../ui/cartograph/controller.py" line="3324" />
       <source>Image of the first page at the saved resolution</source>
       <translation>صورة للصفحة الأولى بالاستبانة المحفوظة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3299" />
+      <location filename="../ui/cartograph/controller.py" line="3329" />
       <source>Export QGIS layout template…</source>
       <translation>تصدير قالب تخطيط QGIS…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3300" />
+      <location filename="../ui/cartograph/controller.py" line="3330" />
       <source>Round trip back into QGIS</source>
       <translation>رحلة ذهاب وعودة إلى QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3305" />
+      <location filename="../ui/cartograph/controller.py" line="3335" />
       <source>PDF settings…</source>
       <translation>إعدادات PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3306" />
+      <location filename="../ui/cartograph/controller.py" line="3336" />
       <source>Page size, bleed, crop marks and colour profile for Save PDF</source>
       <translation>حجم الصفحة والهامش الزائد وعلامات القص وملف الألوان لحفظ PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3310" />
+      <location filename="../ui/cartograph/controller.py" line="3340" />
       <source>HTML cartograph</source>
       <translation>اللوحة الخرائطية HTML</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3313" />
+      <location filename="../ui/cartograph/controller.py" line="3343" />
       <source>Preview in browser</source>
       <translation>معاينة في المتصفح</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3314" />
+      <location filename="../ui/cartograph/controller.py" line="3344" />
       <source>Open the HTML cartograph to check interactive maps and browser behaviour.</source>
       <translation>افتح اللوحة الخرائطية HTML للتحقق من الخرائط التفاعلية وسلوك المتصفح.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3324" />
+      <location filename="../ui/cartograph/controller.py" line="3354" />
       <source>Copy HTML file path</source>
       <translation>نسخ مسار ملف HTML</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3325" />
+      <location filename="../ui/cartograph/controller.py" line="3355" />
       <source>Copies the cartograph's path</source>
       <translation>ينسخ مسار اللوحة الخرائطية</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3330" />
+      <location filename="../ui/cartograph/controller.py" line="3360" />
       <source>Show HTML in folder</source>
       <translation>إظهار HTML في المجلد</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3331" />
+      <location filename="../ui/cartograph/controller.py" line="3361" />
       <source>Shows the cartograph in your file manager</source>
       <translation>يُظهر اللوحة الخرائطية في مدير الملفات</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3340" />
+      <location filename="../ui/cartograph/controller.py" line="3370" />
       <source>NIKA hand-off</source>
       <translation>التسليم إلى NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3343" />
+      <location filename="../ui/cartograph/controller.py" line="3373" />
       <source>Prepare enhancement prompt...</source>
       <translation>إعداد طلب تحسين...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3344" />
+      <location filename="../ui/cartograph/controller.py" line="3374" />
       <source>Opens a prompt for improving this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
       <translation>يفتح طلبًا لتحسين هذه اللوحة الخرائطية، لنسخه إلى NIKA أو مساعد ذكاء اصطناعي آخر. لا يُرسل شيء من هنا.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3352" />
+      <location filename="../ui/cartograph/controller.py" line="3382" />
       <source>Prepare critique prompt...</source>
       <translation>إعداد طلب نقد...</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3353" />
+      <location filename="../ui/cartograph/controller.py" line="3383" />
       <source>Opens a prompt asking for a critique of this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
       <translation>يفتح طلبًا لنقد هذه اللوحة الخرائطية، لنسخه إلى NIKA أو مساعد ذكاء اصطناعي آخر. لا يُرسل شيء من هنا.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3568" />
+      <location filename="../ui/cartograph/controller.py" line="3598" />
       <source>Preparing the print…</source>
       <translation>جارٍ تجهيز الطباعة…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3586" />
+      <location filename="../ui/cartograph/controller.py" line="3616" />
       <source>Printing…</source>
       <translation>جارٍ الطباعة…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3616" />
+      <location filename="../ui/cartograph/controller.py" line="3646" />
       <source>Sent {n} sheet to {printer}.</source>
       <translation>أُرسلت {n} ورقة إلى {printer}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3616" />
+      <location filename="../ui/cartograph/controller.py" line="3646" />
       <source>Sent {n} sheets to {printer}.</source>
       <translation>أُرسلت {n} أوراق إلى {printer}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3623" />
+      <location filename="../ui/cartograph/controller.py" line="3653" />
       <source>Printed {n} sheet to the file {printer}.</source>
       <translation>طُبعت {n} ورقة في الملف {printer}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3623" />
+      <location filename="../ui/cartograph/controller.py" line="3653" />
       <source>Printed {n} sheets to the file {printer}.</source>
       <translation>طُبعت {n} أوراق في الملف {printer}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3657" />
+      <location filename="../ui/cartograph/controller.py" line="3687" />
       <source>Save atlas as PDF</source>
       <translation>حفظ الأطلس بصيغة PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3657" />
+      <location filename="../ui/cartograph/controller.py" line="3687" />
       <source>Save PDF</source>
       <translation>حفظ PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3659" />
+      <location filename="../ui/cartograph/controller.py" line="3689" />
       <source>Save the series as a PDF to print</source>
       <translation>احفظ السلسلة بصيغة PDF للطباعة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3664" />
+      <location filename="../ui/cartograph/controller.py" line="3694" />
       <source>PDF (*.pdf)</source>
       <translation>PDF (*.pdf)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3676" />
-      <location filename="../ui/cartograph/controller.py" line="3379" />
-      <location filename="../ui/cartograph/controller.py" line="3389" />
+      <location filename="../ui/cartograph/controller.py" line="3706" />
+      <location filename="../ui/cartograph/controller.py" line="3409" />
+      <location filename="../ui/cartograph/controller.py" line="3419" />
       <source>Saving PDF…</source>
       <translation>جارٍ حفظ PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3718" />
+      <location filename="../ui/cartograph/controller.py" line="3748" />
       <source>No printer found: nothing was printed. PDF to print: {name}</source>
       <translation>لم تُعثر على طابعة: لم يُطبع شيء. ملف PDF للطباعة: {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3720" />
+      <location filename="../ui/cartograph/controller.py" line="3750" />
       <source>Saved PDF: {name}</source>
       <translation>حُفظ PDF: {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3767" />
-      <location filename="../ui/cartograph/controller.py" line="3779" />
+      <location filename="../ui/cartograph/controller.py" line="3797" />
+      <location filename="../ui/cartograph/controller.py" line="3809" />
       <source>Save layout template as</source>
       <translation>حفظ قالب التخطيط باسم</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3769" />
+      <location filename="../ui/cartograph/controller.py" line="3799" />
       <source>QGIS layout template (*.qpt)</source>
       <translation>قالب تخطيط QGIS (*.qpt)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="535" />
+      <location filename="../ui/cartograph/controller.py" line="562" />
       <source>There is no map canvas to build from.</source>
       <translation>لا توجد لوحة خريطة للبناء منها.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1195" />
+      <location filename="../ui/cartograph/controller.py" line="1225" />
       <source>No differences from the QGIS layout.</source>
       <translation>لا توجد اختلافات عن تخطيط QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1198" />
+      <location filename="../ui/cartograph/controller.py" line="1228" />
       <source>{n} difference from the QGIS layout to review</source>
       <translation>{n} اختلاف عن تخطيط QGIS للمراجعة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1198" />
+      <location filename="../ui/cartograph/controller.py" line="1228" />
       <source>{n} differences from the QGIS layout to review</source>
       <translation>{n} اختلافات عن تخطيط QGIS للمراجعة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1219" />
+      <location filename="../ui/cartograph/controller.py" line="1249" />
       <source>Atlas (on)</source>
       <translation>الأطلس (مفعّل)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1222" />
+      <location filename="../ui/cartograph/controller.py" line="1252" />
       <source>One page per feature: on</source>
       <translation>صفحة لكل معلم: مفعّل</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1222" />
+      <location filename="../ui/cartograph/controller.py" line="1252" />
       <source>One page per feature: off</source>
       <translation>صفحة لكل معلم: متوقف</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1246" />
+      <location filename="../ui/cartograph/controller.py" line="1276" />
       <source>There is no map canvas to build a layout from.</source>
       <translation>لا توجد لوحة خريطة لبناء تخطيط منها.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1383" />
+      <location filename="../ui/cartograph/controller.py" line="1413" />
       <source>Imported as the print layout "{name}".</source>
       <translation>تم الاستيراد كتخطيط طباعة باسم "{name}".</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1620" />
+      <location filename="../ui/cartograph/controller.py" line="1650" />
       <source>Edit this layout in QGIS's layout designer.</source>
       <translation>حرّر هذا التخطيط في مصمم التخطيطات في QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1622" />
+      <location filename="../ui/cartograph/controller.py" line="1652" />
       <source>Choose a print layout first.</source>
       <translation>اختر تخطيط طباعة أولًا.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1787" />
+      <location filename="../ui/cartograph/controller.py" line="1817" />
       <location filename="../ui/cartograph/series_export_dialog.py" line="50" />
       <source>Switch to Interactive</source>
       <translation>التحويل إلى تفاعلي</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2743" />
-      <location filename="../ui/cartograph/controller.py" line="2735" />
+      <location filename="../ui/cartograph/controller.py" line="2773" />
+      <location filename="../ui/cartograph/controller.py" line="2765" />
       <source>Could not build the cartograph: {message}</source>
       <translation>تعذّر إنشاء اللوحة الخرائطية: {message}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2800" />
+      <location filename="../ui/cartograph/controller.py" line="2830" />
       <source>The layout is gone; nothing was written.</source>
       <translation>لم يعد التخطيط موجودًا؛ لم يُكتب أي شيء.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2969" />
+      <location filename="../ui/cartograph/controller.py" line="2999" />
       <source>Choose a print layout first - there is nothing to check yet.</source>
       <translation>اختر تخطيط طباعة أولًا - لا يوجد ما يمكن فحصه بعد.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3146" />
+      <location filename="../ui/cartograph/controller.py" line="3176" />
       <source>Nothing to preview yet - the cartograph has not been saved. Choose a print layout in the panel.</source>
       <translation>لا شيء للمعاينة بعد - لم تُحفظ اللوحة الخرائطية. اختر تخطيط طباعة في اللوحة الجانبية.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3370" />
+      <location filename="../ui/cartograph/controller.py" line="3400" />
       <source>Available once the cartograph has saved - choose a print layout</source>
       <translation>متاح بعد حفظ اللوحة الخرائطية - اختر تخطيط طباعة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3374" />
+      <location filename="../ui/cartograph/controller.py" line="3404" />
       <source>Choose a print layout first</source>
       <translation>اختر تخطيط طباعة أولًا</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3381" />
+      <location filename="../ui/cartograph/controller.py" line="3411" />
       <source>Choose or create a layout first</source>
       <translation>اختر تخطيطًا أو أنشئ واحدًا أولًا</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3392" />
+      <location filename="../ui/cartograph/controller.py" line="3422" />
       <source>Not available for cartographs yet</source>
       <translation>غير متاح للوحات الخرائطية بعد</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3562" />
+      <location filename="../ui/cartograph/controller.py" line="3592" />
       <source>Printing cancelled. Nothing was sent to a printer.</source>
       <translation>أُلغيت الطباعة. لم يُرسل شيء إلى الطابعة.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3612" />
+      <location filename="../ui/cartograph/controller.py" line="3642" />
       <source>Printing cancelled. The rest of the series was not sent.</source>
       <translation>أُلغيت الطباعة. لم يُرسل باقي السلسلة.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3724" />
+      <location filename="../ui/cartograph/controller.py" line="3754" />
       <source>Open PDF</source>
       <translation>فتح PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3725" />
+      <location filename="../ui/cartograph/controller.py" line="3755" />
       <location filename="../ui/cartograph/layout_page.py" line="1645" />
       <source>Show in folder</source>
       <translation>إظهار في المجلد</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1213" />
+      <location filename="../ui/cartograph/controller.py" line="1243" />
       <source>{theme} theme</source>
       <translation>سمة {theme}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1344" />
+      <location filename="../ui/cartograph/controller.py" line="1374" />
       <source>Created the print layout "{name}" from the canvas. Edit it in the layout designer any time; the cartograph follows.</source>
       <translation>أُنشئ تخطيط الطباعة "{name}" من اللوحة. حرّره في مصمم التخطيط في أي وقت؛ وتتبعه اللوحة الخرائطية.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1432" />
+      <location filename="../ui/cartograph/controller.py" line="1462" />
       <source>Renamed the print layout "{old}" to "{new}".</source>
       <translation>تمت إعادة تسمية تخطيط الطباعة "{old}" إلى "{new}".</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1520" />
+      <location filename="../ui/cartograph/controller.py" line="1550" />
       <source>Edit page title</source>
       <translation>تحرير عنوان الصفحة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1522" />
+      <location filename="../ui/cartograph/controller.py" line="1552" />
       <source>Edit page attribution</source>
       <translation>تحرير إسناد الصفحة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1524" />
+      <location filename="../ui/cartograph/controller.py" line="1554" />
       <source>Change page theme</source>
       <translation>تغيير سمة الصفحة</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1560" />
+      <location filename="../ui/cartograph/controller.py" line="1590" />
       <source>The title on this page is an expression, which is kept. Edit it on the page; this field sets the project title the page reads.</source>
       <translation>عنوان هذه الصفحة تعبير، وهو محفوظ كما هو. حرّره على الصفحة؛ يحدد هذا الحقل عنوان المشروع الذي تقرؤه الصفحة.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1607" />
+      <location filename="../ui/cartograph/controller.py" line="1637" />
       <source>Based on {name}</source>
       <translation>استنادًا إلى {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1681" />
+      <location filename="../ui/cartograph/controller.py" line="1711" />
       <source>Replacing it will overwrite its contents.</source>
       <translation>سيؤدي استبداله إلى الكتابة فوق محتواه.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2781" />
+      <location filename="../ui/cartograph/controller.py" line="2811" />
       <source>{old} was left as it is: it is not this cartograph's own file, or cannot be saved to. Saved to {new} instead.</source>
       <translation>تُرك {old} كما هو: ليس ملف هذه اللوحة الخرائطية، أو لا يمكن الحفظ فيه. حُفظت في {new} بدلًا منه.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3211" />
+      <location filename="../ui/cartograph/controller.py" line="3241" />
       <source>This browser view will not follow later changes.</source>
       <translation>لن يتابع عرض المتصفح هذا التغييرات اللاحقة.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3407" />
-      <location filename="../ui/cartograph/controller.py" line="3738" />
-      <location filename="../ui/main_dialog.py" line="4787" />
+      <location filename="../ui/cartograph/controller.py" line="3437" />
+      <location filename="../ui/cartograph/controller.py" line="3768" />
+      <location filename="../ui/main_dialog.py" line="4796" />
       <source>Copied {path}</source>
       <translation>نُسخ: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3783" />
+      <location filename="../ui/cartograph/controller.py" line="3813" />
       <source>Saved {path}</source>
       <translation>حُفظ: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="886" />
-      <location filename="../ui/cartograph/controller.py" line="877" />
+      <location filename="../ui/cartograph/controller.py" line="916" />
+      <location filename="../ui/cartograph/controller.py" line="907" />
       <source>The cartograph could not be saved. Nothing was written.</source>
       <translation>تعذّر حفظ اللوحة الخرائطية. لم تُكتب أي بيانات.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1203" />
+      <location filename="../ui/cartograph/controller.py" line="1233" />
       <source>Checks ({n})</source>
       <translation>الفحوصات ({n})</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1327" />
+      <location filename="../ui/cartograph/controller.py" line="1357" />
       <source>Untitled map</source>
       <translation>خريطة بلا عنوان</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1566" />
+      <location filename="../ui/cartograph/controller.py" line="1596" />
       <source>The attribution on this page is an expression, which is kept. Edit it on the page.</source>
       <translation>الإسناد في هذه الصفحة تعبير، وهو محفوظ كما هو. حرّره على الصفحة.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1854" />
-      <location filename="../ui/cartograph/controller.py" line="1826" />
+      <location filename="../ui/cartograph/controller.py" line="1884" />
+      <location filename="../ui/cartograph/controller.py" line="1856" />
       <source>Unknown CRS</source>
       <translation>CRS غير معروف</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2622" />
+      <location filename="../ui/cartograph/controller.py" line="2652" />
       <source>The OnlyMap runtime could not be loaded, so nothing was written: {error}</source>
       <translation>تعذّر تحميل بيئة تشغيل OnlyMap، لذا لم يُكتب شيء: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2658" />
-      <location filename="../ui/cartograph/controller.py" line="2649" />
+      <location filename="../ui/cartograph/controller.py" line="2688" />
+      <location filename="../ui/cartograph/controller.py" line="2679" />
       <source>Could not save the cartograph: {error}</source>
       <translation>تعذّر حفظ اللوحة الخرائطية: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2806" />
+      <location filename="../ui/cartograph/controller.py" line="2836" />
       <source>{path} is not this cartograph's own file; not replaced.</source>
       <translation>{path} ليس ملف هذه اللوحة الخرائطية؛ لم يُستبدل.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3429" />
-      <location filename="../ui/main_dialog.py" line="4809" />
+      <location filename="../ui/cartograph/controller.py" line="3459" />
+      <location filename="../ui/main_dialog.py" line="4818" />
       <source>Showing {name} in the file manager</source>
       <translation>جارٍ إظهار {name} في مدير الملفات</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3581" />
+      <location filename="../ui/cartograph/controller.py" line="3611" />
       <source>Preparing page {page} of {pages}…</source>
       <translation>جارٍ تجهيز الصفحة {page} من {pages}…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3780" />
+      <location filename="../ui/cartograph/controller.py" line="3810" />
       <source>Could not save the layout template to {path}.</source>
       <translation>تعذّر حفظ قالب التخطيط في {path}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1332" />
+      <location filename="../ui/cartograph/controller.py" line="1362" />
       <source>Could not build a layout from the canvas: {error}</source>
       <translation>تعذّر بناء تخطيط من اللوحة: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1393" />
+      <location filename="../ui/cartograph/controller.py" line="1423" />
       <source>Some parts could not be carried into QGIS:</source>
       <translation>تعذّر نقل بعض الأجزاء إلى QGIS:</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="1571" />
+      <location filename="../ui/cartograph/controller.py" line="1601" />
       <source>This layout has no attribution text, so the attribution is for the web page only.</source>
       <translation>لا يحتوي هذا التخطيط على نص إسناد، لذا فالإسناد لصفحة الويب فقط.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="2916" />
+      <location filename="../ui/cartograph/controller.py" line="2946" />
       <source>{message}
 
 The full error is in the QGIS message log. Nothing about the cartograph is known until a check finishes, so none of it is shown as a verdict.</source>
@@ -2416,33 +2416,33 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
 الخطأ الكامل في سجل رسائل QGIS. لا يُعرف شيء عن اللوحة الخرائطية حتى يكتمل الفحص، لذا لا يُعرض أي حكم عنها.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3432" />
-      <location filename="../ui/main_dialog.py" line="4813" />
+      <location filename="../ui/cartograph/controller.py" line="3462" />
+      <location filename="../ui/main_dialog.py" line="4822" />
       <source>Opened {path}</source>
       <translation>فُتح: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3436" />
+      <location filename="../ui/cartograph/controller.py" line="3466" />
       <source>Could not show the file in a file manager: {reason}.</source>
       <translation>تعذّر إظهار الملف في مدير الملفات: {reason}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3442" />
+      <location filename="../ui/cartograph/controller.py" line="3472" />
       <source>Copy path</source>
       <translation>نسخ المسار</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3601" />
+      <location filename="../ui/cartograph/controller.py" line="3631" />
       <source>Could not print the series: {error}</source>
       <translation>تعذّرت طباعة السلسلة: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3690" />
+      <location filename="../ui/cartograph/controller.py" line="3720" />
       <source>Could not save the PDF: {error}</source>
       <translation>تعذّر حفظ PDF: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3204" />
+      <location filename="../ui/cartograph/controller.py" line="3234" />
       <source>Could not start the local preview server ({error}), so the cartograph opened from its file. If it does not print or download, check that local connections to {host} are allowed, then try again.</source>
       <translation>تعذّر تشغيل خادم المعاينة المحلي ({error})، لذا فُتحت اللوحة الخرائطية من ملفها. إن لم تُطبع أو تُنزَّل، فتحقّق من السماح بالاتصالات المحلية إلى {host}، ثم حاول مرة أخرى.</translation>
     </message>
@@ -3270,13 +3270,13 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/cartograph/layer_membership.py" line="397" />
-      <location filename="../ui/main_dialog.py" line="4331" />
+      <location filename="../ui/main_dialog.py" line="4340" />
       <source>{included} of {n} layer included</source>
       <translation>{included} من {n} طبقة مضمّنة</translation>
     </message>
     <message>
       <location filename="../ui/cartograph/layer_membership.py" line="397" />
-      <location filename="../ui/main_dialog.py" line="4331" />
+      <location filename="../ui/main_dialog.py" line="4340" />
       <source>{included} of {n} layers included</source>
       <translation>{included} من {n} طبقات مضمّنة</translation>
     </message>
@@ -4838,7 +4838,7 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
     </message>
     <message>
       <location filename="../ui/fidelity_panel.py" line="561" />
-      <location filename="../ui/main_dialog.py" line="5220" />
+      <location filename="../ui/main_dialog.py" line="5230" />
       <source>Try again</source>
       <translation>حاول مرة أخرى</translation>
     </message>
@@ -5283,43 +5283,43 @@ They are also online at &lt;{url}&gt;.
       <translation>ما تحتفظ به اللوحة الخرائطية</translation>
     </message>
     <message>
-      <location filename="../ui/language_picker.py" line="83" />
+      <location filename="../ui/language_picker.py" line="106" />
       <location filename="../ui/main_dialog.py" line="3694" />
       <source>Follow QGIS</source>
       <translation>اتباع QGIS</translation>
     </message>
     <message>
-      <location filename="../ui/language_picker.py" line="73" />
+      <location filename="../ui/language_picker.py" line="96" />
       <source>The language this dialog is shown in</source>
       <translation>اللغة التي تظهر بها هذه النافذة</translation>
     </message>
     <message>
-      <location filename="../ui/language_picker.py" line="142" />
+      <location filename="../ui/language_picker.py" line="166" />
       <source>No thanks</source>
       <translation>لا، شكرًا</translation>
     </message>
     <message>
-      <location filename="../ui/language_picker.py" line="52" />
+      <location filename="../ui/language_picker.py" line="70" />
       <source>Language not downloaded</source>
       <translation>لم تُنزَّل اللغة</translation>
     </message>
     <message>
-      <location filename="../ui/language_picker.py" line="139" />
+      <location filename="../ui/language_picker.py" line="163" />
       <source>Use {language}</source>
       <translation>استخدام {language}</translation>
     </message>
     <message>
-      <location filename="../ui/language_picker.py" line="91" />
+      <location filename="../ui/language_picker.py" line="114" />
       <source>{language} - download</source>
       <translation>{language} - تنزيل</translation>
     </message>
     <message>
-      <location filename="../ui/language_picker.py" line="134" />
+      <location filename="../ui/language_picker.py" line="158" />
       <source>This dialog is available in {language}.</source>
       <translation>هذه النافذة متاحة باللغة {language}.</translation>
     </message>
     <message>
-      <location filename="../ui/language_picker.py" line="53" />
+      <location filename="../ui/language_picker.py" line="71" />
       <source>{language} could not be downloaded.</source>
       <translation>تعذّر تنزيل {language}.</translation>
     </message>
@@ -5822,84 +5822,79 @@ They are also online at &lt;{url}&gt;.
       <translation>جارٍ الإيقاف...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4037" />
-      <source>Stopped. Nothing was written.</source>
-      <translation>توقّف. لم يُكتب شيء.</translation>
-    </message>
-    <message>
-      <location filename="../ui/main_dialog.py" line="4062" />
+      <location filename="../ui/main_dialog.py" line="4070" />
       <source>Something went wrong</source>
       <translation>حدث خطأ ما</translation>
     </message>
     <message>
+      <location filename="../ui/main_dialog.py" line="4181" />
       <location filename="../ui/main_dialog.py" line="4172" />
-      <location filename="../ui/main_dialog.py" line="4163" />
       <source>Live preview stopped.</source>
       <translation>توقفت المعاينة الحية.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4257" />
-      <location filename="../ui/main_dialog.py" line="4255" />
-      <location filename="../ui/main_dialog.py" line="4230" />
+      <location filename="../ui/main_dialog.py" line="4266" />
+      <location filename="../ui/main_dialog.py" line="4264" />
+      <location filename="../ui/main_dialog.py" line="4239" />
       <source>Updating the preview...</source>
       <translation>جارٍ تحديث المعاينة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4610" />
+      <location filename="../ui/main_dialog.py" line="4619" />
       <source>The OnlyMap runtime is needed to build a map. Nothing was written.</source>
       <translation>بيئة تشغيل OnlyMap مطلوبة لبناء الخريطة. لم يُكتب شيء.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4626" />
-      <location filename="../ui/main_dialog.py" line="4847" />
-      <location filename="../ui/main_dialog.py" line="4537" />
+      <location filename="../ui/main_dialog.py" line="4635" />
+      <location filename="../ui/main_dialog.py" line="4546" />
+      <location filename="../ui/main_dialog.py" line="4856" />
       <source>Reading the project...</source>
       <translation>جارٍ قراءة المشروع...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4704" />
-      <location filename="../ui/main_dialog.py" line="4647" />
+      <location filename="../ui/main_dialog.py" line="4713" />
+      <location filename="../ui/main_dialog.py" line="4656" />
       <source>Building the preview...</source>
       <translation>جارٍ بناء المعاينة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4723" />
+      <location filename="../ui/main_dialog.py" line="4732" />
       <source>Live preview could not start on this machine, so the preview opened as a file. Reload the tab after making changes.</source>
       <translation>تعذّر تشغيل المعاينة الحية على هذا الجهاز، لذا فُتحت المعاينة كملف. أعد تحميل التبويب بعد إجراء التغييرات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4833" />
+      <location filename="../ui/main_dialog.py" line="4842" />
       <source>Hosting is not live yet - the waitlist form opened in your browser.</source>
       <translation>الاستضافة لم تنطلق بعد - فُتح نموذج قائمة الانتظار في متصفحك.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4981" />
-      <location filename="../ui/main_dialog.py" line="4901" />
+      <location filename="../ui/main_dialog.py" line="4991" />
+      <location filename="../ui/main_dialog.py" line="4911" />
       <source>Writing the map...</source>
       <translation>جارٍ كتابة الخريطة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4992" />
+      <location filename="../ui/main_dialog.py" line="5002" />
       <source>This will be a large single file</source>
       <translation>سيكون هذا ملفًا واحدًا كبيرًا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4995" />
+      <location filename="../ui/main_dialog.py" line="5005" />
       <source>The map file inlines all the data into the one HTML file, which is why it is this big. Exporting as Share ZIP on the Map tab packages the same map to send more easily.</source>
       <translation>يضمّن ملف الخريطة كل البيانات في ملف HTML واحد، ولهذا هو بهذا الحجم. التصدير بصيغة ZIP للمشاركة من تبويب الخريطة يحزم الخريطة نفسها لإرسالها بسهولة أكبر.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5002" />
+      <location filename="../ui/main_dialog.py" line="5012" />
       <source>Write it anyway</source>
       <translation>اكتبه على أي حال</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5047" />
+      <location filename="../ui/main_dialog.py" line="5057" />
       <source>Choose where to save first</source>
       <translation>اختر مكان الحفظ أولًا</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5048" />
+      <location filename="../ui/main_dialog.py" line="5058" />
       <source>This map has nowhere to be saved yet.
 
 Fill in Save to on the Map tab, then try again.</source>
@@ -5908,28 +5903,28 @@ Fill in Save to on the Map tab, then try again.</source>
 املأ حقل الحفظ في تبويب الخريطة، ثم حاول مرة أخرى.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5072" />
-      <location filename="../ui/main_dialog.py" line="4931" />
+      <location filename="../ui/main_dialog.py" line="5082" />
+      <location filename="../ui/main_dialog.py" line="4941" />
       <source>Cannot export</source>
       <translation>تعذّر التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5179" />
+      <location filename="../ui/main_dialog.py" line="5189" />
       <source>Saving the cartograph before closing...</source>
       <translation>جارٍ حفظ اللوحة الخرائطية قبل الإغلاق...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5194" />
+      <location filename="../ui/main_dialog.py" line="5204" />
       <source>Saving is taking longer than expected, and is not finished yet.</source>
       <translation>الحفظ يستغرق وقتًا أطول من المتوقع ولم يكتمل بعد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5210" />
+      <location filename="../ui/main_dialog.py" line="5220" />
       <source>The cartograph could not be saved</source>
       <translation>تعذّر حفظ اللوحة الخرائطية</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5213" />
+      <location filename="../ui/main_dialog.py" line="5223" />
       <source>Your latest changes are not in the cartograph file yet. Try again, keep the window open to fix the problem, or close without saving them.</source>
       <translation>آخر تغييراتك ليست في ملف اللوحة الخرائطية بعد. حاول مرة أخرى، أو أبقِ النافذة مفتوحة لإصلاح المشكلة، أو أغلق دون حفظها.</translation>
     </message>
@@ -6207,42 +6202,47 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>ما زال العمل جاريًا على الطلب السابق.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4182" />
+      <location filename="../ui/main_dialog.py" line="4044" />
+      <source>Stopped. Nothing was written.</source>
+      <translation>توقّف. لم يُكتب شيء.</translation>
+    </message>
+    <message>
+      <location filename="../ui/main_dialog.py" line="4191" />
       <source>Preview tab closed, so the preview server stopped. Press Preview to start it again.</source>
       <translation>أُغلق تبويب المعاينة، فتوقف خادم المعاينة. اضغط معاينة لتشغيله من جديد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4312" />
+      <location filename="../ui/main_dialog.py" line="4321" />
       <source>Add a vector or raster layer to the project to export.</source>
       <translation>أضف طبقة متجهة أو نقطية إلى المشروع للتصدير.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4701" />
+      <location filename="../ui/main_dialog.py" line="4710" />
       <source>Live preview open. Changes here update the tab automatically.</source>
       <translation>المعاينة الحية مفتوحة. التغييرات هنا تحدّث التبويب تلقائيًا.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5034" />
+      <location filename="../ui/main_dialog.py" line="5044" />
       <source>Folder not found</source>
       <translation>المجلد غير موجود</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5068" />
+      <location filename="../ui/main_dialog.py" line="5078" />
       <source>No layer in the selection could be read.</source>
       <translation>تعذّرت قراءة أي طبقة في التحديد.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5077" />
+      <location filename="../ui/main_dialog.py" line="5087" />
       <source>Fix these in QGIS, then export again. The Fidelity tab lists everything that was checked.</source>
       <translation>أصلح هذه في QGIS ثم صدّر من جديد. يسرد تبويب الدقة كل ما جرى فحصه.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5222" />
+      <location filename="../ui/main_dialog.py" line="5232" />
       <source>Cancel closing</source>
       <translation>إلغاء الإغلاق</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5225" />
+      <location filename="../ui/main_dialog.py" line="5235" />
       <source>Close without saving</source>
       <translation>إغلاق دون حفظ</translation>
     </message>
@@ -6302,48 +6302,48 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>حجم {control}: العودة إلى تلقائي</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4030" />
+      <location filename="../ui/main_dialog.py" line="4033" />
       <source>Export failed</source>
       <translation>فشل التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4048" />
+      <location filename="../ui/main_dialog.py" line="4055" />
       <source>Live preview could not be updated ({message}) - see the QGIS log.</source>
       <translation>تعذّر تحديث المعاينة الحية ({message}) - راجع سجل QGIS.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4253" />
+      <location filename="../ui/main_dialog.py" line="4262" />
       <source>Live preview updated.</source>
       <translation>حُدّثت المعاينة الحية.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4315" />
+      <location filename="../ui/main_dialog.py" line="4324" />
       <source>Tick at least one layer to include.</source>
       <translation>حدّد طبقة واحدة على الأقل لتضمينها.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4320" />
+      <location filename="../ui/main_dialog.py" line="4329" />
       <source>{n} layer will be exported.</source>
       <translation>ستُصدَّر {n} طبقة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4320" />
+      <location filename="../ui/main_dialog.py" line="4329" />
       <source>{n} layers will be exported.</source>
       <translation>ستُصدَّر {n} طبقات.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4664" />
-      <location filename="../ui/main_dialog.py" line="4692" />
+      <location filename="../ui/main_dialog.py" line="4673" />
+      <location filename="../ui/main_dialog.py" line="4701" />
       <source>Preview opened. Press Preview again after making changes - your position on the map is kept.</source>
       <translation>فُتحت المعاينة. اضغط معاينة مرة أخرى بعد إجراء التغييرات - يُحفظ موضعك على الخريطة.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4907" />
+      <location filename="../ui/main_dialog.py" line="4917" />
       <source>Saving the map...</source>
       <translation>يجري حفظ الخريطة...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4962" />
+      <location filename="../ui/main_dialog.py" line="4972" />
       <source>Exported, with warnings</source>
       <translation>صُدّرت، مع تحذيرات</translation>
     </message>
@@ -6383,27 +6383,27 @@ Fill in Save to on the Map tab, then try again.</source>
       <translation>غير محدد</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4414" />
+      <location filename="../ui/main_dialog.py" line="4423" />
       <source>Converting rasters ({percent}%)...</source>
       <translation>يجري تحويل الطبقات النقطية ({percent}%)...</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4463" />
+      <location filename="../ui/main_dialog.py" line="4472" />
       <source>Reading '{name}' ({done} of {total})</source>
       <translation>جارٍ قراءة '{name}' ({done} من {total})</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4969" />
+      <location filename="../ui/main_dialog.py" line="4979" />
       <source>The Fidelity tab lists the detail.</source>
       <translation>يعرض تبويب الدقة التفاصيل.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4979" />
+      <location filename="../ui/main_dialog.py" line="4989" />
       <source>Export complete</source>
       <translation>اكتمل التصدير</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="5035" />
+      <location filename="../ui/main_dialog.py" line="5045" />
       <source>There is no folder at {path}.
 
 Pick somewhere that exists, or create it first.</source>
@@ -6427,18 +6427,18 @@ Pick somewhere that exists, or create it first.</source>
       <translation>{column} - لا يستخدمه إطار الصورة</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4815" />
+      <location filename="../ui/main_dialog.py" line="4824" />
       <source>Could not show the file in a file manager: {reason}. Use Copy file path for {path}.</source>
       <translation>تعذّر إظهار الملف في مدير الملفات: {reason}. استخدم نسخ مسار الملف لـ {path}.</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4932" />
-      <location filename="../ui/main_dialog.py" line="5073" />
+      <location filename="../ui/main_dialog.py" line="4942" />
+      <location filename="../ui/main_dialog.py" line="5083" />
       <source>This map cannot be exported yet:</source>
       <translation>لا يمكن تصدير هذه الخريطة بعد:</translation>
     </message>
     <message>
-      <location filename="../ui/main_dialog.py" line="4965" />
+      <location filename="../ui/main_dialog.py" line="4975" />
       <source>The exported map has known limitations:</source>
       <translation>للخريطة المُصدَّرة قيود معروفة:</translation>
     </message>
