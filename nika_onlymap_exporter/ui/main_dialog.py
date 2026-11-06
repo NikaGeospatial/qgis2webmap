@@ -4039,7 +4039,9 @@ class MainDialog(QDialog):
         self._set_busy(False)
         self.cancel_button.setEnabled(True)
         self._end_fidelity_check_without_report()
-        self.status_label.setText(tr("Stopped. Nothing was written."))
+        if self._close_result is None:
+            # A close cancels the job and says it is saving; that stays.
+            self.status_label.setText(tr("Stopped. Nothing was written."))
 
     def _on_job_failed_quietly(self, message: str, details: str) -> None:
         """A background failure the user did not ask about. Log and say so once."""

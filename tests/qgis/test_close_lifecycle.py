@@ -189,6 +189,30 @@ class TestCloseFinishesThePendingSave:
             export.release()
             plugin.unload()
 
+    def test_a_web_map_job_the_close_stops_leaves_the_saving_line(
+        self, qgis_app, saved, export
+    ) -> None:
+        """Closing stops a web-map job; its "Stopped" does not replace the line
+        saying the window is saving before it closes."""
+        import threading
+
+        dialog, _cartograph, layout, label, _target = saved
+        gate = threading.Event()
+        assert dialog._start_job(
+            lambda progress: (gate.wait(30), progress.check_cancelled()),
+            lambda _result: None,
+            "Updating the preview...",
+            quiet=True,
+        )
+        export.hold_workers()
+        edit_label(layout, label, "Newest")
+        _click_close(dialog)
+        gate.set()
+        assert _wait_for(qgis_app, lambda: dialog._job is None)
+        assert dialog.status_label.text() == "Saving the cartograph before closing..."
+        export.release()
+        assert _wait_for(qgis_app, lambda: not dialog.isVisible())
+
     def test_the_window_says_it_is_saving_while_the_close_waits(
         self, qgis_app, saved, export
     ) -> None:
