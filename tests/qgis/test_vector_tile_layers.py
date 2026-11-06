@@ -367,8 +367,11 @@ class TestArchivesInACartograph:
                 metadata=METADATA,
             )
         )
-        sheet, _report = self._sheet(project, first, second)
+        sheet, report = self._sheet(project, first, second)
         assert self._drawn(sheet) == [first.read_bytes(), second.read_bytes()]
+        # Each frame opens on its layout's extent: the web map's rows about
+        # where it would open are not the sheet's.
+        assert not [item for item in report.items if item.subject == "Map extent"]
 
     def test_an_archive_two_frames_draw_is_carried_and_counted_once(
         self, qgis_app, project, archive, monkeypatch

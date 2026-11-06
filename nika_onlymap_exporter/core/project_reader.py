@@ -401,7 +401,8 @@ def prepare_project(
     description rows advise on the web map's Map name field, which a frame
     has no use for, and the Terrain row leaves out the advice to change it on the web
     map's Map tab. The Basemap row is left out: a frame's layers are the
-    layout's choice.
+    layout's choice, and so are the Map extent rows: a frame opens on its
+    layout's extent, whatever the web map would open on.
 
     `selected_layer_ids` limits the export to layers the user ticked; `None`
     means every layer in the tree.
@@ -706,7 +707,12 @@ def finish_project(
 
     # Before the terrain notes: they name labelled layers, and a layer whose
     # labels never have room is unlabelled from `_declutter` on.
-    extent = _resolve_extent(layers, report, settings, canvas_extent)
+    extent = _resolve_extent(
+        layers,
+        report if pending.report_map_title else FidelityReportBuilder(),
+        settings,
+        canvas_extent,
+    )
     layers = _translate_scale_visibility(pending.scale_basis, layers, extent, report)
     layers = _declutter(layers, report)
     # After the declutter, which settles the count bubbles and labels that
