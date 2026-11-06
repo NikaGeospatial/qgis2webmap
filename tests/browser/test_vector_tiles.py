@@ -367,9 +367,9 @@ def test_an_archive_beside_a_page_opened_from_disk_says_to_serve_it(
     page, runtime, tmp_path, runtime_beside
 ) -> None:
     """A Share ZIP or Folder opened by double-click cannot read the files
-    beside its page: the reader is told the map has to be served, as the
-    README says, rather than shown a silently empty layer, or told a Folder
-    needs JavaScript."""
+    beside its page in Chromium or WebKit: the reader is told the map has to
+    be served, as the README says, rather than shown a silently empty layer,
+    or told a Folder needs JavaScript."""
     from nika_onlymap_exporter.writers.onlymap_writer import SERVED_ONLY_NOTE
 
     source = tmp_path / "lakes.pmtiles"
@@ -395,6 +395,13 @@ def test_an_archive_beside_a_page_opened_from_disk_says_to_serve_it(
     )
     page.set_viewport_size({"width": 900, "height": 700})
     page.goto(entry.as_uri())
+    # Firefox reads a file beside a page opened from disk, and runs the
+    # Folder's runtime file, so there the map simply draws.
+    if page.context.browser.browser_type.name == "firefox":
+        _open(page, entry.as_uri())
+        _assert_water_drawn(page)
+        assert _notice(page) is None
+        return
     if runtime_beside:
         page.wait_for_function(
             "() => document.querySelector('om-fallback .om-fallback p')"
