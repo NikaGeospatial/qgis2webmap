@@ -1752,28 +1752,28 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3583" />
+      <location filename="../ui/cartograph/controller.py" line="3556" />
       <location filename="../ui/cartograph/series_print_dialog.py" line="44" />
       <source>Print series</source>
       <translation>Imprimir serie</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3820" />
+      <location filename="../ui/cartograph/controller.py" line="3793" />
       <source>Describe the map here: what it shows, where the data comes from.</source>
       <translation>Describe el mapa aquí: qué muestra, de dónde vienen los datos.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3821" />
+      <location filename="../ui/cartograph/controller.py" line="3794" />
       <source>Key figure</source>
       <translation>Cifra clave</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3822" />
+      <location filename="../ui/cartograph/controller.py" line="3795" />
       <source>What the number means</source>
       <translation>Qué significa el número</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3823" />
+      <location filename="../ui/cartograph/controller.py" line="3796" />
       <source>Author</source>
       <translation>Autor</translation>
     </message>
@@ -1895,7 +1895,7 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1713" />
-      <location filename="../ui/cartograph/controller.py" line="3598" />
+      <location filename="../ui/cartograph/controller.py" line="3571" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/main_dialog.py" line="3873" />
@@ -2040,105 +2040,80 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Muestra la lámina cartográfica en el gestor de archivos</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3370" />
-      <source>NIKA hand-off</source>
-      <translation>Traspaso a NIKA</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3373" />
-      <source>Prepare enhancement prompt...</source>
-      <translation>Preparar instrucción de mejora...</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3374" />
-      <source>Opens a prompt for improving this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
-      <translation>Abre una instrucción para mejorar esta lámina cartográfica, para copiarla en NIKA u otro asistente de IA. No se envía nada desde aquí.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3382" />
-      <source>Prepare critique prompt...</source>
-      <translation>Preparar instrucción de crítica...</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3383" />
-      <source>Opens a prompt asking for a critique of this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
-      <translation>Abre una instrucción que pide una crítica de esta lámina cartográfica, para copiarla en NIKA u otro asistente de IA. No se envía nada desde aquí.</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3598" />
+      <location filename="../ui/cartograph/controller.py" line="3571" />
       <source>Preparing the print…</source>
       <translation>Preparando la impresión…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3616" />
+      <location filename="../ui/cartograph/controller.py" line="3589" />
       <source>Printing…</source>
       <translation>Imprimiendo…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3646" />
+      <location filename="../ui/cartograph/controller.py" line="3619" />
       <source>Sent {n} sheet to {printer}.</source>
       <translation>Se envió {n} hoja a {printer}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3646" />
+      <location filename="../ui/cartograph/controller.py" line="3619" />
       <source>Sent {n} sheets to {printer}.</source>
       <translation>Se enviaron {n} hojas a {printer}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3653" />
+      <location filename="../ui/cartograph/controller.py" line="3626" />
       <source>Printed {n} sheet to the file {printer}.</source>
       <translation>Se imprimió {n} hoja en el archivo {printer}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3653" />
+      <location filename="../ui/cartograph/controller.py" line="3626" />
       <source>Printed {n} sheets to the file {printer}.</source>
       <translation>Se imprimieron {n} hojas en el archivo {printer}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3687" />
+      <location filename="../ui/cartograph/controller.py" line="3660" />
       <source>Save atlas as PDF</source>
       <translation>Guardar atlas como PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3687" />
+      <location filename="../ui/cartograph/controller.py" line="3660" />
       <source>Save PDF</source>
       <translation>Guardar PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3689" />
+      <location filename="../ui/cartograph/controller.py" line="3662" />
       <source>Save the series as a PDF to print</source>
       <translation>Guardar la serie como PDF para imprimir</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3694" />
+      <location filename="../ui/cartograph/controller.py" line="3667" />
       <source>PDF (*.pdf)</source>
       <translation>PDF (*.pdf)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3706" />
-      <location filename="../ui/cartograph/controller.py" line="3409" />
-      <location filename="../ui/cartograph/controller.py" line="3419" />
+      <location filename="../ui/cartograph/controller.py" line="3679" />
+      <location filename="../ui/cartograph/controller.py" line="3384" />
+      <location filename="../ui/cartograph/controller.py" line="3394" />
       <source>Saving PDF…</source>
       <translation>Guardando PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3748" />
+      <location filename="../ui/cartograph/controller.py" line="3721" />
       <source>No printer found: nothing was printed. PDF to print: {name}</source>
       <translation>No se encontró ninguna impresora: no se imprimió nada. PDF para imprimir: {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3750" />
+      <location filename="../ui/cartograph/controller.py" line="3723" />
       <source>Saved PDF: {name}</source>
       <translation>PDF guardado: {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3797" />
-      <location filename="../ui/cartograph/controller.py" line="3809" />
+      <location filename="../ui/cartograph/controller.py" line="3770" />
+      <location filename="../ui/cartograph/controller.py" line="3782" />
       <source>Save layout template as</source>
       <translation>Guardar plantilla de diseño como</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3799" />
+      <location filename="../ui/cartograph/controller.py" line="3772" />
       <source>QGIS layout template (*.qpt)</source>
       <translation>Plantilla de diseño de QGIS (*.qpt)</translation>
     </message>
@@ -2225,42 +2200,37 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Nada que previsualizar todavía: la lámina cartográfica no se ha guardado. Elija un diseño de impresión en el panel.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3400" />
+      <location filename="../ui/cartograph/controller.py" line="3375" />
       <source>Available once the cartograph has saved - choose a print layout</source>
       <translation>Disponible cuando la lámina cartográfica se haya guardado: elija un diseño de impresión</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3404" />
+      <location filename="../ui/cartograph/controller.py" line="3379" />
       <source>Choose a print layout first</source>
       <translation>Elija primero un diseño de impresión</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3411" />
+      <location filename="../ui/cartograph/controller.py" line="3386" />
       <source>Choose or create a layout first</source>
       <translation>Elige o crea primero un diseño</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3422" />
-      <source>Not available for cartographs yet</source>
-      <translation>Aún no disponible para láminas cartográficas</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3592" />
+      <location filename="../ui/cartograph/controller.py" line="3565" />
       <source>Printing cancelled. Nothing was sent to a printer.</source>
       <translation>Impresión cancelada. No se envió nada a la impresora.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3642" />
+      <location filename="../ui/cartograph/controller.py" line="3615" />
       <source>Printing cancelled. The rest of the series was not sent.</source>
       <translation>Impresión cancelada. No se envió el resto de la serie.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3754" />
+      <location filename="../ui/cartograph/controller.py" line="3727" />
       <source>Open PDF</source>
       <translation>Abrir PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3755" />
+      <location filename="../ui/cartograph/controller.py" line="3728" />
       <location filename="../ui/cartograph/layout_page.py" line="1645" />
       <source>Show in folder</source>
       <translation>Mostrar en la carpeta</translation>
@@ -2321,14 +2291,14 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>Esta vista del navegador no seguirá los cambios posteriores.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3437" />
-      <location filename="../ui/cartograph/controller.py" line="3768" />
+      <location filename="../ui/cartograph/controller.py" line="3410" />
+      <location filename="../ui/cartograph/controller.py" line="3741" />
       <location filename="../ui/main_dialog.py" line="4796" />
       <source>Copied {path}</source>
       <translation>Copiado: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3813" />
+      <location filename="../ui/cartograph/controller.py" line="3786" />
       <source>Saved {path}</source>
       <translation>Guardado: {path}</translation>
     </message>
@@ -2376,18 +2346,18 @@ Los mapas que ya publicaste siguen en línea. Tendrás que volver a iniciar sesi
       <translation>{path} no es el archivo de esta lámina cartográfica; no se reemplazó.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3459" />
+      <location filename="../ui/cartograph/controller.py" line="3432" />
       <location filename="../ui/main_dialog.py" line="4818" />
       <source>Showing {name} in the file manager</source>
       <translation>Mostrando {name} en el gestor de archivos</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3611" />
+      <location filename="../ui/cartograph/controller.py" line="3584" />
       <source>Preparing page {page} of {pages}…</source>
       <translation>Preparando la página {page} de {pages}…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3810" />
+      <location filename="../ui/cartograph/controller.py" line="3783" />
       <source>Could not save the layout template to {path}.</source>
       <translation>No se pudo guardar la plantilla de diseño en {path}.</translation>
     </message>
@@ -2416,28 +2386,28 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
 El error completo está en el registro de mensajes de QGIS. No se sabe nada de la lámina cartográfica hasta que termina una comprobación, así que nada se muestra como veredicto.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3462" />
+      <location filename="../ui/cartograph/controller.py" line="3435" />
       <location filename="../ui/main_dialog.py" line="4822" />
       <source>Opened {path}</source>
       <translation>Abierto: {path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3466" />
+      <location filename="../ui/cartograph/controller.py" line="3439" />
       <source>Could not show the file in a file manager: {reason}.</source>
       <translation>No se pudo mostrar el archivo en un gestor de archivos: {reason}.</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3472" />
+      <location filename="../ui/cartograph/controller.py" line="3445" />
       <source>Copy path</source>
       <translation>Copiar ruta</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3631" />
+      <location filename="../ui/cartograph/controller.py" line="3604" />
       <source>Could not print the series: {error}</source>
       <translation>No se pudo imprimir la serie: {error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3720" />
+      <location filename="../ui/cartograph/controller.py" line="3693" />
       <source>Could not save the PDF: {error}</source>
       <translation>No se pudo guardar el PDF: {error}</translation>
     </message>

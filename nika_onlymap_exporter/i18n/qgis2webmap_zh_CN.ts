@@ -1752,28 +1752,28 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>QGIS2WebMap by NIKA</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3583" />
+      <location filename="../ui/cartograph/controller.py" line="3556" />
       <location filename="../ui/cartograph/series_print_dialog.py" line="44" />
       <source>Print series</source>
       <translation>打印系列</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3820" />
+      <location filename="../ui/cartograph/controller.py" line="3793" />
       <source>Describe the map here: what it shows, where the data comes from.</source>
       <translation>在此描述地图：它展示了什么，数据来自哪里。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3821" />
+      <location filename="../ui/cartograph/controller.py" line="3794" />
       <source>Key figure</source>
       <translation>关键数据</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3822" />
+      <location filename="../ui/cartograph/controller.py" line="3795" />
       <source>What the number means</source>
       <translation>该数字的含义</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3823" />
+      <location filename="../ui/cartograph/controller.py" line="3796" />
       <source>Author</source>
       <translation>作者</translation>
     </message>
@@ -1895,7 +1895,7 @@ Maps you have already published stay online. You will need to sign in again thro
     </message>
     <message>
       <location filename="../ui/cartograph/controller.py" line="1713" />
-      <location filename="../ui/cartograph/controller.py" line="3598" />
+      <location filename="../ui/cartograph/controller.py" line="3571" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/cartograph/go_to_location_dialog.py" line="730" />
       <location filename="../ui/main_dialog.py" line="3873" />
@@ -2040,105 +2040,80 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>在文件管理器中显示图版</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3370" />
-      <source>NIKA hand-off</source>
-      <translation>交给 NIKA</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3373" />
-      <source>Prepare enhancement prompt...</source>
-      <translation>准备改进提示...</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3374" />
-      <source>Opens a prompt for improving this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
-      <translation>打开一个用于改进此图版的提示，可复制到 NIKA 或其他 AI 助手。此处不会发送任何内容。</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3382" />
-      <source>Prepare critique prompt...</source>
-      <translation>准备评审提示...</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3383" />
-      <source>Opens a prompt asking for a critique of this cartograph, to copy into NIKA or another AI assistant. Nothing is sent from here.</source>
-      <translation>打开一个请求评审此图版的提示，可复制到 NIKA 或其他 AI 助手。此处不会发送任何内容。</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3598" />
+      <location filename="../ui/cartograph/controller.py" line="3571" />
       <source>Preparing the print…</source>
       <translation>正在准备打印…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3616" />
+      <location filename="../ui/cartograph/controller.py" line="3589" />
       <source>Printing…</source>
       <translation>正在打印…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3646" />
+      <location filename="../ui/cartograph/controller.py" line="3619" />
       <source>Sent {n} sheet to {printer}.</source>
       <translation>已向 {printer} 发送 {n} 张。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3646" />
+      <location filename="../ui/cartograph/controller.py" line="3619" />
       <source>Sent {n} sheets to {printer}.</source>
       <translation>已向 {printer} 发送 {n} 张。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3653" />
+      <location filename="../ui/cartograph/controller.py" line="3626" />
       <source>Printed {n} sheet to the file {printer}.</source>
       <translation>已将 {n} 张打印到文件 {printer}。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3653" />
+      <location filename="../ui/cartograph/controller.py" line="3626" />
       <source>Printed {n} sheets to the file {printer}.</source>
       <translation>已将 {n} 张打印到文件 {printer}。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3687" />
+      <location filename="../ui/cartograph/controller.py" line="3660" />
       <source>Save atlas as PDF</source>
       <translation>将图集保存为 PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3687" />
+      <location filename="../ui/cartograph/controller.py" line="3660" />
       <source>Save PDF</source>
       <translation>保存 PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3689" />
+      <location filename="../ui/cartograph/controller.py" line="3662" />
       <source>Save the series as a PDF to print</source>
       <translation>将系列保存为 PDF 以便打印</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3694" />
+      <location filename="../ui/cartograph/controller.py" line="3667" />
       <source>PDF (*.pdf)</source>
       <translation>PDF (*.pdf)</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3706" />
-      <location filename="../ui/cartograph/controller.py" line="3409" />
-      <location filename="../ui/cartograph/controller.py" line="3419" />
+      <location filename="../ui/cartograph/controller.py" line="3679" />
+      <location filename="../ui/cartograph/controller.py" line="3384" />
+      <location filename="../ui/cartograph/controller.py" line="3394" />
       <source>Saving PDF…</source>
       <translation>正在保存 PDF…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3748" />
+      <location filename="../ui/cartograph/controller.py" line="3721" />
       <source>No printer found: nothing was printed. PDF to print: {name}</source>
       <translation>未找到打印机：未打印任何内容。待打印的 PDF：{name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3750" />
+      <location filename="../ui/cartograph/controller.py" line="3723" />
       <source>Saved PDF: {name}</source>
       <translation>已保存 PDF：{name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3797" />
-      <location filename="../ui/cartograph/controller.py" line="3809" />
+      <location filename="../ui/cartograph/controller.py" line="3770" />
+      <location filename="../ui/cartograph/controller.py" line="3782" />
       <source>Save layout template as</source>
       <translation>布局模板另存为</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3799" />
+      <location filename="../ui/cartograph/controller.py" line="3772" />
       <source>QGIS layout template (*.qpt)</source>
       <translation>QGIS 布局模板 (*.qpt)</translation>
     </message>
@@ -2225,42 +2200,37 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>还没有可预览的内容 - 图版尚未保存。请在面板中选择一个打印布局。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3400" />
+      <location filename="../ui/cartograph/controller.py" line="3375" />
       <source>Available once the cartograph has saved - choose a print layout</source>
       <translation>图版保存后可用 - 请选择一个打印布局</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3404" />
+      <location filename="../ui/cartograph/controller.py" line="3379" />
       <source>Choose a print layout first</source>
       <translation>请先选择一个打印布局</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3411" />
+      <location filename="../ui/cartograph/controller.py" line="3386" />
       <source>Choose or create a layout first</source>
       <translation>请先选择或创建布局</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3422" />
-      <source>Not available for cartographs yet</source>
-      <translation>图版暂不可用</translation>
-    </message>
-    <message>
-      <location filename="../ui/cartograph/controller.py" line="3592" />
+      <location filename="../ui/cartograph/controller.py" line="3565" />
       <source>Printing cancelled. Nothing was sent to a printer.</source>
       <translation>打印已取消。未向打印机发送任何内容。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3642" />
+      <location filename="../ui/cartograph/controller.py" line="3615" />
       <source>Printing cancelled. The rest of the series was not sent.</source>
       <translation>打印已取消。系列的其余部分未发送。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3754" />
+      <location filename="../ui/cartograph/controller.py" line="3727" />
       <source>Open PDF</source>
       <translation>打开 PDF</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3755" />
+      <location filename="../ui/cartograph/controller.py" line="3728" />
       <location filename="../ui/cartograph/layout_page.py" line="1645" />
       <source>Show in folder</source>
       <translation>在文件夹中显示</translation>
@@ -2321,14 +2291,14 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>此浏览器视图不会跟随之后的更改。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3437" />
-      <location filename="../ui/cartograph/controller.py" line="3768" />
+      <location filename="../ui/cartograph/controller.py" line="3410" />
+      <location filename="../ui/cartograph/controller.py" line="3741" />
       <location filename="../ui/main_dialog.py" line="4796" />
       <source>Copied {path}</source>
       <translation>已复制：{path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3813" />
+      <location filename="../ui/cartograph/controller.py" line="3786" />
       <source>Saved {path}</source>
       <translation>已保存：{path}</translation>
     </message>
@@ -2376,18 +2346,18 @@ Maps you have already published stay online. You will need to sign in again thro
       <translation>{path} 不是此图版自己的文件；未替换。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3459" />
+      <location filename="../ui/cartograph/controller.py" line="3432" />
       <location filename="../ui/main_dialog.py" line="4818" />
       <source>Showing {name} in the file manager</source>
       <translation>正在文件管理器中显示 {name}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3611" />
+      <location filename="../ui/cartograph/controller.py" line="3584" />
       <source>Preparing page {page} of {pages}…</source>
       <translation>正在准备第 {page} 页，共 {pages} 页…</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3810" />
+      <location filename="../ui/cartograph/controller.py" line="3783" />
       <source>Could not save the layout template to {path}.</source>
       <translation>无法将布局模板保存到 {path}。</translation>
     </message>
@@ -2416,28 +2386,28 @@ The full error is in the QGIS message log. Nothing about the cartograph is known
 完整错误见 QGIS 消息日志。检查完成前无法确定图版的任何情况，因此不会显示任何结论。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3462" />
+      <location filename="../ui/cartograph/controller.py" line="3435" />
       <location filename="../ui/main_dialog.py" line="4822" />
       <source>Opened {path}</source>
       <translation>已打开：{path}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3466" />
+      <location filename="../ui/cartograph/controller.py" line="3439" />
       <source>Could not show the file in a file manager: {reason}.</source>
       <translation>无法在文件管理器中显示该文件：{reason}。</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3472" />
+      <location filename="../ui/cartograph/controller.py" line="3445" />
       <source>Copy path</source>
       <translation>复制路径</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3631" />
+      <location filename="../ui/cartograph/controller.py" line="3604" />
       <source>Could not print the series: {error}</source>
       <translation>无法打印该系列：{error}</translation>
     </message>
     <message>
-      <location filename="../ui/cartograph/controller.py" line="3720" />
+      <location filename="../ui/cartograph/controller.py" line="3693" />
       <source>Could not save the PDF: {error}</source>
       <translation>无法保存 PDF：{error}</translation>
     </message>
