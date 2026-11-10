@@ -142,7 +142,7 @@ from .layout_reading import _name
 from .legend_edit import support_left_out
 from .locator_context import has_wider_context
 from .raster_legend import layers_with_unavailable_range
-from .renderer_translator import drawn_rules
+from .renderer_translator import drawn_rules, rule_classes
 from .runtime_legend import ClassedLayer, describe_runtime_legend_changes
 from .settings import default_frame_mode
 
@@ -1190,8 +1190,12 @@ def _classed_legend_layers(
         elif isinstance(renderer, QgsGraduatedSymbolRenderer):
             count = len(renderer.ranges())
         elif isinstance(renderer, QgsRuleBasedRenderer):
-            # Exported as categories, one per rule that draws.
+            # Exported as categories, one per rule that draws. Rules that each
+            # pick values of one field become that field's categories, and an
+            # ELSE rule among them its "all other values" class.
             count = len(drawn_rules(renderer))
+            read = rule_classes(renderer, layer.fields().names())
+            catch_all = read is not None and any(not klass.values for klass in read[1])
         else:
             continue
         classed.append(

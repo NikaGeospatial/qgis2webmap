@@ -371,7 +371,8 @@ class TestLiveLegendChecks:
         read_layout(layout, report)
         (row,) = self._legend_rows(report)
         assert row.status is FidelityStatus.APPROXIMATED
-        assert "'other' row" in row.detail
+        # No "all other values" class, so the browser lists no "other" either.
+        assert "'other'" not in row.detail
         assert "classified field" in row.detail
         assert "columns" in row.detail
         # Polygon classes are squares in QGIS too.
@@ -398,8 +399,40 @@ class TestLiveLegendChecks:
         read_layout(layout, report)
         (row,) = self._legend_rows(report)
         assert row.status is FidelityStatus.APPROXIMATED
-        assert "'other' row" in row.detail
+        # Its rules pick no field's values, so each is a class under its own
+        # label, the ELSE rule's too: no "other".
+        assert "'other'" not in row.detail
         assert "classified field" in row.detail
+
+    def test_an_else_rule_beside_value_rules_is_named_other(self, project) -> None:
+        """Rules that each pick values of one field are that field's
+        categories, and the ELSE rule among them is the browser's 'other'."""
+        from qgis.core import QgsRuleBasedRenderer
+        from rule_trees import qgis_made
+
+        layout, map_item, parcels, _roads = _layout(project)
+        root = qgis_made(QgsRuleBasedRenderer.Rule(None))
+        for colour, expression, label in (
+            ("red", "\"size\" = 'small'", "Small lot"),
+            ("blue", "ELSE", "Every other lot"),
+        ):
+            root.appendChild(
+                qgis_made(
+                    QgsRuleBasedRenderer.Rule(
+                        QgsFillSymbol.createSimple({"color": colour}),
+                        0,
+                        0,
+                        expression,
+                        label,
+                    )
+                )
+            )
+        parcels.setRenderer(QgsRuleBasedRenderer(root))
+        _legend(layout, map_item)
+        report = FidelityReportBuilder()
+        read_layout(layout, report)
+        (row,) = self._legend_rows(report)
+        assert "names each 'all other values' class 'other'" in row.detail
 
 
 class TestStaticLegendShapes:
