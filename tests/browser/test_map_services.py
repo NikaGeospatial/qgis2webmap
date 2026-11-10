@@ -402,6 +402,14 @@ class TestWmsFailures:
 
         assert "cors-fallback" not in entry.read_text(encoding="utf-8")
         seen = _measure_drawn(page, screen=True)
+        # The plain pictures arrive tile by tile: wait for the last of them.
+        deadline = time.monotonic() + 20
+        while (
+            seen["found"] != pytest.approx(seen["expected"], abs=2.5)
+            and time.monotonic() < deadline
+        ):
+            page.wait_for_timeout(250)
+            seen = _measure(page, screen=True)
         assert _get_maps(services, "/nocors/wms"), "the map never asked"
         assert seen["crimson"] > 0, "the plain pictures did not show"
         assert seen["found"] == pytest.approx(seen["expected"], abs=2.5)

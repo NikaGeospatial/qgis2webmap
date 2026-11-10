@@ -490,14 +490,16 @@
 @CAPTION@
 
     <!--
-      Opens the map on the whole of its extent, in the window it is opened in.
-      The zoom written on <om-map> fits the extent's width into one 512px tile
-      and knows nothing of the window, so tall data opened cropped, and a
-      phone cut the sides off wide data. This lowers it to the closest zoom at
-      which every corner of the extent is on screen - the tilt of a relief map
-      included - and leaves it as written when the extent already fits. It
-      runs before the runtime starts, so the first frame is the fitted one,
-      and it needs no server, so file:// is the same.
+      Opens the map on the whole of its extent, in the window it is opened in,
+      as QGIS fills its canvas with it (and as qgis2web fits its view). The
+      zoom written on <om-map> fits the extent's width into one 512px tile
+      and knows nothing of the window: tall data opened cropped, a phone cut
+      the sides off wide data, and a desktop window showed up to twice the
+      extent QGIS showed. This sets it to the closest zoom at which every
+      corner of the extent is on screen - the tilt of a relief map included -
+      in or out. One point keeps the zoom written for it. It runs before the
+      runtime starts, so the first frame is the fitted one, and it needs no
+      server, so file:// is the same.
 
       It stands aside for a camera someone chose: a `center` or `zoom` edited
       by hand, and the camera the dialog's Preview keeps in the address
@@ -540,10 +542,9 @@
             );
           });
         };
-        var written = Number(fit.zoom);
-        if (fits(written)) return;
+        if (fit.lonSpan === 0 && fit.south === fit.north) return;
         var low = 0;
-        var high = written;
+        var high = fit.maxZoom;
         for (var step = 0; step < 30; step += 1) {
           var zoom = (low + high) / 2;
           if (fits(zoom)) low = zoom;

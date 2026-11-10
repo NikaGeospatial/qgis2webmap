@@ -567,8 +567,9 @@ Each of the last two, plus coordinate precision, can also be set for a single
 layer — see *Settings for one layer only* above.
 
 The starting view comes from your data's extent: the map opens showing all
-of it, in whatever window it is opened in. It zooms out as far as a phone or
-tall data needs; data that already fits opens as it always did. Data crossing the 180th meridian - Alaska, Fiji, Chukotka - is handled
+of it, in whatever window it is opened in, filling the window as QGIS fills
+its canvas: zoomed out as far as a phone or tall data needs, and in as far as
+a wide desktop window allows. Data crossing the 180th meridian - Alaska, Fiji, Chukotka - is handled
 correctly rather than opening zoomed out to the whole world.
 
 On the **Map** tab you can open the map on **the current QGIS view** instead.

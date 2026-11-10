@@ -3048,8 +3048,8 @@ def opening_camera(project: ExportProject) -> tuple[str, str]:
     """The `center` and `zoom` the map is written with, as attribute values.
 
     The page's opening-view script (`map.html`, filled by `opening_view_data`)
-    lowers this zoom when the extent would not fit the window, and only while
-    the attributes are still these, so a hand edit to either one stands.
+    refits this zoom to the window, and only while the attributes are still
+    these, so a hand edit to either one stands.
     """
     if project.extent is None:
         return "[0.000000, 0.000000]", _number(2.0)
@@ -3077,6 +3077,7 @@ def opening_view_data(project: ExportProject) -> str:
             "lonSpan": round(extent.width_degrees, 6),
             "south": round(extent.south, 6),
             "north": round(extent.north, 6),
+            "maxZoom": MAX_WEB_ZOOM,
         }
     )
 
@@ -3085,10 +3086,10 @@ def _zoom_for_extent(width_degrees: float) -> float:
     """The written zoom: the data's longitude span in one 512 px tile width.
 
     A first guess, not the opening view. It ignores the latitude span and the
-    window, so the page refits it before the runtime starts (`map.html`):
-    lowered to whatever shows the whole extent, on both axes, in the window
-    the map is opened in, and left as it is when the extent already fits. A
-    zero-width extent - one point, or one meridian - starts at zoom 12.
+    window, so the page refits it before the runtime starts (`map.html`): to
+    the zoom that just shows the whole extent, on both axes, in the window the
+    map is opened in. A zero-width extent - one point, or one meridian -
+    starts at zoom 12, where one point stays.
     """
     if width_degrees <= 0:
         return 12.0
