@@ -18,7 +18,6 @@ SPDX-License-Identifier: GPL-2.0-or-later
 from __future__ import annotations
 
 import ast
-import re
 from collections.abc import Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -205,25 +204,43 @@ class TestTheMapOpensOnTheWholeExtent:
                 f"{corner} opens off the {size[0]}x{size[1]} map, at {x:.0f},{y:.0f}"
             )
 
-    def test_wide_data_that_fits_keeps_its_written_zoom(
-        self, opener, runtime, tmp_path
+    @pytest.mark.parametrize("extent", (TALL, WIDE), ids=("tall", "wide"))
+    def test_the_extent_fills_the_window_as_in_qgis(
+        self, opener, runtime, tmp_path, extent
     ) -> None:
-        """On a desktop window wide data already fitted; its view is unchanged."""
+        """QGIS fills its canvas with the extent, and so does qgis2web's view:
+        on a desktop window the extent reaches across one side of the map,
+        less its margins, rather than opening at up to twice the size."""
+        corners = [
+            [extent.west, extent.south],
+            [extent.east, extent.south],
+            [extent.west, extent.north],
+            [extent.east, extent.north],
+        ]
         entry = _write(
             runtime,
             tmp_path,
             ExportProject(
                 title="Extent",
-                layers=(_layer("data", "Data", [(-10.0, 50.0), (10.0, 52.0)]),),
-                extent=WIDE,
+                layers=(_layer("data", "Data", corners),),
+                extent=extent,
             ),
         )
-        written = re.search(
-            r'<om-map\s[^>]*?\szoom="([^"]+)"', entry.read_text(encoding="utf-8")
-        )
-        assert written is not None
         page = opener(entry, "file", (1200, 800))
-        assert page.locator("om-map").get_attribute("zoom") == written.group(1)
+        box = page.locator("om-map").bounding_box()
+        assert box is not None
+        points = [
+            page.evaluate("(c) => document.querySelector('om-map').project(c)", c)
+            for c in corners
+        ]
+        # The map opens centred on the extent's middle, so its farthest corner
+        # reaches the margin: on the side it spans, it fills the window.
+        room_x, room_y = box["width"] / 2 - 16, box["height"] / 2 - 16
+        filled = max(
+            max(abs(x - box["width"] / 2) / room_x, abs(y - box["height"] / 2) / room_y)
+            for x, y in points
+        )
+        assert 0.97 <= filled <= 1.0 + 1e-6, f"the extent reaches {filled:.0%}"
 
     def test_the_previews_saved_camera_is_kept(self, page, runtime, tmp_path) -> None:
         """A camera kept in the address is the one the map opens on, and the

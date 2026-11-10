@@ -162,8 +162,8 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   CORS: a WMS asked in another coordinate system, a WMTS on a national grid,
   and any such layer in a cartograph frame drawn in another projection,
   since those pictures are warped into place. A service on `http://` still
-  does not draw in a map served over `https://` unless it also answers on
-  `https://`.
+  may not draw in a map put on an `https://` website, where Chrome, Edge and
+  Safari block it, unless it also answers on `https://`.
 
 ### Fixed
 - The README inside a Share ZIP or Folder no longer promises that the map
@@ -190,6 +190,12 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   `https://` for its tiles, legend and clicks, as it was added. It used to be asked
   on `http://`, which such a service only redirects to `https://`, and
   Safari then showed it only as plain pictures under the rest of the map.
+- The map opens filling its window with the extent, as QGIS fills its canvas
+  (and as qgis2web fits its view). A map whose extent already fitted the
+  window used to open at the zoom that fits it in a nominal 512 pixels, so a
+  desktop window showed up to twice the area QGIS showed, and WMS and other
+  imagery came a zoom level coarser than in QGIS. One point still opens at
+  zoom 12, and a saved or hand-edited camera still wins.
 - A layer read from an `http://` address (tiles, a web raster or archive,
   live features) has a Fidelity row saying a map put on an `https://`
   website, as GitHub Pages and most hosts are, may not show it, and the map's

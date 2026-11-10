@@ -303,8 +303,9 @@ the service for its images itself, from the reader's browser. The browser's
 developer tools (Console) show a refused or failed request, and the map page
 reports the cause on its `om-validation-error` event. Common causes:
 
-- **The service is on `http://` and the map is served over `https://`.**
-  Chrome, Edge and Safari block it (Firefox shows tiles as plain pictures),
+- **The service is on `http://` and the map is put on an `https://` website.**
+  Chrome, Edge and Safari block it (Firefox may still show its tiles as plain
+  pictures),
   unless the service also answers on `https://`. The Fidelity tab says so for
   any layer on `http://`, and the map's notice names the layer and the reason.
   Only the service's provider can change that; a map opened from a file or in
@@ -347,8 +348,8 @@ popup stays closed when the service found nothing at that spot, and also:
 - **The service does not allow web pages to read its answers (CORS)**, is
   offline, or answers with an error: the map's notice says "Could not get
   details from" and the layer's name. Only the service's provider can allow
-  web pages; a service on `http://` is blocked in a map served over
-  `https://`. An error message the service sends back is written to the
+  web pages; a service on `http://` is blocked in a map put on an `https://`
+  website. An error message the service sends back is written to the
   browser's developer tools (Console).
 
 ### A WMS or WMTS layer's legend shows no picture
@@ -374,7 +375,7 @@ the server must allow web pages to read it (`Access-Control-Allow-Origin`,
 `Access-Control-Allow-Headers: Range` and
 `Access-Control-Expose-Headers: Content-Range`). The browser's developer tools
 (Console) show the refused request; only the file's host can allow access. A
-file on `http://` is also blocked inside a map served over `https://`. If you
+file on `http://` is also blocked inside a map put on an `https://` website. If you
 cannot change the server, save a local copy (right-click the layer,
 **Export > Save As...**) and add the file instead: it is carried inside the map.
 
@@ -383,7 +384,7 @@ cannot change the server, save a local copy (right-click the layer,
 The map asks a live layer's service for what it draws from the reader's
 browser. When that fails - the service sends no `Access-Control-Allow-Origin`
 header (`*` for a map opened from a file), answers with an error, is an
-`http://` service in a map served over `https://`, or the reader is offline -
+`http://` service in a map put on an `https://` website, or the reader is offline -
 a WFS, OGC API Features or ArcGIS FeatureServer layer exported *live first*
 shows the copy of its features carried in the map, as they were when you
 exported. A layer with no copy to show (*live only*, or a tile or map service
