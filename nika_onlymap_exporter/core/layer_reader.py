@@ -3028,7 +3028,7 @@ def read_live_source(
     one carrying an access key is embedded only too, so the key never
     reaches the map.
     """
-    from qgis.core import QgsDataSourceUri, QgsFields
+    from qgis.core import Qgis, QgsDataSourceUri
 
     provider = (layer.providerType() or "").lower()
     service = LIVE_PROVIDERS.get(provider)
@@ -3056,7 +3056,7 @@ def read_live_source(
     kept = [fields.indexOf(name) for name in sorted(keep)]
     # An expression (virtual) field, or one joined from another layer, is
     # QGIS's own: a feature loaded live does not have it.
-    not_the_services = (QgsFields.OriginExpression, QgsFields.OriginJoin)
+    not_the_services = (Qgis.FieldOrigin.Expression, Qgis.FieldOrigin.Join)
     if any(i >= 0 and fields.fieldOrigin(i) in not_the_services for i in kept):
         reasons.append("its virtual or joined fields")
 
