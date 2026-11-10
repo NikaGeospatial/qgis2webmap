@@ -172,8 +172,13 @@ python3 scripts/run_tests.py stop                  # ends the running run's own 
   representative vector and raster export, atlas, printing, Value Relation
   ordering), the whole browser tier in Chromium, Firefox and WebKit (each must
   draw: a missing WebGL2 fails; on NixOS set `Q2W_FIREFOX_LIBRARY_PATH` to the
-  `LD_LIBRARY_PATH` below for Firefox), translations, ruff, package + verify, and
-  the packaged-ZIP smoke on 4.2 and 3.44. Passing on 4.2 says nothing about 3.44.
+  `LD_LIBRARY_PATH` below for Firefox), translations, ruff, package + verify,
+  the two checks plugins.qgis.org runs on an upload (the security scan, which
+  needs `bandit`, `flake8` and `detect-secrets` on PATH or named by
+  `Q2W_SCAN_WRAPPER`, e.g. `nix shell nixpkgs#bandit nixpkgs#python3Packages.flake8
+  nixpkgs#detect-secrets --command`; and the Qt6 check, in the pinned
+  `pyqgis4-checker` image through Docker), and the packaged-ZIP smoke on 4.2
+  and 3.44. Passing on 4.2 says nothing about 3.44.
 - **full**: as release, but the whole suite also runs on 3.44 (it contains the
   focused list, which is therefore not run again).
 
