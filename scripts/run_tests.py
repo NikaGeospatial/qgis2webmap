@@ -84,6 +84,19 @@ SMOKE_SUBSET = "classic,map-only,poster,locator,dashboard,dark"
 # The plugin zip in dist/, not the language packs zip built beside it
 # (qgis2webmap-language-packs-<version>.zip): the digit after the dash.
 PLUGIN_ZIP_GLOB = "qgis2webmap-[0-9]*.zip"
+
+
+def qt6_checker_image(root: Path) -> str:
+    """The Qt6 checker image, pinned once, in the workflow that runs it."""
+    workflow = (root / ".github" / "workflows" / "checks.yml").read_text(
+        encoding="utf-8"
+    )
+    found = re.search(r"ghcr\.io/qgis/pyqgis4-checker@sha256:[0-9a-f]{64}", workflow)
+    if found is None:
+        raise SystemExit("checks.yml names no pinned pyqgis4-checker image")
+    return found.group(0)
+
+
 BUILDERS = (
     ("cartograph", "CARTOGRAPH_FIXTURES_DIR", "expected.json"),
     ("ground_size", "GROUND_SIZE_FIXTURES_DIR", "expected.json"),
@@ -1036,6 +1049,67 @@ class Planner:
             "package", ["sh", "-c", script], "build the plugin ZIP and verify its shape"
         )
 
+    def add_site_checks(self) -> None:
+        """The two checks plugins.qgis.org runs on an upload, which the
+        release workflow runs too: the security scan (Bandit, detect-secrets,
+        flake8) and the Qt6 check, in the image the site uses. A release
+        round that skips them can tag a ZIP the site refuses."""
+        scan_prefix = shlex.split(os.environ.get("Q2W_SCAN_WRAPPER", ""))
+
+        def scan() -> list[str]:
+            return [
+                *scan_prefix,
+                sys.executable,
+                str(self.snap / "scripts" / "scan_package.py"),
+                str(self.locate_zip()),
+            ]
+
+        self.add(
+            Stage(
+                name="scan",
+                kind="light",
+                depends=["package"],
+                command=scan,
+                env=lambda: self.worker_env(dict(os.environ), "scan"),
+                cwd=self.snap,
+                log=self.log("scan"),
+                timeout_s=900,
+                description="the site's security scan (Bandit, detect-secrets, flake8)",
+            )
+        )
+        problem = self.docker_available()
+        if problem:
+            self.skipped.append(("qt6-check", problem))
+            return
+        image = qt6_checker_image(self.snap)
+
+        def qt6() -> list[str]:
+            zip_file = self.locate_zip()
+            assert zip_file is not None
+            return [
+                "docker", "run", "--rm",
+                "-u", f"{os.getuid()}:{os.getgid()}",
+                "-v", f"{self.snap}:/w:ro",
+                "-v", f"{zip_file.parent}:/dist:ro",
+                "-w", "/w",
+                image,
+                "python3", "scripts/check_qt6.py", f"/dist/{zip_file.name}",
+            ]  # fmt: skip
+
+        self.add(
+            Stage(
+                name="qt6-check",
+                kind="light",
+                depends=["package"],
+                command=qt6,
+                env=lambda: dict(os.environ),
+                cwd=self.snap,
+                log=self.log("qt6-check"),
+                timeout_s=1200,
+                description="the site's Qt6 check, in the image it runs it in",
+            )
+        )
+
     def locate_zip(self) -> Path | None:
         found = sorted((self.run_dir / "dist").glob(PLUGIN_ZIP_GLOB))
         if found:
@@ -1327,6 +1401,7 @@ def build_plan(
     else:
         planner.skipped.append(("ruff", "ruff was not found (set RUFF)"))
     planner.add_package()
+    planner.add_site_checks()
     planner.add_primary(primary_all, shards, durations)
     if profile == "release":
         planner.add_container_pytest(
