@@ -33,7 +33,7 @@ from collections.abc import Mapping
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qsl, urljoin, urlsplit
-from xml.etree import ElementTree
+from xml.etree import ElementTree  # nosec B405 - reads QGIS's own style XML
 
 from qgis.core import QgsMapLayerType, QgsProviderRegistry, QgsVectorLayer
 
@@ -516,7 +516,7 @@ def _canonical(text: str) -> Any:
     inside an option) is read the same way. Attribute order is not stable
     under Qt 5, so the text alone cannot be compared."""
     try:
-        element = ElementTree.fromstring(text)
+        element = ElementTree.fromstring(text)  # nosec B314 - QGIS's own XML
     except ElementTree.ParseError:
         return text
 

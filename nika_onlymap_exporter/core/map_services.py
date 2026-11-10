@@ -450,7 +450,7 @@ def _join(base: str, pairs: Sequence[tuple[str, str]]) -> str:
 
 # The token the runtime fills with the layer's `time`, for a WMS-T whose
 # time a slider steps.
-TIME_TOKEN = "{time}"
+TIME_TOKEN = "{time}"  # nosec B105 - an address token, not a password
 
 
 def bbox_token(crs: str) -> str | None:
