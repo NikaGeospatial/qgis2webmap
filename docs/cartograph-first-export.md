@@ -189,8 +189,8 @@ graphics card.
 **Preview**, at the top right of the dialog, opens the saved cartograph
 in your default browser. The page on the left is QGIS's drawing of the layout;
 this is the real HTML. **Share** beside it opens the
-[Share menu](cartograph-dialog.md#the-share-menu), with PDF and PNG export,
-the layout template and the NIKA hand-off.
+[Share menu](cartograph-dialog.md#the-share-menu), with PDF and PNG export
+and the layout template.
 
 Nothing opens until there is a saved file. If you press Preview before
 the first save, the bar at the foot of the dialog says so.

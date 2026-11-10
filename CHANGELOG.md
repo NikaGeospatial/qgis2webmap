@@ -136,6 +136,9 @@ All notable changes to QGIS2WebMap by NIKA. Format follows
   style QGIS kept no copy of. Vector tile layers were not exported before.
 
 ### Changed
+- A cartograph's **Share** menu no longer shows the two greyed-out NIKA
+  hand-off rows (**Prepare enhancement prompt...**, **Prepare critique
+  prompt...**), as the web map's has not since 0.3.2.
 - **Languages download from the GitHub release, all at once.** Choosing
   any language other than English the first time fetches one file of about
   350 KB from this version's release on GitHub (`github.com`, which hands it

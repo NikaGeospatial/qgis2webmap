@@ -3362,31 +3362,6 @@ class CartographController:
             self.on_reveal,
         )
 
-        # NIKA after everything that works on the file, each named for what
-        # it does today, as in the web map's menu: the hand-offs prepare a
-        # prompt for the user to take to NIKA, shown greyed out until they are
-        # ready for cartographs. Hosting is for web maps only, so no hosting
-        # row here. The hand-off dialog is issue #3 S4.
-        menu.addSection(tr("NIKA hand-off"))
-        add(
-            "enhance",
-            tr("Prepare enhancement prompt..."),
-            tr(
-                "Opens a prompt for improving this cartograph, to copy into NIKA "
-                "or another AI assistant. Nothing is sent from here."
-            ),
-            lambda: self.on_handoff("enhance"),
-        )
-        add(
-            "critique",
-            tr("Prepare critique prompt..."),
-            tr(
-                "Opens a prompt asking for a critique of this cartograph, to copy "
-                "into NIKA or another AI assistant. Nothing is sent from here."
-            ),
-            lambda: self.on_handoff("critique"),
-        )
-
         return menu
 
     def _update_share_enabled(self) -> None:
@@ -3418,8 +3393,6 @@ class CartographController:
                 not self._pdf_running,
                 tr("Saving PDF…"),
             )
-        for key in ("enhance", "critique"):
-            self._set_share_row(key, False, tr("Not available for cartographs yet"))
 
     def _set_share_row(self, key: str, available: bool, needs: str) -> None:
         """Grey a row out with what it needs, or give it back its own words."""

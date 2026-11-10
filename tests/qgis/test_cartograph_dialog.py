@@ -1116,9 +1116,6 @@ class TestCartographShareMenu:
                 ("Preview in browser", False),
                 ("Copy HTML file path", False),
                 (rows[8][0], False),  # "Show HTML in folder"
-                ("NIKA hand-off", True),
-                ("Prepare enhancement prompt...", False),
-                ("Prepare critique prompt...", False),
             ]
             assert rows[8][0] == "Show HTML in folder"
             assert "export_pdf" not in cartograph.cartograph_share_actions
@@ -1157,37 +1154,19 @@ class TestCartographShareMenu:
         finally:
             dialog.close()
 
-    def test_the_hand_off_rows_are_greyed_out_and_hosting_is_not_offered(
-        self, qgis_app, project, tmp_path
-    ) -> None:
-        """The hand-off is not ready for cartographs, so its rows stay greyed
-        out even with the file saved; hosting is for web maps only."""
+    def test_no_hand_off_rows_and_no_hosting(self, qgis_app, project, tmp_path) -> None:
+        """The NIKA hand-off is not offered for cartographs, and hosting is for
+        web maps only."""
         dialog, _target = self._ready_dialog(project, tmp_path)
         try:
             actions = dialog._cartograph.cartograph_share_actions
             assert actions["open_browser"].isEnabled()
-            for key in ("enhance", "critique"):
-                assert not actions[key].isEnabled(), key
-                assert actions[key].toolTip() == "Not available for cartographs yet"
+            assert "enhance" not in actions and "critique" not in actions
             assert "publish" not in actions
             menu = dialog._cartograph.cartograph_share_button.menu()
             labels = [action.text() for action in menu.actions()]
+            assert not any("prompt" in label.lower() for label in labels), labels
             assert not any("hosting" in label.lower() for label in labels), labels
-        finally:
-            dialog.close()
-
-    def test_hand_off_rows_wait_for_a_saved_file(
-        self, qgis_app, project, tmp_path
-    ) -> None:
-        _add_layout(project, "Survey", [("Overview", "EPSG:4326")])
-        dialog = _dialog(project)
-        try:
-            _choose_cartograph(dialog)
-            dialog._cartograph.file_edit.setText(str(tmp_path / "missing.html"))
-            dialog._cartograph._update_share_enabled()
-            actions = dialog._cartograph.cartograph_share_actions
-            for key in ("enhance", "critique"):
-                assert not actions[key].isEnabled(), key
         finally:
             dialog.close()
 
@@ -3587,9 +3566,9 @@ class TestPanel:
     def test_the_share_menu_names_nika_rows_for_what_they_do(
         self, qgis_app, project
     ) -> None:
-        """Same order and words as the web map's: file and export rows, then
-        the hand-offs (greyed out for now) - no hosting row, which is for web
-        maps only - and a greyed row says what it needs instead of looking
+        """Same order and words as the web map's: export rows, then the HTML
+        cartograph's - no NIKA hand-off rows, and no hosting row, which is for
+        web maps only - and a greyed row says what it needs instead of looking
         broken."""
         dialog = _dialog(project)
         try:
@@ -3602,12 +3581,10 @@ class TestPanel:
                     continue
                 rows.append((section, action.text()))
             texts = [text for _section, text in rows]
-            assert ("NIKA hand-off", "Prepare enhancement prompt...") in rows
-            assert ("NIKA hand-off", "Prepare critique prompt...") in rows
-            assert texts.index("Export PNG…") < texts.index(
-                "Prepare enhancement prompt..."
-            )
-            assert texts[-1] == "Prepare critique prompt..."
+            # No NIKA hand-off rows, and no hosting row, which is for web maps.
+            assert not any("prompt" in text for text in texts)
+            assert texts.index("Export PNG…") < texts.index("Preview in browser")
+            assert texts[-1] == "Show HTML in folder"
             actions = cartograph.cartograph_share_actions
             # No layout yet: greyed, with what it needs.
             assert not actions["export_png"].isEnabled()

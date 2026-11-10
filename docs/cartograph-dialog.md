@@ -33,8 +33,8 @@ A cartograph is **a file that is always saved**, not something an Export
 button produces. Selecting a layout saves it at once, and every change after
 that - in the panel, in the print layout itself, or to the style or data of a
 layer it draws - rewrites the file about 600 ms later, through a temporary
-file that is swapped in, so it is never half written. Preview, Share and
-the NIKA hand-off all work on that file. The dialog's title names it. Closing
+file that is swapped in, so it is never half written. Preview and Share both
+work on that file. The dialog's title names it. Closing
 the dialog leaves it where it is, and reopening the plugin on the same project
 picks it up again.
 
@@ -407,7 +407,6 @@ section, then the greyed NIKA rows.
 | **Preview in browser** (**Ctrl+O**) | Opens the HTML cartograph, once the save holding your latest edits has landed, to check interactive maps and browser behaviour | Once the file exists |
 | **Copy HTML file path** | Puts the cartograph's path on the clipboard | Once the file exists |
 | **Show HTML in folder** | Opens the folder the HTML cartograph is in | Once the file exists |
-| **Prepare enhancement prompt...**, **Prepare critique prompt...** (NIKA hand-off) | Shown greyed out: the hand-off is not available for cartographs yet | Not yet |
 
 **Ctrl+O** (Preview in browser) and **Ctrl+S** (Save PDF…) work from anywhere in the dialog, without opening
 the menu.
