@@ -30,6 +30,7 @@ import math
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -574,6 +575,11 @@ class TestOneDistanceAtATime:
         assert _pressed(page, DISTANCE) == "false"
 
 
+# The runtime's double-tap window, 350 ms, less a margin for the second tap's
+# own round trip.
+DOUBLE_TAP_WINDOW_S = 0.3
+
+
 class TestClosingAnArea:
     @staticmethod
     def _perimeter_km() -> float:
@@ -650,32 +656,43 @@ class TestClosingAnArea:
     def test_a_double_tap_still_closes_it_on_a_touch_screen(
         self, browser, measure_map, apart
     ) -> None:
-        context = browser.new_context(
-            viewport={"width": 1000, "height": 800}, has_touch=True, is_mobile=True
-        )
-        page = context.new_page()
-        try:
-            open_map(page, measure_map.entry_path)
-            require_webgl(page)
-            wait_until_drawn(page)
-            page.locator(AREA).tap(timeout=10_000)
-            assert _hint_shown(page)
-            for corner in CORNERS[:2]:
-                page.touchscreen.tap(*_screen_point(page, corner))
-                page.wait_for_timeout(500)
-            x, y = _screen_point(page, CORNERS[2])
-            page.touchscreen.tap(x, y)
-            page.wait_for_timeout(80)
-            page.touchscreen.tap(x + apart, y)
-            page.wait_for_timeout(600)
-
-            assert self._readout_perimeter(page) == pytest.approx(
-                self._perimeter_km(), rel=0.03
+        # Each tap waits on the browser, so on a busy machine two taps meant
+        # 80 ms apart can land further apart than the runtime's double-tap
+        # window: that is two taps, not a double tap, and says nothing about
+        # the tool. Such a try is made again.
+        for _attempt in range(3):
+            context = browser.new_context(
+                viewport={"width": 1000, "height": 800}, has_touch=True, is_mobile=True
             )
-            assert not _hint_shown(page)
-            assert _pressed(page, AREA) == "false"
-        finally:
-            context.close()
+            page = context.new_page()
+            try:
+                open_map(page, measure_map.entry_path)
+                require_webgl(page)
+                wait_until_drawn(page)
+                page.locator(AREA).tap(timeout=10_000)
+                assert _hint_shown(page)
+                for corner in CORNERS[:2]:
+                    page.touchscreen.tap(*_screen_point(page, corner))
+                    page.wait_for_timeout(500)
+                x, y = _screen_point(page, CORNERS[2])
+                first = time.monotonic()
+                page.touchscreen.tap(x, y)
+                page.wait_for_timeout(80)
+                page.touchscreen.tap(x + apart, y)
+                gap = time.monotonic() - first
+                page.wait_for_timeout(600)
+                if gap > DOUBLE_TAP_WINDOW_S:
+                    continue
+
+                assert self._readout_perimeter(page) == pytest.approx(
+                    self._perimeter_km(), rel=0.03
+                )
+                assert not _hint_shown(page)
+                assert _pressed(page, AREA) == "false"
+                return
+            finally:
+                context.close()
+        pytest.fail("this machine could not tap twice within the double-tap window")
 
 
 class TestACompactPanel:
